@@ -1,0 +1,10 @@
+execution_mode: "dry_run"
+allow_real_ros_calls: false
+allowed_named_poses:
+  - "home"
+  - "camera_pose"
+  - "place_left"
+workspace:
+  x: [0.05, 0.45]
+  y: [-0.25, 0.25]
+  z: [0.05, 0.45]

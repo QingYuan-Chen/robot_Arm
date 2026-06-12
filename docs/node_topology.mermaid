@@ -1,0 +1,92 @@
+%% reBotArm ROS2 节点-话题拓扑图
+%% 数据流方向: 操作入口(上) -> 规划/示教(中) -> 控制器(下) -> 硬件
+flowchart TB
+
+    subgraph HW["硬件层 rebotarmcontroller (唯一碰电机的包)"]
+        CTRL["reBotArmController 节点"]
+        CTRL ---|内部| HM["HardwareManager<br/>串口/SDK/重力补偿"]
+        CTRL ---|内部| MPT["MotorPassthrough<br/>单电机调试 TRAJ_RUNNING时拒绝"]
+    end
+
+    subgraph MOTION["运动规划层 rebotarm_motion (不碰硬件)"]
+        POSE["PoseExecutionNode<br/>motion_execution"]
+        MLIB["库: moveit_planner / 重定时<br/>碰撞预检 / 安全监控"]
+    end
+
+    subgraph TEACH["示教层 rebotarm_teach"]
+        REC["TeachRecorderNode<br/>重力补偿录制"]
+        REP["TeachReplayNode<br/>预处理+多重安全门回放"]
+    end
+
+    subgraph TELEOP["遥操作层 rebotarm_teleop"]
+        KBD["TeleopKeyboardNode"]
+        GVIS["GripperVisualJointStateNode<br/>仅RViz可视化"]
+    end
+
+    subgraph DASH["仪表盘层 rebotarm_dashboard"]
+        PANEL["TeleopStatusPanelNode<br/>HTTP+SSE+命令网关"]
+    end
+
+    subgraph VISION["视觉层 rebotarm_vision (流水线)"]
+        VN["vision_node<br/>相机+YOLO检测"]
+        ORD["ordinary_grasp_node<br/>几何抓取候选"]
+        GNET["graspnet_baseline_node<br/>GraspNet候选"]
+        IKF["candidate_ik_filter<br/>MoveIt IK+碰撞过滤"]
+        EXEC["visual_grasp_executor<br/>执行总控 接近/伺服/重试"]
+    end
+
+    subgraph VOICE["语音层 rebotarm_voice_control"]
+        VC["voice/text/realtime 入口"]
+        LLM["llm_tool + tool_call<br/>意图解析"]
+        SG["SafetyGuard<br/>白名单+工作空间限位"]
+    end
+
+    subgraph MOVEIT["MoveIt move_group"]
+        MG["/plan_kinematic_path<br/>/compute_ik<br/>/check_state_validity"]
+    end
+
+    %% 状态回流
+    CTRL -->|"/joint_states<br/>/arm_status<br/>/gripper/state"| PANEL
+    CTRL -->|joint_states| REP
+    CTRL -->|joint_states| REC
+
+    %% 控制器对外接口
+    POSE -->|FollowJointTrajectory| CTRL
+    POSE -->|ExecutePose srv| CTRL
+    REP -->|FollowJointTrajectory| CTRL
+    KBD -->|FollowJointTrajectory| CTRL
+    PANEL -->|"enable/disable/safe_home<br/>trajectory_stop/gripper<br/>重力补偿/示教录制 srv"| CTRL
+    EXEC -->|ExecutePose / gripper srv| CTRL
+
+    %% MoveIt 调用
+    POSE -->|规划| MG
+    REP -->|碰撞预检| MG
+    IKF -->|IK+校验| MG
+    PANEL -->|状态校验| MG
+
+    %% 示教内部
+    REC -->|gravity_comp/start srv| CTRL
+    REC -.->|teleop/recording_status| PANEL
+    REP -.->|teleop/replay_status| PANEL
+    REP -->|复用算法| MLIB
+
+    %% 视觉流水线
+    VN -->|/grasp/detections| ORD
+    VN -->|/grasp/detections| GNET
+    ORD -->|/grasp/candidates| IKF
+    GNET -->|/grasp/graspnet_candidates| IKF
+    IKF -->|/grasp/filtered_plan| EXEC
+
+    %% 语音流
+    VC --> LLM --> SG -->|MoveToPose/MoveRelative action| CTRL
+
+    %% 兼容层
+    COMPAT["rebotarm_interactive_control<br/>(旧import重定向壳)"]
+    COMPAT -.->|sys.modules 转发| TEACH
+    COMPAT -.->|sys.modules 转发| TELEOP
+    COMPAT -.->|sys.modules 转发| DASH
+
+    classDef hw fill:#ffd9d9,stroke:#c0392b,color:#000;
+    classDef safe fill:#fff3cd,stroke:#e67e22,color:#000;
+    class CTRL,HM,MPT hw;
+    class REP,SG,IKF safe;

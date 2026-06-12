@@ -1,0 +1,9 @@
+backend: "recorded"
+moveit2:
+  move_relative_action: "/rebotarm/sim/move_relative"
+  move_named_pose_action: "/rebotarm/sim/move_to_pose"
+  pick_object_action: "/rebotarm/sim/pick_object"
+  place_object_action: "/rebotarm/sim/place_object"
+  execute_trajectory_action: "/execute_trajectory"
+  planning_frame: "base_link"
+  end_effector_link: "grasp_tcp"

@@ -1,0 +1,5 @@
+string record_path
+---
+bool success
+string message
+string normalized_path

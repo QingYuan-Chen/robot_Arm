@@ -1,0 +1,10 @@
+string axis
+float64 distance_m
+string frame_id
+float64 speed_scale
+---
+bool success
+string message
+---
+string state
+float64 progress

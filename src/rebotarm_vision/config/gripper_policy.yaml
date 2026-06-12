@@ -1,0 +1,19 @@
+rebotarm_visual_grasp_executor:
+  ros__parameters:
+    close_position_m: 0.025
+    close_max_effort: 0.4
+    open_before_approach: true
+    auto_gripper_width: true
+    auto_gripper_effort: true
+    open_clearance_m: 0.0
+    close_margin_m: 0.012
+    min_gripper_effort: 0.22
+    max_gripper_effort: 0.60
+    max_allowed_grasp_width_m: 0.082
+    gripper_grasp_enabled: true
+    gripper_grasp_close_force: 0.4
+    gripper_grasp_timeout_sec: 8.0
+    gripper_grasp_min_close_time_sec: 0.08
+    gripper_grasp_velocity_threshold: 0.04
+    gripper_grasp_min_closure_distance_m: 0.006
+

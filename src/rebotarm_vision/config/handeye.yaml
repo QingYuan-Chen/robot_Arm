@@ -1,0 +1,15 @@
+# Eye-in-hand calibration result for Gemini2 mounted near the gripper.
+# Generated from filtered samples by removing outliers: [11, 5, 4, 19].
+# ROS TF uses end_link -> camera_depth_frame.
+handeye:
+  parent_frame: end_link
+  child_frame: camera_depth_frame
+  translation:
+    x: -0.085000000
+    y: 0.010000000
+    z: 0.045000000
+  rotation:
+    x: -0.523092811
+    y: 0.578134825
+    z: -0.405717914
+    w: 0.476997914

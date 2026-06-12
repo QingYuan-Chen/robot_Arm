@@ -1,0 +1,9 @@
+# Request
+geometry_msgs/Pose target_pose
+---
+# Response
+bool success
+string message
+float64[] q_solution
+
+# 对应service值，适合一次请求一次响应

@@ -1,0 +1,17 @@
+rebotarm_visual_ready_startup:
+  ros__parameters:
+    auto_move_on_start: true
+    exit_after_startup_move: true
+    startup_delay_sec: 0.0
+    joint_positions: [0.0, -0.1, -0.2, 0.2, 0.0, 0.0]
+    duration_sec: 4.0
+    wait_timeout_sec: 12.0
+    max_start_delta_rad: 1.0
+
+rebotarm_visual_ready:
+  ros__parameters:
+    auto_move_on_start: false
+    joint_positions: [0.0, -0.1, -0.2, 0.2, 0.0, 0.0]
+    duration_sec: 4.0
+    wait_timeout_sec: 12.0
+    max_start_delta_rad: 1.0

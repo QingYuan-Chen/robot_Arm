@@ -1,0 +1,2316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>reBot 遥操作面板</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --line: #d8dee6;
+      --text: #17202a;
+      --muted: #667085;
+      --good: #188a4d;
+      --warn: #b7791f;
+      --bad: #c24135;
+      --info: #2563a8;
+      --shadow: 0 10px 26px rgba(31, 41, 55, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+    .shell { max-width: 1480px; margin: 0 auto; padding: 14px; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    h1 { margin: 0; font-size: 20px; font-weight: 750; }
+    .timestamp { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .teleop-workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(380px, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+    .robot-workspace,
+    .control-cards {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .control-cards {
+      align-content: start;
+      max-height: calc(100vh - 76px);
+      overflow-y: auto;
+      padding-right: 6px;
+      scrollbar-width: thin;
+    }
+    .control-cards::-webkit-scrollbar { width: 8px; }
+    .control-cards::-webkit-scrollbar-thumb {
+      background: #cbd5df;
+      border-radius: 999px;
+      border: 2px solid #f4f6f8;
+    }
+    .card-note {
+      color: var(--muted);
+      line-height: 1.4;
+      padding: 0 12px 10px;
+      overflow-wrap: anywhere;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .value {
+      font-size: 20px;
+      font-weight: 650;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    .value.small { font-size: 15px; font-weight: 600; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .panel-title {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 750;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 750;
+      background: #fbfcfd;
+    }
+    .card-header .panel-title {
+      padding: 0;
+      border-bottom: 0;
+    }
+    .card-toggle {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      min-width: 30px;
+      min-height: 26px;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+    }
+    .card-toggle:hover { background: #f3f6f9; }
+    .collapsible-card.collapsed .card-body { display: none; }
+    .collapsible-card.collapsed .card-header { border-bottom: 0; }
+    .collapsible-card:not(.collapsed) .card-header { box-shadow: inset 3px 0 0 var(--info); }
+    .collapsible-card.collapsed .card-toggle::after { content: "+"; }
+    .collapsible-card:not(.collapsed) .card-toggle::after { content: "-"; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+    }
+    th, td {
+      border-bottom: 1px solid #edf0f3;
+      padding: 9px 10px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      background: #fafbfc;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    th:first-child, td:first-child { text-align: left; width: 110px; }
+    tr:last-child td { border-bottom: 0; }
+    .robot-viewer { margin-bottom: 0; }
+    .viewer-body {
+      position: relative;
+      min-height: min(72vh, 720px);
+      background: #101820;
+    }
+    #robot-view {
+      display: block;
+      width: 100%;
+      height: min(72vh, 720px);
+    }
+    .viewer-status {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.88);
+      color: #26313d;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .viewer-tools {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+    .slider-panel { margin-bottom: 0; }
+    .aux-hidden { display: none; }
+    .slider-grid {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px 14px;
+    }
+    .joint-slider {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr) 132px;
+      gap: 10px;
+      align-items: center;
+      min-height: 34px;
+    }
+    .joint-name { font-weight: 650; font-variant-numeric: tabular-nums; }
+    .joint-slider input[type="range"] {
+      width: 100%;
+      accent-color: var(--info);
+    }
+    .joint-slider input[disabled] { opacity: 0.72; }
+    .joint-values {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .joint-values strong {
+      color: var(--text);
+      font-weight: 650;
+    }
+    .joint-limit {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .preview-toolbar .panel-title {
+      padding: 0;
+      border-bottom: 0;
+    }
+    .slider-pane[hidden] { display: none; }
+    .tool-button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+      min-height: 30px;
+      padding: 5px 10px;
+      font: inherit;
+      cursor: pointer;
+      font-weight: 650;
+      transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+    }
+    .tool-button:hover { background: #f3f6f9; border-color: #c8d2df; }
+    .tool-button:active:not(:disabled) { transform: translateY(1px); }
+    .tool-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+      background: #f5f7fa;
+    }
+    .preview-active input[type="range"] { accent-color: var(--warn); }
+    .execute-row {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .execute-status {
+      color: var(--muted);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .execute-settings {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .execute-setting {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 34px;
+    }
+    .execute-setting label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .execute-setting input[type="number"] {
+      width: 100%;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+    .execute-setting input[type="text"] {
+      width: 100%;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: inherit;
+    }
+    .execute-setting.wide { grid-column: 1 / -1; }
+    .robot-command-row {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .teach-section-title {
+      padding: 10px 12px 6px;
+      color: var(--text);
+      font-weight: 700;
+      border-top: 1px solid var(--line);
+    }
+    .teach-step {
+      border-top: 1px solid var(--line);
+      padding: 0;
+    }
+    .teach-step > summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 10px 12px;
+      color: var(--text);
+      font-weight: 700;
+      user-select: none;
+    }
+    .teach-step > summary::-webkit-details-marker { display: none; }
+    .teach-step > summary::after {
+      content: "+";
+      float: right;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .teach-step[open] > summary::after { content: "-"; }
+    #teach-record-select:invalid { color: var(--muted); }
+    #teach-record-select option { color: var(--text); }
+    #teach-record-select option[value=""] { color: var(--muted); }
+    .execute-button {
+      border-color: #9f3a32;
+      background: #c24135;
+      color: #ffffff;
+      font-weight: 650;
+    }
+    .execute-button:hover { background: #a9362e; }
+    .execute-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+      background: #ffffff;
+      color: var(--muted);
+      border-color: var(--line);
+    }
+    .stop-button {
+      border-color: #44515f;
+      background: #44515f;
+      color: #ffffff;
+      font-weight: 650;
+    }
+    .stop-button:hover { background: #303b46; }
+    .stop-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+      background: #ffffff;
+      color: var(--muted);
+      border-color: var(--line);
+    }
+    .gripper-button {
+      border-color: #2563a8;
+      background: #2563a8;
+      color: #ffffff;
+      font-weight: 650;
+    }
+    .gripper-button:hover { background: #1e4f86; }
+    .gripper-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+      background: #ffffff;
+      color: var(--muted);
+      border-color: var(--line);
+    }
+    .status-list { padding: 10px 12px; display: grid; gap: 10px; }
+    .status-row {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .status-key { color: var(--muted); font-size: 12px; padding-top: 3px; }
+    .status-main { min-width: 0; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: var(--info);
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .chip.good { background: #e8f6ee; color: var(--good); }
+    .chip.warn { background: #fff6df; color: var(--warn); }
+    .chip.bad { background: #fdecea; color: var(--bad); }
+    .chip.pass { background: #e8f6ee; color: var(--good); }
+    .chip.red { background: #fdecea; color: var(--bad); }
+    .detail {
+      margin-top: 5px;
+      color: var(--muted);
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .teach-panel { margin-bottom: 0; }
+    .precheck-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .teach-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+    }
+    .teach-metric {
+      min-height: 60px;
+      border: 1px solid #edf0f3;
+      border-radius: 6px;
+      padding: 8px 9px;
+      background: #fafbfc;
+      min-width: 0;
+    }
+    .teach-metric strong {
+      display: block;
+      font-size: 16px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .compact-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 10px 12px;
+      gap: 8px;
+    }
+    .compact-grid .teach-metric {
+      min-height: 58px;
+      padding: 8px 9px;
+    }
+    .compact-grid .teach-metric strong { font-size: 14px; }
+    .teach-wide { grid-column: span 2; }
+    .mini-limit-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-weight: 500;
+      table-layout: fixed;
+    }
+    .mini-limit-table th,
+    .mini-limit-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 5px 4px;
+      text-align: left;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+    .mini-limit-table th { color: var(--muted); font-weight: 650; }
+    .teach-controls {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .teach-control {
+      display: grid;
+      grid-template-columns: 110px minmax(0, 1fr) 72px;
+      gap: 8px;
+      align-items: center;
+    }
+    .teach-control label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .teach-control input[type="range"] {
+      width: 100%;
+      accent-color: var(--info);
+    }
+    .teach-control input[type="number"] {
+      width: 100%;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+    .event-log {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px;
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .event-item { overflow-wrap: anywhere; }
+    details.panel {
+      display: block;
+      margin-bottom: 12px;
+    }
+    details.panel > summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 650;
+      user-select: none;
+    }
+    details.panel > summary::-webkit-details-marker { display: none; }
+    details.panel > summary::after {
+      content: "+";
+      float: right;
+      color: var(--muted);
+      font-weight: 650;
+    }
+    details.panel[open] > summary::after { content: "-"; }
+    .details-body {
+      border-top: 1px solid var(--line);
+    }
+    .record-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .command-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+    }
+    .keymap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      padding: 0 12px 10px;
+    }
+    .keycap {
+      border: 1px solid #edf0f3;
+      border-radius: 6px;
+      padding: 6px 7px;
+      background: #fafbfc;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .keycap strong {
+      color: var(--text);
+      font-weight: 650;
+    }
+    .record-toolbar select {
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font: inherit;
+      min-width: 0;
+    }
+    .trajectory-view { padding: 12px; display: grid; gap: 10px; }
+    .trajectory-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .trajectory-canvas-wrap {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      min-height: 260px;
+    }
+    #teach-trajectory-canvas {
+      display: block;
+      width: 100%;
+      height: 260px;
+    }
+    .trajectory-controls {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      align-items: center;
+    }
+    .empty { color: var(--muted); padding: 14px; }
+    @media (max-width: 980px) {
+      .teleop-workbench { grid-template-columns: 1fr; }
+      .control-cards { max-height: none; overflow: visible; padding-right: 0; }
+      .precheck-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .teach-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .teach-controls { grid-template-columns: 1fr; }
+      .slider-grid { grid-template-columns: 1fr; }
+      #robot-view { height: 340px; }
+      .viewer-body { min-height: 340px; }
+      #teach-trajectory-canvas { height: 340px; }
+    }
+    @media (max-width: 560px) {
+      .joint-slider { grid-template-columns: 1fr; gap: 4px; }
+      .joint-values { text-align: left; }
+      .teach-grid { grid-template-columns: 1fr; }
+      .trajectory-summary { grid-template-columns: 1fr; }
+      .precheck-strip { grid-template-columns: 1fr; }
+      .compact-grid { grid-template-columns: 1fr; }
+      .teach-wide { grid-column: span 1; }
+      .keymap-grid { grid-template-columns: 1fr; }
+      .command-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topbar">
+      <h1>reBot 遥操作面板</h1>
+      <div class="timestamp" id="updated">等待数据</div>
+    </div>
+    <section class="teleop-workbench">
+      <div class="robot-workspace">
+        <section class="panel robot-viewer">
+          <div class="panel-title">机械臂 3D 实时视图</div>
+          <div class="viewer-body">
+            <canvas id="robot-view"></canvas>
+            <div class="viewer-status" id="robot-view-status">正在加载 3D 机械臂</div>
+            <div class="viewer-tools">
+              <button class="tool-button" id="toggle-grid" type="button">网格</button>
+            </div>
+          </div>
+          <div class="button-row robot-command-row">
+            <button class="tool-button execute-button" id="arm-safe-home" type="button">回安全位</button>
+            <button class="tool-button" id="arm-enable" type="button">使能</button>
+            <button class="tool-button stop-button" id="arm-disable" type="button">失能</button>
+          </div>
+        </section>
+      </div>
+      <aside class="control-cards">
+        <section class="panel collapsible-card collapsed" id="arm-status-card">
+          <div class="card-header"><div class="panel-title">机械臂总状态</div><button class="card-toggle" type="button" data-card-toggle="arm-status-card" aria-label="展开或折叠机械臂总状态"></button></div>
+          <div class="card-body">
+          <div class="status-list">
+            <div class="status-row">
+              <div class="status-key">模式</div>
+              <div class="status-main"><div class="value small" id="mode">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">状态机</div>
+              <div class="status-main"><div class="value small" id="state">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">使能</div>
+              <div class="status-main"><div class="value small" id="enabled">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">示教录制</div>
+              <div class="status-main"><div class="value small" id="recording-state">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">轨迹回放</div>
+              <div class="status-main"><div class="value small" id="replay-state">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">机械臂命令</div>
+              <div class="status-main"><div class="value small" id="arm-command-state">-</div></div>
+            </div>
+            <div class="status-row">
+              <div class="status-key">夹爪命令</div>
+              <div class="status-main"><div class="value small" id="gripper-command-state">-</div></div>
+            </div>
+          </div>
+          <div class="panel-title">错误信息</div>
+          <div class="status-list" id="errors"><div class="empty">无错误</div></div>
+          </div>
+        </section>
+
+        <section class="panel collapsible-card collapsed" id="motor-state-card">
+          <div class="card-header"><div class="panel-title">电机实时状态</div><button class="card-toggle" type="button" data-card-toggle="motor-state-card" aria-label="展开或折叠电机实时状态"></button></div>
+          <div class="card-body">
+          <table>
+            <thead><tr><th>关节</th><th>位置 rad</th><th>速度</th><th>力矩</th><th>状态</th></tr></thead>
+            <tbody id="joints"><tr><td colspan="5" class="empty">等待关节状态</td></tr></tbody>
+          </table>
+          </div>
+        </section>
+
+        <section class="panel slider-panel collapsible-card collapsed" id="web-teleop-card">
+          <div class="card-header"><div class="panel-title">网页遥操作</div><button class="card-toggle" type="button" data-card-toggle="web-teleop-card" aria-label="展开或折叠网页遥操作"></button></div>
+          <div class="card-body">
+          <div class="preview-toolbar">
+            <button class="tool-button" id="sync-preview" type="button">同步当前姿态</button>
+          </div>
+          <div class="card-note">预览滑条只先改变左侧 3D 模型；确认执行后，一次性发送关节目标和夹爪目标。</div>
+          <div class="aux-hidden" id="joint-sliders"></div>
+          <div class="slider-pane" id="preview-slider-pane">
+            <div class="slider-grid" id="preview-sliders"></div>
+          </div>
+          <div class="execute-settings">
+            <div class="execute-setting">
+              <label for="execute-max-delta">单次最大差值</label>
+              <input id="execute-max-delta" type="number" min="0.05" max="1.50" step="0.05" value="0.80">
+            </div>
+            <div class="execute-setting">
+              <label for="execute-duration">执行时长</label>
+              <input id="execute-duration" type="number" min="1.0" max="8.0" step="0.5" value="3.0">
+            </div>
+            <div class="execute-setting">
+              <label for="execute-speed">最大速度</label>
+              <input id="execute-speed" type="number" min="0.1" max="1.5" step="0.1" value="1.5">
+            </div>
+          </div>
+          <div class="execute-row">
+            <div class="execute-status" id="execute-status">当前仅预览。拖动目标滑条后，再确认执行。</div>
+            <div>
+              <button class="tool-button execute-button" id="execute-preview" type="button" disabled>执行关节 + 夹爪</button>
+              <button class="tool-button stop-button" id="stop-execute" type="button" disabled>停止</button>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <section class="panel teach-panel collapsible-card collapsed" id="teach-trajectory-card">
+          <div class="card-header"><div class="panel-title">示教轨迹</div><button class="card-toggle" type="button" data-card-toggle="teach-trajectory-card" aria-label="展开或折叠示教轨迹"></button></div>
+          <div class="card-body">
+          <details class="teach-step" id="teach-record-step">
+            <summary>1. 录制</summary>
+            <div class="execute-settings">
+              <div class="execute-setting wide">
+                <label for="teach-record-name">文件名</label>
+                <input id="teach-record-name" type="text" value="teach_record.jsonl" autocomplete="off">
+              </div>
+            </div>
+            <div class="command-grid">
+              <button class="tool-button execute-button" id="start-teach-record" type="button">开始示教</button>
+              <button class="tool-button stop-button" id="stop-teach-record" type="button" disabled>停止示教</button>
+            </div>
+            <div class="teach-grid compact-grid" id="teach-record-summary">
+              <div class="empty">输入文件名后开始录制。</div>
+            </div>
+          </details>
+          <details class="teach-step" id="teach-check-step">
+            <summary>2. 检查</summary>
+            <div class="record-toolbar">
+              <select id="teach-record-select" required>
+                <option value="" disabled selected>选择已录制文件</option>
+              </select>
+              <button class="tool-button" id="refresh-teach-records" type="button">刷新文件</button>
+            </div>
+            <div class="precheck-strip" id="replay-precheck-summary">
+              <div class="empty">暂无有效示教轨迹</div>
+            </div>
+            <button class="tool-button" id="run-teach-dry-run" type="button" disabled>检查轨迹</button>
+          </details>
+          <details class="teach-step" id="teach-replay-step">
+            <summary>3. 回放</summary>
+            <div class="execute-row">
+              <div class="execute-status" id="teach-dry-run-status">请先检查轨迹。安全检查通过后才能回放。</div>
+              <div>
+                <button class="tool-button execute-button" id="run-teach-replay" type="button" disabled>回放优化轨迹</button>
+                <button class="tool-button stop-button" id="stop-teach-replay" type="button" disabled>停止回放</button>
+              </div>
+            </div>
+            <div class="teach-controls">
+              <div class="teach-control">
+                <label for="teach-replay-speed">回放倍率</label>
+                <input id="teach-replay-speed" type="range" min="0.1" max="1.0" step="0.1" value="1.0">
+                <input id="teach-replay-speed-number" type="number" min="0.1" max="1.0" step="0.1" value="1.0">
+              </div>
+            </div>
+            <div class="teach-grid compact-grid" id="teach-params-details">
+              <div class="empty">等待回放估计</div>
+            </div>
+          </details>
+          <details class="panel teach-panel" id="teach-file-details-panel">
+            <summary>轨迹文件与曲线</summary>
+            <div class="teach-grid" id="teach-file-details">
+              <div class="empty">等待示教文件</div>
+            </div>
+            <div class="trajectory-view">
+              <div class="trajectory-summary" id="teach-trajectory-details">
+                <div class="empty">加载示教文件后绘制轨迹曲线</div>
+              </div>
+              <div class="trajectory-canvas-wrap" id="teach-trajectory-canvas-wrap">
+                <canvas id="teach-trajectory-canvas"></canvas>
+              </div>
+              <div class="trajectory-controls">
+                <button class="tool-button" id="load-teach-trajectory" type="button">加载轨迹</button>
+              </div>
+            </div>
+          </details>
+          <details class="panel teach-panel" id="replay-event-log-panel">
+            <summary>高级日志</summary>
+            <div class="event-log" id="replay-event-log">
+              <div class="empty">暂无回放事件</div>
+            </div>
+          </details>
+          </div>
+        </section>
+
+        <section class="panel collapsible-card collapsed" id="keyboard-teleop-card">
+          <div class="card-header"><div class="panel-title">键盘遥操作</div><button class="card-toggle" type="button" data-card-toggle="keyboard-teleop-card" aria-label="展开或折叠键盘遥操作"></button></div>
+          <div class="card-body">
+          <div class="status-list">
+            <div class="status-row">
+              <div class="status-key">输入状态</div>
+              <div class="status-main"><div class="value small" id="teleop-state">-</div></div>
+            </div>
+          </div>
+          <div class="card-note">开启后保持浏览器页面聚焦，按映射按键发送小步关节轨迹。</div>
+          <div class="keymap-grid">
+            <div class="keycap"><strong>1/q</strong> joint1 +/-</div>
+            <div class="keycap"><strong>2/w</strong> joint2 +/-</div>
+            <div class="keycap"><strong>3/e</strong> joint3 +/-</div>
+            <div class="keycap"><strong>4/r</strong> joint4 +/-</div>
+            <div class="keycap"><strong>5/t</strong> joint5 +/-</div>
+            <div class="keycap"><strong>6/y</strong> joint6 +/-</div>
+            <div class="keycap"><strong>Esc</strong> 关闭</div>
+            <div class="keycap"><strong>焦点</strong> 页面</div>
+            <div class="keycap"><strong>停止</strong> 按钮</div>
+          </div>
+          <div class="execute-settings">
+            <div class="execute-setting">
+              <label for="keyboard-step">步长</label>
+              <input id="keyboard-step-number" type="number" min="0.005" max="0.100" step="0.005" value="0.020">
+            </div>
+            <div class="execute-setting">
+              <label for="keyboard-speed">速度</label>
+              <input id="keyboard-speed-number" type="number" min="0.1" max="1.5" step="0.1" value="0.5">
+            </div>
+          </div>
+          <div class="command-grid">
+            <button class="tool-button execute-button" id="keyboard-enable" type="button">开启键盘</button>
+            <button class="tool-button stop-button" id="keyboard-disable" type="button" disabled>关闭键盘</button>
+          </div>
+          </div>
+        </section>
+
+      </aside>
+    </section>
+  </main>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js';
+    import URDFLoader from 'https://unpkg.com/urdf-loader@0.12.6/src/URDFLoader.js';
+
+    const panelConfig = await fetch('/api/config')
+      .then((response) => response.json())
+      .catch(() => ({
+        joint_names: ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'],
+        joint_limits: {
+          joint1: [-3.1416, 3.1416],
+          joint2: [-3.1416, 3.1416],
+          joint3: [-3.1416, 3.1416],
+          joint4: [-3.1416, 3.1416],
+          joint5: [-3.1416, 3.1416],
+          joint6: [-3.1416, 3.1416],
+        },
+        gripper_limits: [0.0, 0.09],
+        joint_velocity_limits: {
+          joint1: 1.5,
+          joint2: 1.5,
+          joint3: 1.5,
+          joint4: 1.5,
+          joint5: 1.5,
+          joint6: 1.5,
+        },
+      }));
+    const source = new EventSource('/events');
+    const panelMode = String(panelConfig.panel_mode || 'control').toLowerCase();
+    const isCheckMode = panelMode === 'check';
+    const armJointNames = panelConfig.joint_names || ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'];
+    const sliderNames = [...armJointNames, 'gripper'];
+    const jointLimits = {
+      ...(panelConfig.joint_limits || {}),
+      gripper: panelConfig.gripper_limits || [0.0, 0.09],
+    };
+    const webExecuteEnabled = panelConfig.web_execute?.enabled === true;
+    let latestTeachFileInfo = null;
+    let selectedTeachRecordPath = '';
+    let lastTeachDryRun = null;
+    let lastReplayStatusKey = '';
+    let lastFastRenderMs = 0;
+    let lastSlowRenderMs = 0;
+    const FAST_RENDER_INTERVAL_MS = 250;
+    const replayEvents = [];
+    const motorRowsByName = new Map();
+    const fmt = (value, digits = 4) => Number.isFinite(value) ? Number(value).toFixed(digits) : '-';
+    const deg = (value) => Number.isFinite(value) ? (Number(value) * 180 / Math.PI).toFixed(1) : '-';
+    const text = (value) => value === undefined || value === null || value === '' ? '-' : String(value);
+    const escapeHtml = (value) => text(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+    const statusObj = (value) => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+      return { state: text(value) };
+    };
+    const isDetailsOpen = (id) => document.getElementById(id)?.open === true;
+    const isControlCardOpen = (id) => !document.getElementById(id)?.classList.contains('collapsed');
+    const clearOptionalDetails = (id, html = '<div class="empty">展开后显示详情</div>') => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    };
+    const setHtml = (id, html) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    };
+    const toggleControlCard = (cardId) => {
+      const card = document.getElementById(cardId);
+      if (!card) return;
+      card.classList.toggle('collapsed');
+      if (cardId === 'teach-trajectory-card' && !card.classList.contains('collapsed')) {
+        refreshTeachFileInfo({ force: true });
+      }
+    };
+    const attachControlCardToggles = () => {
+      document.querySelectorAll('[data-card-toggle]').forEach((button) => {
+        button.addEventListener('click', () => toggleControlCard(button.dataset.cardToggle));
+      });
+    };
+    const classFor = (state) => {
+      const normalized = String(state || '').toLowerCase();
+      if (['active', 'recording', 'replaying', 'ready', 'idle', 'deadman', 'done', 'direct', 'green', 'pass', 'planned', 'skipped'].includes(normalized)) return 'good';
+      if (['timeout', 'waiting', 'dry_run', 'starting', 'stopped', 'cancel_requested', 'canceled', 'align', 'unknown', 'missing', 'empty', 'invalid', 'yellow', 'disabled'].includes(normalized)) return 'warn';
+      if (['failed', 'rejected', 'blocked', 'unavailable', 'reject', 'red'].includes(normalized)) return 'bad';
+      return '';
+    };
+    const displayState = (state, context = '') => {
+      const normalized = String(state || '').toLowerCase();
+      const stateLabels = {
+        active: '运行中',
+        accepted: '已接收',
+        align: '需对齐',
+        blocked: '已阻止',
+        canceled: '已取消',
+        cancel_requested: '正在取消',
+        direct: '可直接回放',
+        disabled: '已关闭',
+        done: '完成',
+        dry_run: '检查完成',
+        failed: '失败',
+        green: '可直接回放',
+        idle: '空闲',
+        invalid: '无效',
+        missing: '缺失',
+        pass: '通过',
+        ready: '就绪',
+        recording: '录制中',
+        red: '禁止回放',
+        rejected: '已拒绝',
+        replaying: '回放中',
+        safety_stop: '安全停止',
+        starting: '启动中',
+        stopped: '已停止',
+        stop_requested: '正在停止',
+        timeout: '超时',
+        unavailable: '不可用',
+        unknown: '未知',
+        waiting: '等待中',
+        yellow: '安全重定时后可回放',
+      };
+      if (context === 'keyboard' && normalized === 'timeout') return '无按键输入';
+      if (context === 'teach_file' && ['missing', 'empty', 'invalid'].includes(normalized)) return '暂无有效示教轨迹';
+      if (Object.prototype.hasOwnProperty.call(stateLabels, normalized)) return stateLabels[normalized];
+      return text(state);
+    };
+    const setChip = (id, state) => {
+      const el = document.getElementById(id);
+      const cls = classFor(state);
+      const context = id === 'teleop-state' ? 'keyboard' : '';
+      el.innerHTML = `<span class="chip ${cls}">${displayState(state, context)}</span>`;
+    };
+    const syncRealActionButtons = () => {
+      if (isCheckMode) {
+        document.getElementById('execute-preview')?.setAttribute('disabled', '');
+        document.getElementById('set-gripper')?.setAttribute('disabled', '');
+        document.getElementById('run-teach-dry-run')?.setAttribute('disabled', '');
+        document.getElementById('run-teach-replay')?.setAttribute('disabled', '');
+        return;
+      }
+      if (webExecuteEnabled) return;
+      document.getElementById('execute-preview')?.setAttribute('disabled', '');
+      document.getElementById('set-gripper')?.setAttribute('disabled', '');
+      document.getElementById('run-teach-replay')?.setAttribute('disabled', '');
+    };
+    const statusBlock = (label, value) => {
+      const obj = statusObj(value);
+      const state = obj.state || obj.status || '-';
+      const details = [];
+      if (obj.message) details.push(obj.message);
+      if (obj.last_key) details.push(`按键: ${obj.last_key}`);
+      if (Number.isFinite(obj.max_error)) details.push(`最大误差: ${fmt(obj.max_error)}`);
+      if (Number.isFinite(obj.max_delta)) details.push(`最大差值: ${fmt(obj.max_delta)}`);
+      if (Number.isFinite(obj.max_delta_limit)) details.push(`限制: ${fmt(obj.max_delta_limit)}`);
+      if (Number.isFinite(obj.duration)) details.push(`时长: ${fmt(obj.duration, 2)}s`);
+      if (Number.isFinite(obj.max_joint_speed_rad_s)) details.push(`速度上限: ${fmt(obj.max_joint_speed_rad_s, 2)}rad/s`);
+      if (Number.isFinite(obj.position)) details.push(`位置: ${fmt(obj.position)}m`);
+      if (Number.isFinite(obj.max_effort)) details.push(`力矩: ${fmt(obj.max_effort, 2)}`);
+      if (Number.isFinite(obj.samples)) details.push(`采样点: ${obj.samples}`);
+      if (Number.isFinite(obj.elapsed_sec)) details.push(`耗时: ${fmt(obj.elapsed_sec, 1)}s`);
+      if (Number.isFinite(obj.actual_sample_rate_hz)) details.push(`实际频率: ${fmt(obj.actual_sample_rate_hz, 1)}Hz`);
+      if (Number.isFinite(obj.file_size_bytes)) details.push(`大小: ${obj.file_size_bytes}B`);
+      if (Number.isFinite(obj.trajectory_points)) details.push(`轨迹点: ${obj.trajectory_points}`);
+      if (obj.writing_state) details.push(`写入: ${obj.writing_state}`);
+      if (obj.arm_state) details.push(`机械臂: ${obj.arm_state}`);
+      if (obj.record_path) details.push(`文件: ${obj.record_path}`);
+      if (obj.start_band) details.push(`起点: ${displayState(obj.start_band)}`);
+      return `
+        <div class="status-row">
+          <div class="status-key">${label}</div>
+          <div class="status-main">
+            <span class="chip ${classFor(state)}">${displayState(state)}</span>
+            ${details.length ? `<div class="detail">${details.join(' | ')}</div>` : ''}
+          </div>
+        </div>`;
+    };
+    const teachMetric = (label, value, options = {}) => `
+      <div class="teach-metric ${options.wide ? 'teach-wide' : ''}">
+        <div class="label">${escapeHtml(label)}</div>
+        <strong>${options.raw ? value : escapeHtml(value)}</strong>
+      </div>`;
+    const formatJointMap = (positions) => {
+      if (!positions || typeof positions !== 'object') return '-';
+      const entries = armJointNames
+        .filter((name) => Object.prototype.hasOwnProperty.call(positions, name))
+        .map((name) => `${name}: ${fmt(Number(positions[name]))}`);
+      return entries.length ? entries.join(' | ') : '-';
+    };
+    const countLabel = (shown, total, truncated) => {
+      if (!Number.isFinite(Number(total))) return String(shown || 0);
+      return truncated ? `${shown}/${total}` : String(total);
+    };
+    const replayPolicyText = (policy) => {
+      const value = String(policy || '').toLowerCase();
+      if (value.includes('safe retiming')) return '自动限速平滑后回放';
+      if (value.includes('blocked')) return '禁止真机回放';
+      if (value.includes('direct')) return '可检查后回放';
+      return text(policy);
+    };
+    const renderTeachFileInfo = (info) => {
+      if (!info || typeof info !== 'object') {
+        return '<div class="empty">示教文件检查不可用</div>';
+      }
+      const stateClass = classFor(info.start_band);
+      return [
+        teachMetric('文件检查', `<span class="chip ${stateClass}">${escapeHtml(displayState(info.start_band))}</span>`, { raw: true }),
+        teachMetric('采样点', Number.isFinite(info.samples) ? info.samples : '-'),
+        teachMetric('录制时长', Number.isFinite(info.duration_sec) ? `${fmt(info.duration_sec, 1)} s` : '-'),
+        teachMetric('最大关节', text(info.worst_joint)),
+        teachMetric('起点误差', Number.isFinite(info.max_error) ? `${fmt(info.max_error)} rad` : '-'),
+        teachMetric('文件存在', info.exists ? '是' : '否'),
+        teachMetric('录制文件', text(info.path), { wide: true }),
+        teachMetric('提示', text(info.message), { wide: true }),
+        teachMetric('起点位置', formatJointMap(info.start_positions), { wide: true }),
+        teachMetric('终点位置', formatJointMap(info.end_positions), { wide: true }),
+        teachMetric('当前到起点误差', formatJointMap(info.per_joint_error), { wide: true }),
+        teachMetric('轨迹异常点', countLabel(Array.isArray(info.anomalies) ? info.anomalies.length : 0, info.anomalies_total, info.anomalies_truncated)),
+      ].join('');
+    };
+    const renderTeachRecordSummary = (info, recordingValue) => {
+      const recording = statusObj(recordingValue);
+      return [
+        teachMetric('录制状态', `<span class="chip ${classFor(recording.state)}">${escapeHtml(displayState(recording.state || 'idle'))}</span>`, { raw: true }),
+        teachMetric('采样点', Number.isFinite(recording.samples) ? recording.samples : (Number.isFinite(info?.samples) ? info.samples : '-')),
+        teachMetric('文件', text(recording.record_path || info?.path), { wide: true }),
+      ].join('');
+    };
+    let latestTeachTrajectory = null;
+    const renderTeachTrajectoryDetails = (payload) => {
+      if (!payload || payload.accepted === false) {
+        return `<div class="empty">${escapeHtml(payload?.message || '示教轨迹不可用')}</div>`;
+      }
+      return [
+        teachMetric('曲线来源', text(payload.curve_source || 'prepared')),
+        teachMetric('优化轨迹点', Number.isFinite(payload.raw_samples) ? payload.raw_samples : '-'),
+        teachMetric('显示点数', Number.isFinite(payload.returned_samples) ? payload.returned_samples : '-'),
+        teachMetric('轨迹时长', Number.isFinite(payload.duration_sec) ? `${fmt(payload.duration_sec, 2)} s` : '-'),
+        teachMetric('优化文件', text(payload.prepared_record_path || payload.path || latestTeachFileInfo?.path), { wide: true }),
+        teachMetric('原始文件', text(payload.raw_record_path || latestTeachFileInfo?.path), { wide: true }),
+      ].join('');
+    };
+    const drawTeachTrajectoryChart = (payload) => {
+      const canvas = document.getElementById('teach-trajectory-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(320, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(220, Math.floor(rect.height * dpr));
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const width = canvas.width / dpr;
+      const height = canvas.height / dpr;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = '#d8dee6';
+      ctx.lineWidth = 1;
+      const left = 44, right = 12, top = 16, bottom = 28;
+      ctx.strokeRect(left, top, width - left - right, height - top - bottom);
+      const points = Array.isArray(payload?.points) ? payload.points : [];
+      const joints = Array.isArray(payload?.joint_names) ? payload.joint_names : [];
+      if (!points.length || !joints.length) {
+        ctx.fillStyle = '#667085';
+        ctx.fillText('暂无轨迹采样点', left + 12, top + 24);
+        return;
+      }
+      const tMax = Math.max(...points.map((p) => Number(p.t) || 0), 0.001);
+      const values = [];
+      points.forEach((point) => joints.forEach((joint) => {
+        const value = Number(point.positions?.[joint]);
+        if (Number.isFinite(value)) values.push(value);
+      }));
+      const yMin = Math.min(...values, -0.1);
+      const yMax = Math.max(...values, 0.1);
+      const ySpan = Math.max(yMax - yMin, 0.001);
+      const xFor = (t) => left + ((Number(t) || 0) / tMax) * (width - left - right);
+      const yFor = (v) => top + (1 - ((Number(v) - yMin) / ySpan)) * (height - top - bottom);
+      const colors = ['#2563a8', '#188a4d', '#b7791f', '#c24135', '#6b46c1', '#0f766e'];
+      const drawSeries = (seriesPoints, alpha = 1.0, widthScale = 1.5) => {
+        joints.forEach((joint, jointIndex) => {
+          ctx.beginPath();
+          ctx.strokeStyle = colors[jointIndex % colors.length];
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = widthScale;
+          seriesPoints.forEach((point, index) => {
+            const x = xFor(point.t);
+            const y = yFor(point.positions?.[joint]);
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        });
+        ctx.globalAlpha = 1.0;
+      };
+      drawSeries(points, 1.0, 1.8);
+      (payload.events || []).forEach((event) => {
+        const point = points.find((item) => item.sample === event.sample);
+        if (!point) return;
+        const x = xFor(point.t);
+        ctx.strokeStyle = event.level === 'red' ? '#c24135' : '#b7791f';
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, height - bottom);
+        ctx.stroke();
+      });
+      ctx.fillStyle = '#667085';
+      ctx.fillText(`${fmt(yMax)} rad`, 6, top + 8);
+      ctx.fillText(`${fmt(yMin)} rad`, 6, height - bottom);
+      ctx.fillText(`${fmt(tMax, 2)} s`, width - right - 42, height - 8);
+    };
+    const loadTeachTrajectory = async () => {
+      try {
+        const suffix = selectedTeachRecordPath ? `?path=${encodeURIComponent(selectedTeachRecordPath)}&max_points=500` : '?max_points=500';
+        const response = await fetch(`/api/teach_trajectory${suffix}`);
+        const payload = await response.json();
+        latestTeachTrajectory = payload;
+        document.getElementById('teach-trajectory-details').innerHTML = renderTeachTrajectoryDetails(payload);
+        drawTeachTrajectoryChart(payload);
+      } catch (error) {
+        document.getElementById('teach-trajectory-details').innerHTML =
+          `<div class="empty">轨迹加载失败：${escapeHtml(error.message)}</div>`;
+      }
+    };
+    const renderReplayPrecheckSummary = (info) => {
+      const band = String(info?.start_band || 'unknown').toLowerCase();
+      const quality = info?.quality || {};
+      const estimate = replayEstimate(info);
+      const replay = statusObj(previewState.latestTeleop?.replay);
+      const preparedQuality = lastTeachDryRun?.prepared_replay?.after_quality || replay.prepared_replay?.after_quality || {};
+      const playbackRisk = String(
+        lastTeachDryRun?.effective_risk_level ||
+        lastTeachDryRun?.prepared_risk_level ||
+        replay.effective_risk_level ||
+        replay.prepared_risk_level ||
+        preparedQuality.risk_level ||
+        '-'
+      ).toLowerCase();
+      const preparedJump = Number.isFinite(preparedQuality.max_jump_rad)
+        ? preparedQuality.max_jump_rad
+        : replay.prepared_max_jump_rad;
+      const preparedVelocity = Number.isFinite(preparedQuality.max_velocity_rad_s)
+        ? preparedQuality.max_velocity_rad_s
+        : undefined;
+      const preparedAcceleration = Number.isFinite(preparedQuality.max_acceleration_rad_s2)
+        ? preparedQuality.max_acceleration_rad_s2
+        : replay.retimed_max_acceleration_rad_s2;
+      const preparedJerk = Number.isFinite(preparedQuality.max_jerk_rad_s3)
+        ? preparedQuality.max_jerk_rad_s3
+        : replay.retimed_max_jerk_rad_s3;
+      const time_parameterization = replay.prepared_replay?.time_parameterization || {};
+      const large_motion = lastTeachDryRun?.prepared_replay?.large_motion || replay.prepared_replay?.large_motion || {};
+      const requestedSpeed = Number.isFinite(large_motion?.requested_speed)
+        ? large_motion.requested_speed
+        : estimate.speed;
+      const effectiveSpeed = Number.isFinite(large_motion?.effective_speed)
+        ? large_motion.effective_speed
+        : Number(replay.speed || estimate.speed);
+      const trackingGuard = replay.runtime_monitor || {};
+      const moveit = replay.moveit_start_align || {};
+      const collision = replay.collision_precheck || {};
+      return [
+        teachMetric('起点状态', `<span class="chip ${classFor(band)}">${escapeHtml(displayState(band || 'unknown'))}</span>`, { raw: true }),
+        teachMetric('回放质量', `<span class="chip ${classFor(playbackRisk)}">${escapeHtml(displayState(playbackRisk || '-'))}</span>`, { raw: true }),
+        teachMetric('MoveIt', moveit.state ? `<span class="chip ${classFor(moveit.state)}">${escapeHtml(moveit.state)}</span>` : '-', { raw: true }),
+        teachMetric('碰撞检查', collision.state ? `<span class="chip ${classFor(collision.state)}">${escapeHtml(displayState(collision.state))}</span>` : '-', { raw: true }),
+        teachMetric('碰撞原因', text(collision.message || '-')),
+        teachMetric('起点误差', Number.isFinite(info?.max_error) ? `${fmt(info.max_error)} rad` : '-'),
+        teachMetric('最大关节', text(info?.worst_joint)),
+        teachMetric('优化跳变', Number.isFinite(preparedJump) ? `${fmt(preparedJump)} rad` : '-'),
+        teachMetric('优化速度', Number.isFinite(preparedVelocity) ? `${fmt(preparedVelocity)} rad/s` : '-'),
+        teachMetric('优化加速度', Number.isFinite(preparedAcceleration) ? `${fmt(preparedAcceleration)} rad/s^2` : '-'),
+        teachMetric('优化加加速度', Number.isFinite(preparedJerk) ? `${fmt(preparedJerk)} rad/s^3` : '-'),
+        teachMetric('请求倍率', `${fmt(requestedSpeed, 1)} x`),
+        teachMetric('实际倍率', `${fmt(effectiveSpeed, 1)} x`),
+        teachMetric('大范围轨迹', large_motion?.enabled ? '是' : '否'),
+        teachMetric('跟踪保护', trackingGuard?.enabled === false ? '关闭' : `${fmt(Number(trackingGuard?.max_tracking_error_rad ?? panelConfig.max_tracking_error_rad ?? 0.25), 2)} rad`),
+        teachMetric('时间参数化', text(time_parameterization?.used_method || replay.time_parameterization_method || 'auto')),
+        teachMetric('MoveIt 对齐', moveit.state ? '起点对齐路径' : '等待中'),
+        teachMetric('自动对齐时间', `${fmt(estimate.alignDuration, 1)} s`),
+        teachMetric('预计时间', `${fmt(estimate.estimatedDuration, 1)} s`),
+        teachMetric('轨迹点', estimate.trajectoryPoints),
+      ].join('');
+    };
+    const replayEstimate = (info) => {
+      const speed = Math.min(Math.max(Number(teachReplaySettings.replaySpeed), 0.1), 1.0);
+      const maxError = Number(info?.max_error);
+      const alignDuration = Math.min(Math.max(Number.isFinite(maxError) && maxError > 0 ? maxError / 0.15 : 3.0, 3.0), 10.0);
+      const alignSteps = Math.min(Math.max(Math.round(Number(teachReplaySettings.alignSteps)), 2), 200);
+      const finalHold = 1.0;
+      const useAlign = String(info?.start_band || '').toLowerCase() === 'align';
+      const recordDuration = Number(info?.duration_sec);
+      const replayDuration = Number.isFinite(recordDuration) ? recordDuration / Math.max(speed, 0.01) : NaN;
+      return {
+        speed,
+        alignDuration,
+        alignSteps,
+        finalHold,
+        useAlign,
+        estimatedDuration: (Number.isFinite(replayDuration) ? replayDuration : 0) + (useAlign ? alignDuration : 0) + finalHold,
+        trajectoryPoints: (Number(info?.samples) || 0) + (useAlign ? alignSteps : 0) + ((Number(info?.samples) || 0) > 0 && finalHold > 0 ? 1 : 0),
+      };
+    };
+    const replaySettingsPayload = () => ({
+      replay_speed: Math.min(Math.max(Number(teachReplaySettings.replaySpeed), 0.1), 1.0),
+      align_duration: replayEstimate(latestTeachFileInfo).alignDuration,
+      align_steps: Math.min(Math.max(Math.round(Number(teachReplaySettings.alignSteps)), 2), 200),
+      final_hold_sec: 1.0,
+    });
+    const renderReplayParams = (info) => {
+      const estimate = replayEstimate(info);
+      return [
+        teachMetric('回放倍率', `${fmt(estimate.speed, 1)} x`),
+        teachMetric('预计时长', `${fmt(estimate.estimatedDuration, 1)} s`),
+        teachMetric('轨迹点', estimate.trajectoryPoints),
+      ].join('');
+    };
+    const isReplayArmCommandLocked = (replay = statusObj(previewState.latestTeleop?.replay)) => {
+      const state = String(replay.state || '').toLowerCase();
+      return ['replaying', 'cancel_requested', 'stop_requested'].includes(state);
+    };
+    const addReplayEvent = (message) => {
+      const now = new Date().toLocaleTimeString();
+      replayEvents.unshift(`${now} ${message}`);
+      replayEvents.splice(8);
+      if (!isDetailsOpen('replay-event-log-panel')) return;
+      document.getElementById('replay-event-log').innerHTML = replayEvents.length
+        ? replayEvents.map((item) => `<div class="event-item">${escapeHtml(item)}</div>`).join('')
+        : '<div class="empty">暂无回放事件</div>';
+    };
+    let latestStatusData = null;
+    const renderOptionalDetails = (data) => {
+      if (!data) return;
+      if (isDetailsOpen('replay-event-log-panel')) {
+        document.getElementById('replay-event-log').innerHTML = replayEvents.length
+          ? replayEvents.map((item) => `<div class="event-item">${escapeHtml(item)}</div>`).join('')
+        : '<div class="empty">暂无回放事件</div>';
+      }
+    };
+    const attachDetailsUnloaders = () => {
+      [
+        ['replay-event-log-panel', ['replay-event-log']],
+      ].forEach(([panelId, bodyIds]) => {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        panel.addEventListener('toggle', () => {
+          if (panel.open) {
+            renderOptionalDetails(latestStatusData);
+          } else {
+            bodyIds.forEach((id) => clearOptionalDetails(id));
+          }
+        });
+      });
+    };
+    const updateTeachDryRunButton = (info) => {
+      const band = String(info?.start_band || '').toLowerCase();
+      const button = document.getElementById('run-teach-dry-run');
+      button.disabled = isCheckMode || !['direct', 'align', 'moveit_align'].includes(band);
+      const replayButton = document.getElementById('run-teach-replay');
+      const stopButton = document.getElementById('stop-teach-replay');
+      const dryRunMatches = lastTeachDryRun?.accepted === true &&
+        lastTeachDryRun?.record_path === info?.path;
+      replayButton.disabled = isCheckMode || !webExecuteEnabled || !dryRunMatches || !['direct', 'align', 'moveit_align'].includes(band);
+      replayButton.title = replayButton.disabled
+        ? (dryRunMatches ? '当前起点状态不可回放，请靠近示教起点后重新检查。' : '请先检查当前选择的轨迹文件。')
+        : '检查结果有效，可以发送优化后的真实回放轨迹。';
+      const replayState = String(statusObj(previewState.latestTeleop?.replay).state || '').toLowerCase();
+      stopButton.disabled = !['replaying', 'cancel_requested', 'safety_stop'].includes(replayState);
+    };
+    const refreshTeachFileInfo = async (options = {}) => {
+      if (!options.force && !isControlCardOpen('teach-trajectory-card')) return;
+      try {
+        const suffix = selectedTeachRecordPath ? `?path=${encodeURIComponent(selectedTeachRecordPath)}` : '';
+        const response = await fetch(`/api/teach_record_info${suffix}`);
+        const info = await response.json();
+        latestTeachFileInfo = info;
+        setHtml('replay-precheck-summary', renderReplayPrecheckSummary(info));
+        setHtml('teach-file-details', renderTeachFileInfo(info));
+        setHtml('teach-record-summary', renderTeachRecordSummary(info, previewState.latestTeleop?.recording));
+        setHtml('teach-params-details', renderReplayParams(info));
+        updateTeachDryRunButton(info);
+      } catch (error) {
+        setHtml('replay-precheck-summary', `<div class="empty">预检查不可用: ${escapeHtml(error.message)}</div>`);
+        setHtml('teach-file-details', `<div class="empty">示教文件检查失败: ${escapeHtml(error.message)}</div>`);
+        document.getElementById('run-teach-dry-run').disabled = true;
+        document.getElementById('run-teach-replay').disabled = true;
+        document.getElementById('stop-teach-replay').disabled = true;
+        setHtml('teach-params-details', `<div class="empty">回放参数不可用: ${escapeHtml(error.message)}</div>`);
+      }
+    };
+    const refreshTeachRecords = async () => {
+      try {
+        const response = await fetch('/api/teach_records');
+        const payload = await response.json();
+        const select = document.getElementById('teach-record-select');
+        const current = selectedTeachRecordPath || '';
+        const records = (payload.records || []).slice(0, 10);
+        select.innerHTML = '<option value="" disabled selected>选择已录制文件</option>' +
+          records.map((record) => `<option value="${escapeHtml(record.path)}">${escapeHtml(record.name || record.path)}</option>`).join('');
+        select.value = current;
+      } catch (error) {
+        document.getElementById('teach-file-details').innerHTML =
+          `<div class="empty">示教文件列表读取失败: ${escapeHtml(error.message)}</div>`;
+      }
+    };
+    const selectTeachRecord = async (path) => {
+      selectedTeachRecordPath = path || '';
+      const selectedName = selectedTeachRecordPath.split('/').pop() || selectedTeachRecordPath.split('\\\\').pop();
+      if (selectedName) {
+        document.getElementById('teach-record-name').value = selectedName;
+      }
+      lastTeachDryRun = null;
+      document.getElementById('teach-dry-run-status').textContent =
+        selectedTeachRecordPath
+          ? `已选择示教文件: ${selectedTeachRecordPath}`
+          : '请先选择示教文件，再检查轨迹。';
+      addReplayEvent(selectedTeachRecordPath ? `已选择文件: ${selectedTeachRecordPath}` : '已清空文件选择');
+      await refreshTeachFileInfo();
+    };
+    const previewState = {
+      active: false,
+      targets: {},
+      latestJoints: {},
+      executing: false,
+      latestTeleop: {},
+    };
+    const executeSettings = {
+      maxDelta: 0.8,
+      duration: 3.0,
+      maxSpeed: Number(panelConfig.web_execute?.max_joint_speed_rad_s) || 1.5,
+    };
+    const executeMaxDeltaLimit = Number(panelConfig.web_execute?.max_delta_rad) || 1.5;
+    const gripperSettings = {
+      maxEffort: Number(panelConfig.web_gripper?.max_effort) || 0.3,
+    };
+    const keyboardSettings = {
+      enabled: false,
+      stepRad: Number(panelConfig.web_keyboard?.step_rad) || 0.02,
+      minStepRad: Number(panelConfig.web_keyboard?.min_step_rad) || 0.005,
+      maxStepRad: Number(panelConfig.web_keyboard?.max_step_rad) || 0.1,
+      duration: Number(panelConfig.web_keyboard?.duration) || 0.2,
+      minDuration: Number(panelConfig.web_keyboard?.min_duration) || 0.1,
+      maxDuration: Number(panelConfig.web_keyboard?.max_duration) || 2.0,
+      maxSpeed: Number(panelConfig.web_keyboard?.max_joint_speed_rad_s) || 0.5,
+    };
+    const teachReplaySettings = {
+      replaySpeed: Number(panelConfig.teach?.replay_speed) || 1.0,
+      alignSteps: Number(panelConfig.teach?.align_steps) || 30,
+    };
+    const clamp = (value, min, max) => Math.min(Math.max(Number(value), min), max);
+    const makeSlider = (name, mode = 'live') => {
+      const [min, max] = jointLimits[name] || [-3.1416, 3.1416];
+      const isGripper = name === 'gripper';
+      const isPreview = mode === 'preview';
+      const prefix = isPreview ? 'preview' : 'slider';
+      return `
+        <div class="joint-slider" id="${prefix}-row-${name}">
+          <div class="joint-name">${name}</div>
+          <input id="${prefix}-${name}" type="range" min="${min}" max="${max}" step="0.0001" value="0" ${isPreview ? '' : 'disabled'}>
+          <div class="joint-values">
+            <strong id="${prefix}-rad-${name}">-</strong> ${isGripper ? 'm' : 'rad'}
+            <span id="${prefix}-deg-wrap-${name}">${isGripper ? '' : ' / <span id="' + prefix + '-deg-' + name + '">-</span> deg'}</span>
+            <div class="joint-limit">${Number(min).toFixed(2)} .. ${Number(max).toFixed(2)}</div>
+          </div>
+        </div>`;
+    };
+    document.getElementById('joint-sliders').innerHTML = sliderNames.map(makeSlider).join('');
+    document.getElementById('preview-sliders').innerHTML = sliderNames.map((name) => makeSlider(name, 'preview')).join('');
+    const robotViewer = {
+      scene: null,
+      camera: null,
+      renderer: null,
+      controls: null,
+      grid: null,
+      robot: null,
+      gripperVisuals: null,
+      ready: false,
+      renderPending: false,
+    };
+    const objectNamePath = (object) => {
+      const names = [];
+      let cursor = object;
+      while (cursor) {
+        if (cursor.name) names.push(String(cursor.name).toLowerCase());
+        cursor = cursor.parent;
+      }
+      return names.join('/');
+    };
+    const markGripperDebug = (gripperVisuals, opening = 0) => {
+      window.__rebotGripperDebug = {
+        leftCount: gripperVisuals.left.length,
+        rightCount: gripperVisuals.right.length,
+        leftNames: gripperVisuals.left.map(({ object }) => objectNamePath(object)),
+        rightNames: gripperVisuals.right.map(({ object }) => objectNamePath(object)),
+        lastOpening: opening,
+        lastLeftY: gripperVisuals.left.map(({ object }) => object.position.y),
+        lastRightY: gripperVisuals.right.map(({ object }) => object.position.y),
+      };
+      document.body.dataset.gripperLeftCount = String(gripperVisuals.left.length);
+      document.body.dataset.gripperRightCount = String(gripperVisuals.right.length);
+      document.body.dataset.gripperOpening = String(opening);
+      document.body.dataset.gripperLeftY = gripperVisuals.left.map(({ object }) => object.position.y.toFixed(6)).join(',');
+      document.body.dataset.gripperRightY = gripperVisuals.right.map(({ object }) => object.position.y.toFixed(6)).join(',');
+    };
+    const addGripperVisual = (gripperVisuals, side, object) => {
+      if (!object) return;
+      const list = gripperVisuals[side];
+      if (list.some((entry) => entry.object === object)) return;
+      list.push({ object, base: object.position.clone() });
+    };
+    const namedRobotObject = (robot, name) => {
+      return robot?.visual?.[name] || robot?.frames?.[name] || robot?.links?.[name] || null;
+    };
+    const viewerStatus = (message) => {
+      const el = document.getElementById('robot-view-status');
+      if (el) el.textContent = message;
+    };
+    const renderRobotFrame = () => {
+      robotViewer.renderPending = false;
+      if (!robotViewer.renderer || !robotViewer.scene || !robotViewer.camera) return;
+      robotViewer.controls?.update();
+      robotViewer.renderer.render(robotViewer.scene, robotViewer.camera);
+    };
+    const scheduleRobotRender = () => {
+      if (robotViewer.renderPending) return;
+      robotViewer.renderPending = true;
+      requestAnimationFrame(renderRobotFrame);
+    };
+    const initRobotViewer = async () => {
+      const canvas = document.getElementById('robot-view');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x101820);
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
+      camera.position.set(0.55, -0.75, 0.45);
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0, 0.18);
+      controls.update();
+      controls.addEventListener('change', scheduleRobotRender);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x324055, 1.9));
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      keyLight.position.set(0.5, -0.6, 0.8);
+      scene.add(keyLight);
+      const grid = new THREE.GridHelper(0.8, 16, 0x5b6775, 0x27313c);
+      grid.rotation.x = Math.PI / 2;
+      grid.visible = false;
+      scene.add(grid);
+      robotViewer.grid = grid;
+      robotViewer.scene = scene;
+      robotViewer.camera = camera;
+      robotViewer.renderer = renderer;
+      robotViewer.controls = controls;
+
+      const loader = new URDFLoader();
+      const robot = await new Promise((resolve, reject) => {
+        loader.load('/robot/urdf', resolve, undefined, reject);
+      });
+      robot.rotation.x = -Math.PI / 2;
+      robot.traverse((object) => {
+        if (object.isMesh) {
+          object.castShadow = false;
+          object.receiveShadow = false;
+          if (object.material) {
+            object.material.color?.set(0xaeb7c2);
+            object.material.roughness = 0.62;
+            object.material.metalness = 0.12;
+            object.material.needsUpdate = true;
+          }
+        }
+      });
+      const gripperVisuals = {
+        left: [],
+        right: [],
+      };
+      addGripperVisual(gripperVisuals, 'left', namedRobotObject(robot, 'left_finger'));
+      addGripperVisual(gripperVisuals, 'right', namedRobotObject(robot, 'right_finger'));
+      if (!gripperVisuals.left.length || !gripperVisuals.right.length) {
+        robot.traverse((object) => {
+          const name = objectNamePath(object);
+          if (!gripperVisuals.left.length && name.includes('left_finger')) addGripperVisual(gripperVisuals, 'left', object);
+          if (!gripperVisuals.right.length && name.includes('right_finger')) addGripperVisual(gripperVisuals, 'right', object);
+        });
+      }
+      scene.add(robot);
+      robotViewer.robot = robot;
+      robotViewer.gripperVisuals = gripperVisuals;
+      markGripperDebug(gripperVisuals);
+      const resize = () => {
+        const rect = canvas.getBoundingClientRect();
+        renderer.setSize(rect.width, rect.height, false);
+        camera.aspect = rect.width / Math.max(rect.height, 1);
+        camera.updateProjectionMatrix();
+        scheduleRobotRender();
+      };
+      window.addEventListener('resize', resize);
+      resize();
+      robotViewer.ready = true;
+      scheduleRobotRender();
+      viewerStatus('3D 视图已连接：正在跟随关节和夹爪状态');
+    };
+    const jointsFromTargets = (targets) => {
+      const result = {};
+      sliderNames.forEach((name) => {
+        if (Number.isFinite(Number(targets[name]))) {
+          result[name] = { position: Number(targets[name]) };
+        }
+      });
+      return result;
+    };
+    const updateRobotViewer = (joints) => {
+      if (!robotViewer.ready) return;
+      armJointNames.forEach((name) => {
+        const state = joints[name];
+        const joint = robotViewer.robot?.joints?.[name];
+        const position = state && Number.isFinite(Number(state.position)) ? Number(state.position) : NaN;
+        if (!joint || !Number.isFinite(position)) return;
+        joint.setJointValue(position);
+      });
+      const gripper = joints.gripper;
+      const gripperPosition = gripper && Number.isFinite(Number(gripper.position)) ? Number(gripper.position) : NaN;
+      if (Number.isFinite(gripperPosition) && robotViewer.gripperVisuals) {
+        const [closed, open] = jointLimits.gripper || [0.0, 0.09];
+        const opening = clamp(gripperPosition, closed, open) - Number(closed);
+        const halfTravel = opening * 0.5;
+        robotViewer.gripperVisuals.left.forEach(({ object, base }) => {
+          object.position.copy(base);
+          object.position.y += halfTravel;
+        });
+        robotViewer.gripperVisuals.right.forEach(({ object, base }) => {
+          object.position.copy(base);
+          object.position.y -= halfTravel;
+        });
+        markGripperDebug(robotViewer.gripperVisuals, opening);
+      }
+      scheduleRobotRender();
+    };
+    initRobotViewer().catch((error) => viewerStatus(`3D 视图不可用: ${error.message}`));
+    document.getElementById('toggle-grid').addEventListener('click', () => {
+      if (!robotViewer.grid) return;
+      robotViewer.grid.visible = !robotViewer.grid.visible;
+      scheduleRobotRender();
+    });
+    const updateSlider = (name, joint, mode = 'live') => {
+      const prefix = mode === 'preview' ? 'preview' : 'slider';
+      const slider = document.getElementById(`${prefix}-${name}`);
+      const radLabel = document.getElementById(`${prefix}-rad-${name}`);
+      const degLabel = document.getElementById(`${prefix}-deg-${name}`);
+      const position = joint && Number.isFinite(Number(joint.position)) ? Number(joint.position) : NaN;
+      if (!Number.isFinite(position)) {
+        radLabel.textContent = '-';
+        if (degLabel) degLabel.textContent = '-';
+        return;
+      }
+      const [min, max] = jointLimits[name] || [-3.1416, 3.1416];
+      slider.min = min;
+      slider.max = max;
+      slider.value = clamp(position, min, max);
+      radLabel.textContent = fmt(position);
+      if (degLabel) degLabel.textContent = deg(position);
+    };
+    const syncPreviewFromLive = () => {
+      sliderNames.forEach((name) => {
+        const joint = previewState.latestJoints[name];
+        const position = joint && Number.isFinite(Number(joint.position)) ? Number(joint.position) : 0;
+        const [min, max] = jointLimits[name] || [-3.1416, 3.1416];
+        previewState.targets[name] = clamp(position, min, max);
+        updateSlider(name, { position: previewState.targets[name] }, 'preview');
+      });
+      previewState.active = false;
+      document.getElementById('web-teleop-card').classList.remove('preview-active');
+      document.getElementById('execute-preview').disabled = true;
+      document.getElementById('stop-execute').disabled = true;
+      document.getElementById('execute-status').textContent = '已同步当前姿态。拖动目标滑条后再执行。';
+      updateRobotViewer(previewState.latestJoints);
+      viewerStatus('3D 视图已连接：正在跟随关节和夹爪状态');
+    };
+    const exitPreviewToLive = (message = '已切换为实时反馈。') => {
+      previewState.active = false;
+      document.getElementById('web-teleop-card').classList.remove('preview-active');
+      document.getElementById('execute-preview').disabled = true;
+      document.getElementById('stop-execute').disabled = true;
+      document.getElementById('execute-status').textContent = message;
+      sliderNames.forEach((name) => updateSlider(name, previewState.latestJoints[name], 'preview'));
+      updateRobotViewer(previewState.latestJoints);
+      viewerStatus('3D 视图已连接：正在跟随实时反馈');
+    };
+    const updateMotorRows = (joints) => {
+      const tbody = document.getElementById('joints');
+      const source = { ...(joints || {}) };
+      if (!source.gripper) {
+        source.gripper = { missing: true };
+      }
+      const motorOrder = new Map([...armJointNames, 'gripper'].map((name, index) => [name, index]));
+      const motorDisplayName = (name) => {
+        if (name === 'gripper') return 'joint7';
+        return name;
+      };
+      const entries = Object.entries(source).sort(([left], [right]) => {
+        const leftOrder = motorOrder.has(left) ? motorOrder.get(left) : 1000;
+        const rightOrder = motorOrder.has(right) ? motorOrder.get(right) : 1000;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+        return left.localeCompare(right);
+      });
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">等待关节状态</td></tr>';
+        motorRowsByName.clear();
+        return;
+      }
+      const liveNames = new Set(entries.map(([name]) => name));
+      motorRowsByName.forEach((row, name) => {
+        if (!liveNames.has(name)) {
+          row.remove();
+          motorRowsByName.delete(name);
+        }
+      });
+      if (tbody.querySelector('.empty')) {
+        tbody.innerHTML = '';
+        motorRowsByName.clear();
+      }
+      entries.forEach(([name, joint]) => {
+        let row = motorRowsByName.get(name);
+        if (!row) {
+          row = document.createElement('tr');
+          row.innerHTML = '<td></td><td></td><td></td><td></td><td></td>';
+          tbody.appendChild(row);
+          motorRowsByName.set(name, row);
+        }
+        const cells = row.children;
+        cells[0].textContent = motorDisplayName(name);
+        cells[1].textContent = joint.missing ? '-' : fmt(joint.position);
+        cells[2].textContent = joint.missing ? '-' : fmt(joint.velocity);
+        cells[3].textContent = joint.missing ? '-' : fmt(joint.torque);
+        cells[4].textContent = joint.status_code ?? '-';
+      });
+    };
+    const previewArmTargets = () => {
+      const result = {};
+      const missing = [];
+      armJointNames.forEach((name) => {
+        const target = Number(previewState.targets[name]);
+        const live = Number(previewState.latestJoints[name]?.position);
+        if (Number.isFinite(target)) {
+          result[name] = target;
+        } else if (Number.isFinite(live)) {
+          result[name] = live;
+        } else {
+          missing.push(name);
+        }
+      });
+      return { result, missing };
+    };
+    const maxPreviewDelta = () => {
+      let maxDelta = 0;
+      armJointNames.forEach((name) => {
+        const live = previewState.latestJoints[name]?.position;
+        const target = previewState.targets[name];
+        if (Number.isFinite(Number(live)) && Number.isFinite(Number(target))) {
+          maxDelta = Math.max(maxDelta, Math.abs(Number(target) - Number(live)));
+        }
+      });
+      return maxDelta;
+    };
+    const speedLimitForJoint = (name) => {
+      const configured = Number(panelConfig.joint_velocity_limits?.[name]);
+      return Number.isFinite(configured) ? Math.min(configured, executeSettings.maxSpeed) : executeSettings.maxSpeed;
+    };
+    const speedCheck = () => {
+      let worst = { name: '', speed: 0, limit: executeSettings.maxSpeed, minDuration: 0 };
+      armJointNames.forEach((name) => {
+        const live = Number(previewState.latestJoints[name]?.position);
+        const target = Number(previewState.targets[name]);
+        if (!Number.isFinite(live) || !Number.isFinite(target)) return;
+        const limit = speedLimitForJoint(name);
+        const distance = Math.abs(target - live);
+        const speed = distance / Math.max(executeSettings.duration, 1e-6);
+        if (speed > worst.speed) {
+          worst = { name, speed, limit, minDuration: distance / Math.max(limit, 1e-6) };
+        }
+      });
+      return worst;
+    };
+    const bindExecuteSetting = (inputId, key, min, max) => {
+      const input = document.getElementById(inputId);
+      const update = (value) => {
+        const clamped = clamp(value, min, max);
+        executeSettings[key] = clamped;
+        input.value = clamped.toFixed(key === 'duration' ? 1 : 2);
+      };
+      input.addEventListener('change', (event) => update(event.target.value));
+      update(executeSettings[key]);
+    };
+    const executePreview = async (options = {}) => {
+      if (!previewState.active || previewState.executing) return { accepted: false, message: '预览未激活' };
+      const delta = maxPreviewDelta();
+      const targets = previewArmTargets();
+      if (targets.missing.length) {
+        document.getElementById('execute-status').textContent = `无法执行：缺少实时关节状态 ${targets.missing.join(', ')}`;
+        return { accepted: false, message: '缺少实时关节状态' };
+      }
+      const speed = speedCheck();
+      if (speed.speed > speed.limit) {
+        document.getElementById('execute-status').textContent =
+          `${speed.name} 速度过高：${fmt(speed.speed, 3)} rad/s > ${fmt(speed.limit, 3)} rad/s，请把时长设为 >= ${fmt(speed.minDuration, 2)}s。`;
+        return { accepted: false, message: '速度过高' };
+      }
+      if (options.confirm !== false) {
+        const confirmed = window.confirm(
+          `发送预览目标到真实机械臂？\n` +
+          `目标差值: ${fmt(delta)} rad\n` +
+          `允许差值: ${fmt(executeSettings.maxDelta)} rad\n` +
+          `执行时长: ${fmt(executeSettings.duration, 2)} s\n` +
+          `速度上限: ${fmt(executeSettings.maxSpeed, 2)} rad/s`
+        );
+        if (!confirmed) return { accepted: false, message: '已取消' };
+      }
+      previewState.executing = true;
+      const button = document.getElementById('execute-preview');
+      const stopButton = document.getElementById('stop-execute');
+      const status = document.getElementById('execute-status');
+      button.disabled = true;
+      stopButton.disabled = false;
+      status.textContent = '正在发送预览目标...';
+      try {
+        const response = await fetch('/api/execute_preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            confirm: 'EXECUTE',
+            joint_positions: targets.result,
+            max_delta_rad: executeSettings.maxDelta,
+            max_joint_speed_rad_s: executeSettings.maxSpeed,
+            duration: executeSettings.duration,
+          }),
+        });
+        const result = await response.json();
+        status.textContent = result.message || (result.accepted ? '已接收' : '已拒绝');
+        if (!result.accepted) {
+          button.disabled = false;
+          stopButton.disabled = true;
+        }
+        return result;
+      } catch (error) {
+        status.textContent = `执行请求失败: ${error.message}`;
+        button.disabled = false;
+        stopButton.disabled = true;
+        return { accepted: false, message: error.message };
+      } finally {
+        previewState.executing = false;
+      }
+    };
+    const stopExecute = async () => {
+      const stopButton = document.getElementById('stop-execute');
+      const status = document.getElementById('execute-status');
+      stopButton.disabled = true;
+      status.textContent = '正在请求停止...';
+      try {
+        const response = await fetch('/api/stop_execute', { method: 'POST' });
+        const result = await response.json();
+        status.textContent = result.message || (result.accepted ? '已请求停止' : '停止被拒绝');
+        if (!result.accepted && result.state !== 'idle') {
+          stopButton.disabled = false;
+        }
+      } catch (error) {
+        status.textContent = `停止请求失败: ${error.message}`;
+        stopButton.disabled = false;
+      }
+    };
+    const setGripper = async (options = {}) => {
+      const target = Number(previewState.targets.gripper);
+      const live = Number(previewState.latestJoints.gripper?.position);
+      const position = Number.isFinite(target) ? target : live;
+      if (!Number.isFinite(position)) {
+        document.getElementById('execute-status').textContent = '无法设置夹爪：缺少夹爪状态';
+        return { accepted: false, message: '缺少夹爪状态' };
+      }
+      if (options.confirm !== false) {
+        const confirmed = window.confirm(`设置夹爪目标？\n位置: ${fmt(position)} m`);
+        if (!confirmed) return { accepted: false, message: '已取消' };
+      }
+      const button = document.getElementById('execute-preview');
+      const status = document.getElementById('execute-status');
+      button.disabled = true;
+      status.textContent = '正在发送夹爪目标...';
+      try {
+        const response = await fetch('/api/set_gripper', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            confirm: 'SET_GRIPPER',
+            position,
+            max_effort: gripperSettings.maxEffort,
+          }),
+        });
+        const result = await response.json();
+        status.textContent = result.message || (result.accepted ? '夹爪目标已接收' : '夹爪目标被拒绝');
+        if (!result.accepted) {
+          button.disabled = false;
+        }
+        return result;
+      } catch (error) {
+        status.textContent = `夹爪请求失败: ${error.message}`;
+        button.disabled = false;
+        return { accepted: false, message: error.message };
+      }
+    };
+    const executePreviewAndGripper = async () => {
+      const gripperTarget = Number(previewState.targets.gripper);
+      const gripperLive = Number(previewState.latestJoints.gripper?.position);
+      const gripperPosition = Number.isFinite(gripperTarget) ? gripperTarget : gripperLive;
+      const armDelta = maxPreviewDelta();
+      const confirmed = window.confirm(
+        `执行预览目标？\n` +
+        `关节和夹爪会通过现有安全接口发送。\n` +
+        `最大关节差值: ${fmt(armDelta)} rad\n` +
+        `执行时长: ${fmt(executeSettings.duration, 2)} s\n` +
+        `夹爪: ${Number.isFinite(gripperPosition) ? fmt(gripperPosition) + ' m' : '不可用'}`
+      );
+      if (!confirmed) return;
+      if (armDelta > 1e-5) {
+        const armResult = await executePreview({ confirm: false });
+        if (armResult && armResult.accepted === false) return;
+      }
+      if (Number.isFinite(gripperPosition) && webExecuteEnabled) {
+        const gripperResult = await setGripper({ confirm: false });
+        if (gripperResult && gripperResult.accepted === false) {
+          exitPreviewToLive(`夹爪命令未被接收：${gripperResult.message || '-'}`);
+          return;
+        }
+      }
+      exitPreviewToLive('命令已发送，左侧模型和滑条改为跟随实时反馈。');
+    };
+    const runTeachDryRun = async () => {
+      const button = document.getElementById('run-teach-dry-run');
+      const status = document.getElementById('teach-dry-run-status');
+      const band = String(latestTeachFileInfo?.start_band || '').toLowerCase();
+      if (isCheckMode) {
+        status.textContent = '检查模式会自动 dry-run；当前页面只读。';
+        return;
+      }
+      if (!['direct', 'align', 'moveit_align'].includes(band)) {
+        status.textContent = `轨迹检查被阻止：文件检查状态为 ${displayState(band || 'unknown')}`;
+        return;
+      }
+      const confirmed = window.confirm(
+        `执行示教轨迹检查？\n` +
+        `不会发送真实轨迹。\n` +
+        `文件检查: ${displayState(band)}\n` +
+        `文件: ${latestTeachFileInfo?.path || '-'}`
+      );
+      if (!confirmed) return;
+      button.disabled = true;
+      status.textContent = '正在检查轨迹...';
+      addReplayEvent(`请求检查: ${latestTeachFileInfo?.path || '-'}`);
+      try {
+        const response = await fetch('/api/teach_dry_run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            record_path: latestTeachFileInfo?.path || undefined,
+            settings: replaySettingsPayload(),
+          }),
+        });
+        const result = await response.json();
+        lastTeachDryRun = result.accepted ? result : null;
+        status.textContent = result.message || (result.accepted ? '轨迹检查通过' : '轨迹检查被阻止');
+        addReplayEvent(`${result.accepted ? '检查通过' : '检查被阻止'}: ${result.message || '-'}`);
+        await refreshTeachFileInfo({ force: true });
+        setHtml('replay-precheck-summary', renderReplayPrecheckSummary(latestTeachFileInfo));
+      } catch (error) {
+        status.textContent = `轨迹检查请求失败: ${error.message}`;
+        addReplayEvent(`检查请求失败: ${error.message}`);
+      } finally {
+        updateTeachDryRunButton(latestTeachFileInfo);
+      }
+    };
+    const runTeachReplay = async () => {
+      const replayButton = document.getElementById('run-teach-replay');
+      const status = document.getElementById('teach-dry-run-status');
+      const band = String(latestTeachFileInfo?.start_band || '').toLowerCase();
+      if (isCheckMode) {
+        status.textContent = '回放被阻止：检查模式只读。';
+        return;
+      }
+      if (replayButton.disabled || !lastTeachDryRun?.accepted) {
+        status.textContent = '真机回放被阻止：请先检查轨迹，并保持文件检查有效。';
+        return;
+      }
+      const confirmed = window.confirm(
+        `执行真实示教回放？\n` +
+        `这会向机械臂发送 FollowJointTrajectory 目标。\n` +
+        `文件检查: ${displayState(band)}\n` +
+        `最大起点误差: ${fmt(Number(latestTeachFileInfo?.max_error))} rad\n` +
+        `回放倍率: ${fmt(Number(teachReplaySettings.replaySpeed), 1)}x\n` +
+        `对齐: 自动 (${fmt(replayEstimate(latestTeachFileInfo).alignDuration, 1)}s)\n` +
+        `末端保持: 1.0s\n` +
+        `预计时长: ${fmt(replayEstimate(latestTeachFileInfo).estimatedDuration, 1)}s\n` +
+        `预计轨迹点: ${replayEstimate(latestTeachFileInfo).trajectoryPoints}\n` +
+        `轨迹文件: ${latestTeachFileInfo?.path || '-'}`
+      );
+      if (!confirmed) return;
+      replayButton.disabled = true;
+      status.textContent = '正在发送真实示教回放轨迹...';
+      addReplayEvent(`请求真实回放: ${latestTeachFileInfo?.path || '-'}`);
+      try {
+        const response = await fetch('/api/teach_replay_execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            record_path: latestTeachFileInfo?.path || undefined,
+            dry_run_token: lastTeachDryRun,
+            settings: replaySettingsPayload(),
+          }),
+        });
+        const result = await response.json();
+        status.textContent = result.message || (result.accepted ? '回放已接收' : '回放被阻止');
+        addReplayEvent(`${result.accepted ? '真实回放已接收' : '真实回放被阻止'}: ${result.message || '-'}`);
+        if (!result.accepted) {
+          updateTeachDryRunButton(latestTeachFileInfo);
+        }
+      } catch (error) {
+        status.textContent = `回放请求失败: ${error.message}`;
+        addReplayEvent(`真实回放请求失败: ${error.message}`);
+        updateTeachDryRunButton(latestTeachFileInfo);
+      }
+    };
+    const stopTeachReplay = async () => {
+      const button = document.getElementById('stop-teach-replay');
+      const status = document.getElementById('teach-dry-run-status');
+      button.disabled = true;
+      status.textContent = '正在请求停止示教回放...';
+      addReplayEvent('请求停止回放');
+      try {
+        const response = await fetch('/api/teach_replay_stop', { method: 'POST' });
+        const result = await response.json();
+        status.textContent = result.message || (result.accepted ? '已请求停止回放' : '停止回放被阻止');
+        addReplayEvent(`${result.accepted ? '停止回放已接收' : '停止回放被阻止'}: ${result.message || '-'}`);
+        if (!result.accepted && result.state !== 'idle') {
+          button.disabled = false;
+        }
+      } catch (error) {
+        status.textContent = `停止回放失败: ${error.message}`;
+        addReplayEvent(`停止回放失败: ${error.message}`);
+        updateTeachDryRunButton(latestTeachFileInfo);
+      }
+    };
+    const syncTeachRecordButtons = (recordingValue) => {
+      const recording = statusObj(recordingValue || {});
+      const state = String(recording.state || '').toLowerCase();
+      const active = ['starting', 'recording', 'waiting'].includes(state);
+      document.getElementById('start-teach-record').disabled = active || isCheckMode;
+      document.getElementById('stop-teach-record').disabled = !active || isCheckMode;
+    };
+    const startTeachRecord = async () => {
+      const button = document.getElementById('start-teach-record');
+      button.disabled = true;
+      document.getElementById('teach-dry-run-status').textContent = '正在进入重力补偿并开始示教录制...';
+      addReplayEvent('请求开始示教录制');
+      try {
+        const recordName = String(document.getElementById('teach-record-name')?.value || '').trim();
+        const response = await fetch('/api/teach_record_start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ record_path: recordName }),
+        });
+        const result = await response.json();
+        document.getElementById('teach-dry-run-status').textContent = result.message || (result.accepted ? '示教录制已开始' : '示教录制被阻止');
+        addReplayEvent(`${result.accepted ? '示教录制已开始' : '示教录制被阻止'}: ${result.message || '-'}`);
+        if (result.record_path) {
+          selectedTeachRecordPath = result.record_path;
+          document.getElementById('teach-record-name').value = result.record_path.split('/').pop() || result.record_path;
+        }
+        syncTeachRecordButtons({ state: result.accepted ? 'recording' : 'idle' });
+        await refreshTeachRecords();
+        await refreshTeachFileInfo();
+      } catch (error) {
+        document.getElementById('teach-dry-run-status').textContent = `开始示教失败: ${error.message}`;
+        addReplayEvent(`开始示教失败: ${error.message}`);
+        syncTeachRecordButtons({ state: 'idle' });
+      }
+    };
+    const stopTeachRecord = async () => {
+      const button = document.getElementById('stop-teach-record');
+      button.disabled = true;
+      document.getElementById('teach-dry-run-status').textContent = '正在停止示教录制并退出重力补偿...';
+      addReplayEvent('请求停止示教录制');
+      try {
+        const response = await fetch('/api/teach_record_stop', { method: 'POST' });
+        const result = await response.json();
+        document.getElementById('teach-dry-run-status').textContent = result.message || (result.accepted ? '示教录制已停止' : '停止示教失败');
+        addReplayEvent(`${result.accepted ? '示教录制已停止' : '停止示教失败'}: ${result.message || '-'}`);
+        syncTeachRecordButtons({ state: 'stopped' });
+        await refreshTeachRecords();
+        await refreshTeachFileInfo();
+      } catch (error) {
+        document.getElementById('teach-dry-run-status').textContent = `停止示教失败: ${error.message}`;
+        addReplayEvent(`停止示教失败: ${error.message}`);
+        syncTeachRecordButtons({ state: 'recording' });
+      }
+    };
+    const runArmCommand = async (command, label) => {
+      const buttons = ['arm-safe-home', 'arm-enable', 'arm-disable']
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+      const restoreArmButtons = () => {
+        const replayStatus = statusObj(previewState.latestTeleop?.replay);
+        buttons.forEach((button) => {
+          button.disabled = isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
+        });
+      };
+      const appendArmCommandMessage = (message) => {
+        const status = document.getElementById('replay-state');
+        if (status && message) {
+          status.insertAdjacentHTML('beforeend', `<div class="detail">${escapeHtml(message)}</div>`);
+        }
+      };
+      if (!webExecuteEnabled) {
+        appendArmCommandMessage('web_execute_enabled is false');
+        restoreArmButtons();
+        return;
+      }
+      if (isReplayArmCommandLocked()) {
+        buttons.forEach((button) => { button.disabled = true; });
+        appendArmCommandMessage('teach replay is still stopping; arm commands are locked');
+        return;
+      }
+      if (command === 'safe_home') {
+        const confirmed = window.confirm('现在执行回安全位？机械臂会先停止当前轨迹，再移动到配置的安全姿态。');
+        if (!confirmed) return;
+      }
+      buttons.forEach((button) => { button.disabled = true; });
+      if (command === 'safe_home' || command === 'disable') {
+        exitPreviewToLive(`${label} requested; switching web view back to live feedback.`);
+      }
+      try {
+        const response = await fetch(`/api/arm_${command}`, { method: 'POST' });
+        const result = await response.json();
+        appendArmCommandMessage(result.message || (result.accepted ? `${label} accepted` : `${label} rejected`));
+      } catch (error) {
+        appendArmCommandMessage(`${label} request failed: ${error.message}`);
+      } finally {
+        restoreArmButtons();
+      }
+    };
+    const bindTeachReplaySetting = (rangeId, numberId, key, min, max, digits = 1) => {
+      const range = document.getElementById(rangeId);
+      const number = document.getElementById(numberId);
+      const update = (value) => {
+        const clamped = key === 'alignSteps'
+          ? Math.round(clamp(value, min, max))
+          : clamp(value, min, max);
+        teachReplaySettings[key] = clamped;
+        range.value = clamped;
+        number.value = Number(clamped).toFixed(digits);
+        document.getElementById('replay-precheck-summary').innerHTML = renderReplayPrecheckSummary(latestTeachFileInfo);
+        document.getElementById('teach-params-details').innerHTML = renderReplayParams(latestTeachFileInfo);
+        lastTeachDryRun = null;
+        updateTeachDryRunButton(latestTeachFileInfo);
+      };
+      range.addEventListener('input', (event) => update(event.target.value));
+      number.addEventListener('change', (event) => update(event.target.value));
+      update(teachReplaySettings[key]);
+    };
+    const syncKeyboardButtons = () => {
+      document.getElementById('keyboard-enable').disabled = keyboardSettings.enabled || isCheckMode || !webExecuteEnabled;
+      document.getElementById('keyboard-disable').disabled = !keyboardSettings.enabled;
+    };
+    const bindKeyboardSetting = (numberId, key, min, max, digits = 3) => {
+      const number = document.getElementById(numberId);
+      number.min = min;
+      number.max = max;
+      const update = (value) => {
+        const clamped = clamp(value, min, max);
+        keyboardSettings[key] = clamped;
+        number.value = Number(clamped).toFixed(digits);
+      };
+      number.addEventListener('change', (event) => update(event.target.value));
+      update(keyboardSettings[key]);
+    };
+    const keyboardDurationForStep = () => {
+      const speedDuration = keyboardSettings.stepRad / Math.max(keyboardSettings.maxSpeed, 1e-6);
+      return clamp(Math.max(keyboardSettings.duration, speedDuration), keyboardSettings.minDuration, keyboardSettings.maxDuration);
+    };
+    const enableKeyboardTeleop = async () => {
+      const status = document.getElementById('teleop-state');
+      try {
+        const response = await fetch('/api/keyboard_enable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            step_rad: keyboardSettings.stepRad,
+            duration: keyboardDurationForStep(),
+            max_joint_speed_rad_s: keyboardSettings.maxSpeed,
+          }),
+        });
+        const result = await response.json();
+        keyboardSettings.enabled = response.ok && result.accepted;
+        setChip('teleop-state', result.state || (result.accepted ? 'ready' : 'rejected'));
+        if (result.message) status.insertAdjacentHTML('beforeend', `<div class="detail">${escapeHtml(result.message)}</div>`);
+      } catch (error) {
+        keyboardSettings.enabled = false;
+        status.innerHTML = `<span class="chip bad">失败</span><div class="detail">${escapeHtml(error.message)}</div>`;
+      }
+      syncKeyboardButtons();
+    };
+    const disableKeyboardTeleop = async () => {
+      const status = document.getElementById('teleop-state');
+      try {
+        const response = await fetch('/api/keyboard_disable', { method: 'POST' });
+        const result = await response.json();
+        keyboardSettings.enabled = false;
+        setChip('teleop-state', result.state || 'disabled');
+        if (result.message) status.insertAdjacentHTML('beforeend', `<div class="detail">${escapeHtml(result.message)}</div>`);
+      } catch (error) {
+        status.innerHTML = `<span class="chip bad">失败</span><div class="detail">${escapeHtml(error.message)}</div>`;
+      }
+      syncKeyboardButtons();
+    };
+    const sendKeyboardKey = async (key) => {
+      if (!keyboardSettings.enabled || isCheckMode || !webExecuteEnabled) return;
+      try {
+        const response = await fetch('/api/keyboard_key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            confirm: 'KEYBOARD_TELEOP',
+            key,
+            step_rad: keyboardSettings.stepRad,
+            duration: keyboardDurationForStep(),
+            max_joint_speed_rad_s: keyboardSettings.maxSpeed,
+          }),
+        });
+        const result = await response.json();
+        setChip('teleop-state', result.accepted ? 'active' : 'rejected');
+        const status = document.getElementById('teleop-state');
+        status.insertAdjacentHTML('beforeend', `<div class="detail">${escapeHtml(result.message || key)}</div>`);
+      } catch (error) {
+        const status = document.getElementById('teleop-state');
+        status.innerHTML = `<span class="chip bad">失败</span><div class="detail">${escapeHtml(error.message)}</div>`;
+      }
+    };
+    bindExecuteSetting('execute-max-delta', 'maxDelta', 0.05, executeMaxDeltaLimit);
+    bindExecuteSetting('execute-duration', 'duration', 1.0, 8.0);
+    bindExecuteSetting('execute-speed', 'maxSpeed', 0.1, 1.5);
+    bindKeyboardSetting('keyboard-step-number', 'stepRad', keyboardSettings.minStepRad, keyboardSettings.maxStepRad, 3);
+    bindKeyboardSetting('keyboard-speed-number', 'maxSpeed', 0.1, executeSettings.maxSpeed, 1);
+    bindTeachReplaySetting('teach-replay-speed', 'teach-replay-speed-number', 'replaySpeed', 0.1, 1.0, 1);
+    sliderNames.forEach((name) => {
+      document.getElementById(`preview-${name}`).addEventListener('input', (event) => {
+        const [min, max] = jointLimits[name] || [-3.1416, 3.1416];
+        previewState.targets[name] = clamp(event.target.value, min, max);
+        updateSlider(name, { position: previewState.targets[name] }, 'preview');
+        previewState.active = true;
+        document.getElementById('web-teleop-card').classList.add('preview-active');
+        document.getElementById('execute-preview').disabled = false;
+        syncRealActionButtons();
+        const speed = speedCheck();
+        const speedText = speed.speed > speed.limit
+          ? ` ${speed.name} 速度过高；时长需要 >= ${fmt(speed.minDuration, 2)}s。`
+          : ` 速度 ${fmt(speed.speed, 3)} rad/s <= ${fmt(speed.limit, 3)} rad/s。`;
+        document.getElementById('execute-status').textContent =
+          `预览目标已就绪。最大差值 ${fmt(maxPreviewDelta())} rad，限制 ${fmt(executeSettings.maxDelta)} rad，时长 ${fmt(executeSettings.duration, 2)}s。${speedText}`;
+        updateRobotViewer(jointsFromTargets(previewState.targets));
+        viewerStatus('仅预览：当前姿态只显示在网页模型，尚未发送到真机');
+      });
+    });
+    document.getElementById('sync-preview').addEventListener('click', syncPreviewFromLive);
+    document.getElementById('execute-preview').addEventListener('click', executePreviewAndGripper);
+    document.getElementById('stop-execute').addEventListener('click', stopExecute);
+    document.getElementById('arm-safe-home').addEventListener('click', () => runArmCommand('safe_home', '回安全位'));
+    document.getElementById('arm-enable').addEventListener('click', () => runArmCommand('enable', '使能'));
+    document.getElementById('arm-disable').addEventListener('click', () => runArmCommand('disable', '失能'));
+    document.getElementById('keyboard-enable').addEventListener('click', enableKeyboardTeleop);
+    document.getElementById('keyboard-disable').addEventListener('click', disableKeyboardTeleop);
+    document.getElementById('start-teach-record').addEventListener('click', startTeachRecord);
+    document.getElementById('stop-teach-record').addEventListener('click', stopTeachRecord);
+    window.addEventListener('keydown', (event) => {
+      const targetTag = String(event.target?.tagName || '').toLowerCase();
+      if (['input', 'textarea', 'select', 'button'].includes(targetTag)) return;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (key === 'Escape') {
+        if (keyboardSettings.enabled) {
+          event.preventDefault();
+          disableKeyboardTeleop();
+        }
+        return;
+      }
+      const mapped = ['1', 'q', '2', 'w', '3', 'e', '4', 'r', '5', 't', '6', 'y'];
+      if (mapped.includes(key)) {
+        event.preventDefault();
+        sendKeyboardKey(key);
+      }
+    });
+    syncKeyboardButtons();
+    document.getElementById('run-teach-dry-run').addEventListener('click', runTeachDryRun);
+    document.getElementById('run-teach-replay').addEventListener('click', runTeachReplay);
+    document.getElementById('stop-teach-replay').addEventListener('click', stopTeachReplay);
+    document.getElementById('load-teach-trajectory').addEventListener('click', loadTeachTrajectory);
+    document.getElementById('refresh-teach-records').addEventListener('click', async () => {
+      await refreshTeachRecords();
+      await refreshTeachFileInfo();
+    });
+    document.getElementById('teach-record-select').addEventListener('change', (event) => {
+      selectTeachRecord(event.target.value);
+    });
+    source.addEventListener('status', (event) => {
+      const data = JSON.parse(event.data);
+      const nowMs = performance.now();
+      const shouldRenderFastPanels = nowMs - lastFastRenderMs > FAST_RENDER_INTERVAL_MS;
+      const shouldRenderSlowPanels = nowMs - lastSlowRenderMs > 1000;
+      latestStatusData = data;
+      previewState.latestJoints = data.joints || {};
+      previewState.latestTeleop = data.teleop || {};
+      if (!shouldRenderFastPanels) return;
+      lastFastRenderMs = nowMs;
+      document.getElementById('mode').textContent = data.arm.mode || '-';
+      document.getElementById('state').textContent = data.arm.state_machine || '-';
+      document.getElementById('enabled').textContent = data.arm.enabled ? 'true' : 'false';
+      setChip('teleop-state', statusObj(data.teleop.status).state || '-');
+      setChip('recording-state', statusObj(data.teleop.recording).state || '-');
+      setChip('replay-state', statusObj(data.teleop.replay).state || '-');
+      setChip('arm-command-state', statusObj(data.teleop.arm_command).state || '-');
+      setChip('gripper-command-state', statusObj(data.teleop.web_gripper).state || '-');
+      const replayStatus = statusObj(data.teleop.replay);
+      const replayKey = JSON.stringify({
+        state: replayStatus.state || '-',
+        message: replayStatus.message || '',
+        points: replayStatus.trajectory_points || '',
+      });
+      if (replayKey !== lastReplayStatusKey) {
+        lastReplayStatusKey = replayKey;
+        if ((replayStatus.state || replayStatus.message) && replayStatus.state !== 'idle') {
+          addReplayEvent(`状态 ${replayStatus.state || '-'}: ${replayStatus.message || '-'}`);
+        }
+      }
+      const webExecuteState = statusObj(data.teleop.web_execute).state || '-';
+      document.getElementById('stop-execute').disabled = !['active', 'accepted'].includes(String(webExecuteState).toLowerCase());
+      ['arm-safe-home', 'arm-enable', 'arm-disable'].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
+      });
+      updateTeachDryRunButton(latestTeachFileInfo);
+      document.getElementById('updated').textContent = `已更新 ${new Date().toLocaleTimeString()}`;
+      syncRealActionButtons();
+      syncTeachRecordButtons(data.teleop.recording);
+      setHtml('teach-record-summary', renderTeachRecordSummary(latestTeachFileInfo, data.teleop.recording));
+      updateMotorRows(data.joints || {});
+      sliderNames.forEach((name) => updateSlider(name, data.joints[name]));
+      if (!previewState.active) {
+        sliderNames.forEach((name) => updateSlider(name, data.joints[name], 'preview'));
+        updateRobotViewer(data.joints);
+      }
+      if (shouldRenderSlowPanels) {
+        lastSlowRenderMs = nowMs;
+        renderOptionalDetails(latestStatusData);
+      }
+      const errors = data.arm.error_codes || [];
+      document.getElementById('errors').innerHTML = errors.length
+        ? errors.map((item) => `<div class="chip bad">${item}</div>`).join('')
+        : '<div class="empty">无错误</div>';
+    });
+    attachControlCardToggles();
+    attachDetailsUnloaders();
+    refreshTeachRecords();
+    refreshTeachFileInfo();
+    setInterval(refreshTeachFileInfo, 5000);
+  </script>
+</body>
+</html>

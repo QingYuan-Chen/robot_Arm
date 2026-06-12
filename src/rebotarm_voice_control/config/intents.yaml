@@ -1,0 +1,86 @@
+enable_arm:
+  patterns:
+    - "机械臂使能"
+    - "启动机械臂"
+  command: "enable_arm"
+  need_confirm: false
+
+disable_arm:
+  patterns:
+    - "机械臂失能"
+    - "关闭机械臂"
+  command: "disable_arm"
+  need_confirm: false
+
+safe_home:
+  patterns:
+    - "回到初始位置"
+    - "回零"
+    - "复位"
+    - "回家"
+  command: "safe_home"
+  need_confirm: true
+
+open_gripper:
+  patterns:
+    - "打开夹爪"
+    - "张开夹爪"
+    - "松开"
+    - "放开"
+  command: "set_gripper"
+  params:
+    position: 0.09
+    max_effort: 0.5
+  need_confirm: false
+
+close_gripper:
+  patterns:
+    - "关闭夹爪"
+    - "夹紧"
+    - "抓住"
+    - "夹住"
+  command: "set_gripper"
+  params:
+    position: 0.0
+    max_effort: 0.5
+  need_confirm: false
+
+move_camera_pose:
+  patterns:
+    - "移动到拍照位"
+    - "去拍照位置"
+    - "到观察位置"
+  command: "move_named_pose"
+  params:
+    name: "camera_pose"
+  need_confirm: true
+
+move_place_left:
+  patterns:
+    - "移动到左侧放置位"
+    - "去左边放置位"
+    - "移动到放置位"
+  command: "move_named_pose"
+  params:
+    name: "place_left"
+  need_confirm: true
+
+run_pick_place_demo:
+  patterns:
+    - "执行搬运演示"
+    - "开始搬运演示"
+  command: "run_task_template"
+  params:
+    name: "pick_place_demo"
+  need_confirm: true
+
+stop_motion:
+  patterns:
+    - "停止"
+    - "停下"
+    - "别动"
+    - "急停"
+    - "取消"
+  command: "stop_motion"
+  need_confirm: false
+  priority: "highest"

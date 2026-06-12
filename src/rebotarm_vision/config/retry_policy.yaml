@@ -1,0 +1,17 @@
+rebotarm_visual_grasp_executor:
+  ros__parameters:
+    auto_retry_enabled: false
+    auto_retry_max_attempts: 3
+    safe_retreat_before_retry: true
+    grasp_verification_enabled: true
+    grasp_verification_min_closure_distance_m: 0.006
+    grasp_verification_require_contact: true
+    visual_lift_check_enabled: false
+    visual_lift_min_delta_m: 0.03
+    place_after_grasp_enabled: false
+    place_position_xyz: [0.20, -0.20, 0.25]
+    place_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    place_open_position_m: 0.08
+    place_open_max_effort: 0.25
+    place_retreat_z_m: 0.06
+    trajectory_precheck_enabled: true

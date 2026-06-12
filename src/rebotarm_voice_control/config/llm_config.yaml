@@ -1,0 +1,6 @@
+provider: "doubao"
+model: "doubao-seed-1.6"
+base_url: "https://ark.cn-beijing.volces.com/api/v3"
+api_key_env: "ARK_API_KEY"
+temperature: 0
+response_format: "json_object"

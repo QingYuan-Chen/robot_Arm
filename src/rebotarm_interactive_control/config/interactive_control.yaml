@@ -1,0 +1,30 @@
+interactive_control:
+  ros__parameters:
+    arm_namespace: rebotarm
+    mode: simulation
+    default_move_duration: 2.0
+    preview_backend: sdk
+    moveit_group_name: arm
+    moveit_ik_service: /compute_ik
+    ee_frame_id: end_link
+    joint_names:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+    joint_lower_limits:
+      - -3.14159
+      - -3.14159
+      - -3.14159
+      - -3.14159
+      - -3.14159
+      - -3.14159
+    joint_upper_limits:
+      - 3.14159
+      - 3.14159
+      - 3.14159
+      - 3.14159
+      - 3.14159
+      - 3.14159

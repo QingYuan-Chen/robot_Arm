@@ -1,0 +1,13 @@
+float64 close_force
+float64 hold_force
+float64 close_timeout_sec
+float64 min_close_time_sec
+float64 velocity_threshold
+float64 min_closure_distance_m
+---
+bool success
+bool contact_detected
+float64 contact_position
+float64 reached_position
+float64 hold_force
+string message

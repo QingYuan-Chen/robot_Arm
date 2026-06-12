@@ -1,0 +1,8 @@
+reBotArmController:
+  ros__parameters:
+    arm_namespace: rebotarm
+    joint_state_rate: 200.0
+    cmd_arbitration: reject # reject的意思是当收到一个新的命令时，如果当前正在执行一个命令，则拒绝新的命令，直到当前命令完成。
+    channel: ""
+    frame_id: base_link
+    ee_frame_id: end_link

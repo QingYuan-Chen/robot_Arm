@@ -1,0 +1,85 @@
+rebotarm_vision_node:
+  ros__parameters:
+    camera.type: network_mjpeg
+    camera.color_width: 1280
+    camera.color_height: 720
+    camera.color_fps: 30
+    camera.color_format: MJPG
+    camera.enable_depth: false
+    camera.depth_width: 1280
+    camera.depth_height: 800
+    camera.depth_fps: 30
+    camera.enable_align: false
+    camera.warmup_frames: 15
+    camera.frame_timeout_ms: 1000
+    camera.max_empty_frames: 30
+    camera.network_snapshot_url: http://192.168.145.1:8081/snapshot.jpg
+    camera.network_stream_url: http://192.168.145.1:8081/video.mjpg
+    camera.network_depth_url: http://192.168.145.1:8081/depth.png
+    camera.network_camera_info_url: http://192.168.145.1:8081/camera_info.json
+    camera.network_detections_url: http://192.168.145.1:8081/detections.json
+    camera.network_detections_timeout_ms: 1000
+    yolo.model_path: /home/u24/rebot_grasp/models/yoloe-26s-seg.pt
+    yolo.device: cpu
+    yolo.conf_threshold: 0.25
+    yolo.iou_threshold: 0.45
+    yolo.use_world: true
+    yolo.custom_classes:
+      - yellow banana
+      - water bottle
+      - light blue coffee cup
+      - cup
+      - green object
+      - red object
+      - tool
+    ros.frame_id_color: camera_color_frame
+    ros.frame_id_depth: camera_depth_frame
+    ros.publish_annotated: false
+    ros.show_preview: false
+    ros.preview_window_name: RebotArm Vision Preview
+    ros.loop_rate_hz: 15.0
+    ros.enable_detection: false
+    ros.enable_network_detection: true
+
+rebotarm_ordinary_grasp_node:
+  ros__parameters:
+    ordinary_grasp.input_detections_topic: /grasp/detections
+    ordinary_grasp.input_depth_topic: /camera/depth/image_raw
+    ordinary_grasp.output_topic: /grasp/plan
+    ordinary_grasp.pregrasp_pose_topic: /grasp/pregrasp_pose
+    ordinary_grasp.grasp_pose_topic: /grasp/grasp_pose
+    ordinary_grasp.root: /home/u24/rebot_grasp
+    ordinary_grasp.output_frame_id: camera_depth_frame
+    ordinary_grasp.fx: 519.422
+    ordinary_grasp.fy: 519.17
+    ordinary_grasp.cx: 320.681
+    ordinary_grasp.cy: 241.362
+    ordinary_grasp.depth_quantile: 0.75
+    ordinary_grasp.pregrasp_offset_m: 0.08
+    depth_quality.enabled: true
+    depth_quality.min_valid_pixels: 80
+    depth_quality.min_valid_ratio: 0.20
+    depth_quality.min_depth_m: 0.15
+    depth_quality.max_depth_m: 1.2
+    depth_quality.max_depth_mad_m: 0.025
+    depth_quality.max_depth_span_m: 0.080
+    depth_quality.center_window_px: 9
+    depth_quality.min_center_valid_ratio: 0.30
+
+rebotarm_grasp_tcp_frame:
+  ros__parameters:
+    parent_frame: end_link
+    child_frame: grasp_tcp
+    # end_link -> grasp_tcp translation in end_link frame. Keep [0,0,0] until
+    # the real gripper center is measured in RViz/TF, then update this value.
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
+
+rebotarm_grasp_preview_sender:
+  ros__parameters:
+    input_topic: /grasp/plan
+    output_topic: /rebotarm/interactive_control/pose_target
+    pose_mode: pregrasp
+    target_frame: base_link
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
+    publish_count: 20
+    exit_after_publish: true

@@ -1,0 +1,5 @@
+sensors:
+  - no_depth_sensor
+
+no_depth_sensor:
+  sensor_plugin: "~"

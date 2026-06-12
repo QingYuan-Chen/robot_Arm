@@ -1,0 +1,10 @@
+geometry_msgs/PoseStamped target_pose
+float64 velocity_scaling
+float64 acceleration_scaling
+float64 timeout_sec
+bool execute
+---
+bool success
+string stage
+string message
+trajectory_msgs/JointTrajectory planned_trajectory

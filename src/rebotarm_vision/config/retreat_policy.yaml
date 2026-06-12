@@ -1,0 +1,7 @@
+rebotarm_visual_grasp_executor:
+  ros__parameters:
+    safe_retreat_enabled: true
+    safe_retreat_min_lift_z_m: 0.12
+    safe_retreat_distance_m: 0.06
+    safe_retreat_axis_xyz: [-1.0, 0.0, 0.5]
+    safe_home_after_grasp: false

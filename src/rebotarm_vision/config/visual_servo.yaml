@@ -1,0 +1,11 @@
+rebotarm_visual_grasp_executor:
+  ros__parameters:
+    plan_only_stage_pause_sec: 3.0
+    refresh_plan_at_pregrasp_enabled: false
+    refresh_plan_at_pregrasp_required: false
+    refresh_plan_timeout_sec: 1.0
+    approach_visual_servo_enabled: false
+    approach_visual_servo_max_iterations: 5
+    approach_visual_servo_max_step_m: 0.02
+    approach_visual_servo_position_tolerance_m: 0.008
+    approach_visual_servo_require_fresh_plan: true

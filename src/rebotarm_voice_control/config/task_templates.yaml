@@ -1,0 +1,29 @@
+pick_place_demo:
+  description: "V1 dry-run fixed place demonstration"
+  need_confirm: true
+  steps:
+    - intent: "move_named_pose"
+      command: "move_named_pose"
+      params:
+        name: "camera_pose"
+      need_confirm: true
+    - intent: "open_gripper"
+      command: "set_gripper"
+      params:
+        position: 0.09
+        max_effort: 0.5
+      need_confirm: false
+    - intent: "move_named_pose"
+      command: "move_named_pose"
+      params:
+        name: "place_left"
+      need_confirm: true
+    - intent: "close_gripper"
+      command: "set_gripper"
+      params:
+        position: 0.0
+        max_effort: 0.5
+      need_confirm: false
+    - intent: "safe_home"
+      command: "safe_home"
+      need_confirm: true
