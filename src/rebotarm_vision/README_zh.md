@@ -4,7 +4,28 @@
 
 ## 1. 当前结论
 
-VMware Ubuntu 直接直通 Gemini2 时，彩色流会出现纯灰或 MJPG 坏帧。当前采用折中方案：
+Ubuntu 物理机现在优先使用原生视觉链路：
+
+```text
+Gemini2 摄像头
+-> Ubuntu pyorbbecsdk
+-> Ubuntu CUDA YOLO
+-> rebotarm_vision_node
+-> ROS2 topic
+```
+
+安装和启动请优先执行：
+
+```bash
+./tools/setup_ubuntu_vision.sh
+./tools/install_orbbec_udev_rules.sh
+./tools/run_ubuntu_vision.sh
+```
+
+详见仓库根目录的 `docs/ubuntu_vision_setup_zh.md`。
+
+如果仍在 VMware 中运行 Ubuntu，USB 直通导致彩色流纯灰或 MJPG 坏帧时，
+可继续使用原有 Windows HTTP 兼容链路：
 
 ```text
 Gemini2 摄像头
@@ -15,7 +36,7 @@ Gemini2 摄像头
 -> 发布 ROS2 topic
 ```
 
-Ubuntu 侧不再直接访问 Gemini2，也不再默认在 Ubuntu 内运行 YOLO。
+后续章节保留 Windows 中转方案的配置、启动和排障方法。
 
 ## 2. 当前默认配置
 

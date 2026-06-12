@@ -51,7 +51,17 @@ source install/setup.bash
 
 ## 4. 视觉配置
 
-`src/rebotarm_vision/config/camera.yaml` 默认连接本机：
+Ubuntu 物理机直连 Gemini2 并在本机运行 CUDA YOLO 时，使用：
+
+```bash
+./tools/setup_ubuntu_vision.sh
+./tools/install_orbbec_udev_rules.sh
+./tools/run_ubuntu_vision.sh
+```
+
+完整说明见 `docs/ubuntu_vision_setup_zh.md`。
+
+网络备用链路仍使用 `src/rebotarm_vision/config/camera.yaml`，默认连接本机：
 
 ```text
 http://127.0.0.1:8081

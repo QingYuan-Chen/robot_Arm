@@ -1,0 +1,70 @@
+rebotarm_vision_node:
+  ros__parameters:
+    camera.type: gemini2
+    camera.color_width: 1280
+    camera.color_height: 720
+    camera.color_fps: 30
+    camera.color_format: MJPG
+    camera.enable_depth: true
+    camera.depth_width: 1280
+    camera.depth_height: 720
+    camera.depth_fps: 30
+    camera.enable_align: true
+    camera.warmup_frames: 15
+    camera.frame_timeout_ms: 1000
+    camera.max_empty_frames: 30
+    camera.network_snapshot_url: ""
+    camera.network_stream_url: ""
+    camera.network_depth_url: ""
+    camera.network_camera_info_url: ""
+    camera.network_detections_url: ""
+    camera.network_detections_timeout_ms: 1000
+    # The Ubuntu launch file overrides this with the installed model path.
+    yolo.model_path: ""
+    yolo.device: "0"
+    yolo.conf_threshold: 0.25
+    yolo.iou_threshold: 0.45
+    yolo.use_world: false
+    yolo.custom_classes:
+      - person
+      - bottle
+      - cup
+    ros.frame_id_color: camera_color_frame
+    ros.frame_id_depth: camera_depth_frame
+    ros.publish_annotated: true
+    ros.show_preview: false
+    ros.preview_window_name: RebotArm Ubuntu Vision
+    ros.loop_rate_hz: 15.0
+    ros.enable_detection: true
+    ros.enable_network_detection: false
+
+rebotarm_ordinary_grasp_node:
+  ros__parameters:
+    ordinary_grasp.input_detections_topic: /grasp/detections
+    ordinary_grasp.input_depth_topic: /camera/depth/image_raw
+    ordinary_grasp.output_topic: /grasp/plan
+    ordinary_grasp.pregrasp_pose_topic: /grasp/pregrasp_pose
+    ordinary_grasp.grasp_pose_topic: /grasp/grasp_pose
+    ordinary_grasp.root: ""
+    ordinary_grasp.output_frame_id: camera_depth_frame
+    ordinary_grasp.fx: 519.422
+    ordinary_grasp.fy: 519.17
+    ordinary_grasp.cx: 320.681
+    ordinary_grasp.cy: 241.362
+    ordinary_grasp.depth_quantile: 0.75
+    ordinary_grasp.pregrasp_offset_m: 0.08
+    depth_quality.enabled: true
+    depth_quality.min_valid_pixels: 80
+    depth_quality.min_valid_ratio: 0.20
+    depth_quality.min_depth_m: 0.15
+    depth_quality.max_depth_m: 1.2
+    depth_quality.max_depth_mad_m: 0.025
+    depth_quality.max_depth_span_m: 0.080
+    depth_quality.center_window_px: 9
+    depth_quality.min_center_valid_ratio: 0.30
+
+rebotarm_grasp_tcp_frame:
+  ros__parameters:
+    parent_frame: end_link
+    child_frame: grasp_tcp
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]

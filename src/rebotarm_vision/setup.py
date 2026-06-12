@@ -9,11 +9,15 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
-        (f"share/{package_name}/launch", ["launch/vision.launch.py"]),
+        (
+            f"share/{package_name}/launch",
+            ["launch/vision.launch.py", "launch/vision_ubuntu.launch.py"],
+        ),
         (
             f"share/{package_name}/config",
             [
                 "config/camera.yaml",
+                "config/camera_ubuntu.yaml",
                 "config/flat_graspnet.yaml",
                 "config/grasp_pose_policy.yaml",
                 "config/graspnet_policy.yaml",
@@ -26,6 +30,7 @@ setup(
                 "config/visual_servo.yaml",
             ],
         ),
+        (f"share/{package_name}/models", ["models/yolo11n-seg.pt"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

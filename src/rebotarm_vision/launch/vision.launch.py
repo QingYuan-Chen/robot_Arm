@@ -15,12 +15,19 @@ def _launch_setup(context):
     camera_config = LaunchConfiguration("camera_config").perform(context)
     handeye_config = LaunchConfiguration("handeye_config").perform(context)
     ordinary_grasp_root = LaunchConfiguration("ordinary_grasp_root").perform(context)
+    yolo_model_path = LaunchConfiguration("yolo_model_path").perform(context)
+    yolo_device = LaunchConfiguration("yolo_device").perform(context)
     handeye = load_handeye_config(Path(handeye_config).expanduser())
 
     common_environment = {
         "QT_QPA_PLATFORM": "xcb",
         "QT_QPA_FONTDIR": "/usr/share/fonts/truetype/dejavu",
     }
+    vision_overrides = {}
+    if yolo_model_path:
+        vision_overrides["yolo.model_path"] = yolo_model_path
+    if yolo_device:
+        vision_overrides["yolo.device"] = yolo_device
 
     return [
         Node(
@@ -35,7 +42,7 @@ def _launch_setup(context):
             executable="rebotarm_vision_node",
             name="rebotarm_vision_node",
             output="screen",
-            parameters=[camera_config],
+            parameters=[camera_config, vision_overrides],
             additional_env=common_environment,
         ),
         Node(
@@ -85,6 +92,8 @@ def generate_launch_description():
             DeclareLaunchArgument("ordinary_grasp_root", default_value=""),
             DeclareLaunchArgument("start_ordinary_grasp", default_value="false"),
             DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
+            DeclareLaunchArgument("yolo_model_path", default_value=""),
+            DeclareLaunchArgument("yolo_device", default_value=""),
             OpaqueFunction(function=_launch_setup),
         ]
     )
