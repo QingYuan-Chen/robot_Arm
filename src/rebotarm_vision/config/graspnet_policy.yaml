@@ -6,7 +6,7 @@ rebotarm_graspnet_baseline_node:
     output_candidates_topic: /grasp/graspnet_candidates
     output_frame_id: camera_depth_frame
     source_mode: network
-    network_candidates_url: http://192.168.145.1:8081/graspnet_candidates.json
+    network_candidates_url: http://127.0.0.1:8081/graspnet_candidates.json
     network_timeout_ms: 1000
     network_poll_hz: 5.0
     model_root: ""

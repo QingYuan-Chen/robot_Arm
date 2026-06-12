@@ -79,7 +79,7 @@ class TcpCalibrationNode(Node):
         self.declare_parameter("tcp_reference_position", [0.0, 0.0, 0.0])
         self.declare_parameter("sample_count", 5)
         self.declare_parameter("lookup_timeout_sec", 0.5)
-        self.declare_parameter("aruco.snapshot_url", "http://192.168.145.1:8081/snapshot.jpg")
+        self.declare_parameter("aruco.snapshot_url", "http://127.0.0.1:8081/snapshot.jpg")
         self.declare_parameter("aruco.camera_frame", "camera_depth_frame")
         self.declare_parameter("aruco.dictionary", "DICT_4X4_50")
         self.declare_parameter("aruco.marker_id", 0)

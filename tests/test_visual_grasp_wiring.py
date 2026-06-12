@@ -184,7 +184,7 @@ def test_visual_grasp_vision_publishes_live_depth_camera_info():
     vision_text = _read("src/rebotarm_vision/rebotarm_vision/vision_node.py")
     network_driver_text = _read("src/rebotarm_vision/rebotarm_vision/camera/network_mjpeg_driver.py")
 
-    assert "camera.network_camera_info_url: http://192.168.145.1:8081/camera_info.json" in camera_config
+    assert "camera.network_camera_info_url: http://127.0.0.1:8081/camera_info.json" in camera_config
     assert '"/camera/depth/camera_info"' in vision_text
     assert "CameraInfo" in vision_text
     assert "camera_info_to_msg" in vision_text
@@ -444,7 +444,7 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_source_mode", default_value="network")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_candidates_url", default_value="http://192.168.145.1:8081/graspnet_candidates.json")' in launch_text
+    assert 'DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_model_root", default_value="")' in launch_text
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
@@ -504,7 +504,7 @@ def test_ordinary_grasp_node_publishes_candidate_array_topic():
     assert 'ordinary_grasp.candidates_topic", "/grasp/candidates"' in node_text
     assert "self.candidates_pub.publish(candidates)" in node_text
     assert "plan_and_candidates_from_detections_and_depth" in node_text
-    assert "-p ordinary_grasp.candidates_topic:=/grasp/candidates " in launch_text
+    assert '"ordinary_grasp.candidates_topic": "/grasp/candidates"' in launch_text
     assert "depth_quality.max_depth_m: 1.2" in camera_config
     assert "DepthQualityConfig" in node_text
 
@@ -1431,4 +1431,3 @@ def test_controller_shutdown_runs_safe_home_before_disable_by_default():
     assert 'self.get_logger().error(f"hardware connect failed; disabled before exit: {exc}")' in controller_text
     assert "node = None" in controller_text
     assert "if node is not None:" in controller_text
-

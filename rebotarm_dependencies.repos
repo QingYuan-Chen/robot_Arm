@@ -1,0 +1,5 @@
+repositories:
+  reBotArm_control_py:
+    type: git
+    url: https://github.com/huangbinai/rebotarm_control.git
+    version: 6a49302804f25e624995e771acb6d61896d1856d

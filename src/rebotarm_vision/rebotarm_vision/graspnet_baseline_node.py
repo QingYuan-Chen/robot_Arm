@@ -39,7 +39,7 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("output_candidates_topic", "/grasp/graspnet_candidates")
         self.declare_parameter("output_frame_id", "camera_depth_frame")
         self.declare_parameter("source_mode", "network")
-        self.declare_parameter("network_candidates_url", "http://192.168.145.1:8081/graspnet_candidates.json")
+        self.declare_parameter("network_candidates_url", "http://127.0.0.1:8081/graspnet_candidates.json")
         self.declare_parameter("network_timeout_ms", 1000)
         self.declare_parameter("network_poll_hz", 5.0)
         self.declare_parameter("model_root", "")

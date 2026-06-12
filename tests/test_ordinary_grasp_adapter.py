@@ -155,7 +155,40 @@ def _make_detection_array():
     return msg
 
 
-def test_ordinary_grasp_adapter_reuses_old_python_algorithm():
+@pytest.fixture
+def ordinary_grasp_root(tmp_path, monkeypatch):
+    utils_module = types.ModuleType("utils")
+    utils_module.__path__ = []
+    ordinary_grasp_module = types.ModuleType("utils.ordinary_grasp")
+    transforms_module = types.ModuleType("utils.transforms")
+
+    def estimate_grasps(_results, _depth_mm, _camera_matrix, depth_quantile=0.75):
+        del depth_quantile
+        return [
+            types.SimpleNamespace(
+                class_name="bottle",
+                conf=0.92,
+                position=np.asarray([0.0, 0.0, 1.0], dtype=np.float64),
+                tcp_rotation=np.eye(3, dtype=np.float64),
+                jaw_width_m=0.08,
+                object_length_m=0.12,
+                is_valid=True,
+                rejected_reason=None,
+            )
+        ]
+
+    ordinary_grasp_module.estimate_grasps = estimate_grasps
+    ordinary_grasp_module.select_best_grasp = lambda grasps: grasps[0]
+    transforms_module.canonicalize_parallel_gripper_tcp_rotation = (
+        lambda rotation: rotation
+    )
+    monkeypatch.setitem(sys.modules, "utils", utils_module)
+    monkeypatch.setitem(sys.modules, "utils.ordinary_grasp", ordinary_grasp_module)
+    monkeypatch.setitem(sys.modules, "utils.transforms", transforms_module)
+    return tmp_path
+
+
+def test_ordinary_grasp_adapter_reuses_old_python_algorithm(ordinary_grasp_root):
     _install_ros_message_stubs_if_needed()
 
     from rebotarm_vision.converters.ordinary_grasp_adapter import (
@@ -163,10 +196,6 @@ def test_ordinary_grasp_adapter_reuses_old_python_algorithm():
         plan_from_detections_and_depth,
     )
 
-    local_repo_root = Path(__file__).resolve().parents[3]
-    ordinary_grasp_root = Path("/home/u24/rebot_grasp")
-    if not ordinary_grasp_root.exists():
-        ordinary_grasp_root = local_repo_root / "softare" / "rebot_grasp"
     depth_mm = np.full((480, 640), 1000, dtype=np.uint16)
 
     plan = plan_from_detections_and_depth(
@@ -194,7 +223,7 @@ def test_ordinary_grasp_adapter_reuses_old_python_algorithm():
     assert (dx * dx + dy * dy + dz * dz) ** 0.5 == pytest.approx(0.08, abs=1e-3)
 
 
-def test_ordinary_grasp_adapter_marks_bbox_fallback_source():
+def test_ordinary_grasp_adapter_marks_bbox_fallback_source(ordinary_grasp_root):
     _install_ros_message_stubs_if_needed()
 
     from rebotarm_vision.converters.ordinary_grasp_adapter import (
@@ -202,10 +231,6 @@ def test_ordinary_grasp_adapter_marks_bbox_fallback_source():
         plan_from_detections_and_depth,
     )
 
-    local_repo_root = Path(__file__).resolve().parents[3]
-    ordinary_grasp_root = Path("/home/u24/rebot_grasp")
-    if not ordinary_grasp_root.exists():
-        ordinary_grasp_root = local_repo_root / "softare" / "rebot_grasp"
     detections = _make_detection_array()
     detections.detections[0].has_obb = False
     detections.detections[0].obb_points_xy = []
@@ -222,7 +247,7 @@ def test_ordinary_grasp_adapter_marks_bbox_fallback_source():
     assert plan.candidate.source == "ordinary_grasp_bbox_depth"
 
 
-def test_ordinary_grasp_adapter_uses_mask_when_available_without_obb():
+def test_ordinary_grasp_adapter_uses_mask_when_available_without_obb(ordinary_grasp_root):
     _install_ros_message_stubs_if_needed()
 
     from rebotarm_vision.converters.ordinary_grasp_adapter import (
@@ -230,10 +255,6 @@ def test_ordinary_grasp_adapter_uses_mask_when_available_without_obb():
         plan_from_detections_and_depth,
     )
 
-    local_repo_root = Path(__file__).resolve().parents[3]
-    ordinary_grasp_root = Path("/home/u24/rebot_grasp")
-    if not ordinary_grasp_root.exists():
-        ordinary_grasp_root = local_repo_root / "softare" / "rebot_grasp"
     detections = _make_detection_array()
     det = detections.detections[0]
     det.has_obb = False
@@ -313,18 +334,13 @@ def test_build_candidate_array_scores_valid_candidates_and_best_index():
     assert array.candidates[0].pose.position.x == pytest.approx(0.12)
 
 
-def test_plan_and_candidates_from_detections_returns_candidate_array():
+def test_plan_and_candidates_from_detections_returns_candidate_array(ordinary_grasp_root):
     _install_ros_message_stubs_if_needed()
 
     from rebotarm_vision.converters.ordinary_grasp_adapter import (
         CameraIntrinsics,
         plan_and_candidates_from_detections_and_depth,
     )
-
-    local_repo_root = Path(__file__).resolve().parents[3]
-    ordinary_grasp_root = Path("/home/u24/rebot_grasp")
-    if not ordinary_grasp_root.exists():
-        ordinary_grasp_root = local_repo_root / "softare" / "rebot_grasp"
 
     plan, candidates = plan_and_candidates_from_detections_and_depth(
         _make_detection_array(),
@@ -371,7 +387,7 @@ def test_depth_quality_rejects_object_farther_than_1_2m():
     assert result.reason == "depth_out_of_range"
 
 
-def test_plan_rejects_detection_when_depth_quality_fails():
+def test_plan_rejects_detection_when_depth_quality_fails(tmp_path):
     _install_ros_message_stubs_if_needed()
 
     from rebotarm_vision.converters.ordinary_grasp_adapter import (
@@ -380,16 +396,11 @@ def test_plan_rejects_detection_when_depth_quality_fails():
     )
     from rebotarm_vision.depth_quality import DepthQualityConfig
 
-    local_repo_root = Path(__file__).resolve().parents[3]
-    ordinary_grasp_root = Path("/home/u24/rebot_grasp")
-    if not ordinary_grasp_root.exists():
-        ordinary_grasp_root = local_repo_root / "softare" / "rebot_grasp"
-
     plan, candidates = plan_and_candidates_from_detections_and_depth(
         _make_detection_array(),
         np.full((480, 640), 1300, dtype=np.uint16),
         CameraIntrinsics(fx=500.0, fy=500.0, cx=320.0, cy=240.0),
-        ordinary_grasp_root=ordinary_grasp_root,
+        ordinary_grasp_root=tmp_path,
         output_frame_id="camera_depth_frame",
         depth_quality_config=DepthQualityConfig(max_depth_m=1.2),
     )

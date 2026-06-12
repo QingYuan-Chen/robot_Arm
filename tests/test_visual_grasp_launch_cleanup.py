@@ -51,8 +51,19 @@ def test_vision_launch_does_not_wrap_static_tf_in_ros2_run():
 def test_vision_launch_configures_opencv_qt_font_environment():
     text = (ROOT / "src" / "rebotarm_vision" / "launch" / "vision.launch.py").read_text(encoding="utf-8")
 
-    assert "export QT_QPA_PLATFORM=xcb" in text
-    assert "export QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu" in text
+    assert '"QT_QPA_PLATFORM": "xcb"' in text
+    assert '"QT_QPA_FONTDIR": "/usr/share/fonts/truetype/dejavu"' in text
+
+
+def test_vision_launch_has_no_machine_specific_home_paths():
+    text = (ROOT / "src" / "rebotarm_vision" / "launch" / "vision.launch.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "/home/u24" not in text
+    assert "camera_config" in text
+    assert "handeye_config" in text
+    assert 'DeclareLaunchArgument("start_ordinary_grasp", default_value="false")' in text
 
 
 def test_interactive_launch_removes_legacy_start_interaction_nodes_flag():

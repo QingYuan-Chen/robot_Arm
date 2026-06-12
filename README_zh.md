@@ -66,6 +66,9 @@ source /opt/ros/jazzy/setup.bash
 
 ## 配置开发环境
 
+当前仓库的本机安装、硬件配置和视觉地址覆盖方式见
+[`docs/local_setup_zh.md`](docs/local_setup_zh.md)。
+
 ### Step 1. 安装 ROS2 依赖
 
 请参考[ROS官方下载文档](https://www.ros.org/blog/getting-started/)选择适合的版本进行安装。

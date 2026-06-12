@@ -33,7 +33,7 @@ class OrdinaryGraspNode(Node):
         self.declare_parameter("ordinary_grasp.candidates_topic", "/grasp/candidates")
         self.declare_parameter("ordinary_grasp.pregrasp_pose_topic", "/grasp/pregrasp_pose")
         self.declare_parameter("ordinary_grasp.grasp_pose_topic", "/grasp/grasp_pose")
-        self.declare_parameter("ordinary_grasp.root", "/home/u24/robotarm_ros2/../rebot_grasp")
+        self.declare_parameter("ordinary_grasp.root", "")
         self.declare_parameter("ordinary_grasp.output_frame_id", "camera_depth_frame")
         self.declare_parameter("ordinary_grasp.depth_quantile", 0.75)
         self.declare_parameter("ordinary_grasp.pregrasp_offset_m", 0.08)
@@ -63,7 +63,12 @@ class OrdinaryGraspNode(Node):
             self.get_parameter("ordinary_grasp.pregrasp_pose_topic").value
         )
         self.grasp_pose_topic = str(self.get_parameter("ordinary_grasp.grasp_pose_topic").value)
-        self.ordinary_grasp_root = Path(str(self.get_parameter("ordinary_grasp.root").value))
+        ordinary_grasp_root = str(self.get_parameter("ordinary_grasp.root").value).strip()
+        if not ordinary_grasp_root:
+            raise RuntimeError(
+                "ordinary_grasp.root is required when the legacy ordinary grasp node is enabled"
+            )
+        self.ordinary_grasp_root = Path(ordinary_grasp_root).expanduser()
         self.output_frame_id = str(self.get_parameter("ordinary_grasp.output_frame_id").value)
         self.depth_quantile = float(self.get_parameter("ordinary_grasp.depth_quantile").value)
         self.pregrasp_offset_m = float(self.get_parameter("ordinary_grasp.pregrasp_offset_m").value)

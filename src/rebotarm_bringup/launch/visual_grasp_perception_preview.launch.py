@@ -18,6 +18,10 @@ def generate_launch_description():
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     ordinary_depth_quality_enabled = LaunchConfiguration("ordinary_depth_quality_enabled")
     start_vision = LaunchConfiguration("start_vision")
+    vision_camera_config = LaunchConfiguration("vision_camera_config")
+    vision_handeye_config = LaunchConfiguration("vision_handeye_config")
+    start_ordinary_grasp = LaunchConfiguration("start_ordinary_grasp")
+    ordinary_grasp_root = LaunchConfiguration("ordinary_grasp_root")
     start_graspnet_baseline = LaunchConfiguration("start_graspnet_baseline")
     start_candidate_ik_filter = LaunchConfiguration("start_candidate_ik_filter")
     start_visual_grasp_markers = LaunchConfiguration("start_visual_grasp_markers")
@@ -77,13 +81,23 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
             DeclareLaunchArgument("start_vision", default_value="true"),
+            DeclareLaunchArgument(
+                "vision_camera_config",
+                default_value=PathJoinSubstitution([vision_share, "config", "camera.yaml"]),
+            ),
+            DeclareLaunchArgument(
+                "vision_handeye_config",
+                default_value=PathJoinSubstitution([vision_share, "config", "handeye.yaml"]),
+            ),
+            DeclareLaunchArgument("start_ordinary_grasp", default_value="false"),
+            DeclareLaunchArgument("ordinary_grasp_root", default_value=""),
             DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
             DeclareLaunchArgument("start_graspnet_baseline", default_value="true"),
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
             DeclareLaunchArgument("graspnet_source_mode", default_value="network"),
-            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://192.168.145.1:8081/graspnet_candidates.json"),
+            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
             DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),
             DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
             DeclareLaunchArgument("graspnet_model_root", default_value=""),
@@ -135,6 +149,10 @@ def generate_launch_description():
                 ),
                 condition=IfCondition(start_vision),
                 launch_arguments={
+                    "camera_config": vision_camera_config,
+                    "handeye_config": vision_handeye_config,
+                    "start_ordinary_grasp": start_ordinary_grasp,
+                    "ordinary_grasp_root": ordinary_grasp_root,
                     "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
                 }.items(),
             ),
@@ -248,4 +266,3 @@ def generate_launch_description():
             ),
         ]
     )
-

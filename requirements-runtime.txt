@@ -1,0 +1,2 @@
+# Python dependencies that are not distributed as ROS packages.
+motorbridge==0.4.6

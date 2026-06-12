@@ -15,7 +15,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
-            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://192.168.145.1:8081/graspnet_candidates.json"),
+            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution([bringup_share, "launch", "visual_grasp_system.launch.py"])

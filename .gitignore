@@ -19,6 +19,8 @@ venv/
 .env
 .vscode/
 .idea/
+third_party/*
+!third_party/COLCON_IGNORE
 
 # OS-generated files
 .DS_Store
