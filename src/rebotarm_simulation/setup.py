@@ -1,3 +1,5 @@
+from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = "rebotarm_simulation"
@@ -9,6 +11,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
+        (f"share/{package_name}/launch", glob("launch/*.launch.py")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -19,6 +22,8 @@ setup(
     entry_points={
         "console_scripts": [
             "rebotarm_sim_trajectory_controller = rebotarm_simulation.sim_trajectory_controller_node:main",
+            "rebotarm_mujoco = rebotarm_simulation.mujoco_cli:main",
+            "rebotarm_mujoco_adapter = rebotarm_simulation.mujoco_ros_adapter_node:main",
         ],
     },
 )

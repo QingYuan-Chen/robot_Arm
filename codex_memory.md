@@ -187,6 +187,292 @@ sudo 密码。完成后应拔插相机，再验证彩色流、深度流、相机
 6. 在无硬件运动或低速模式下验证视觉抓取流程。
 7. 真机执行前核对电机型号、关节方向、零位、软限位和控制增益。
 
+## 2026-06-16 MuJoCo 仿真落地
+
+### 1. 同型号 MuJoCo 参考资产
+
+已拉取并验证同型号 B601-DM MuJoCo 参考仓库：
+
+```text
+third_party/reBotArm_develop_hjx
+```
+
+该目录被 `.gitignore` 的 `third_party/*` 规则忽略，作为本机参考资产使用，
+不直接纳入主工程源码。
+
+MuJoCo 专用虚拟环境：
+
+```text
+third_party/rebotarm_mujoco_venv
+```
+
+当前主工程新增固定依赖文件：
+
+```text
+requirements-mujoco.txt
+```
+
+核心依赖：
+
+```text
+mujoco==3.3.0
+numpy
+pyyaml
+jinja2
+typeguard
+```
+
+其中 `pyyaml`、`jinja2` 和 `typeguard` 用于让当前能看到部分 ROS Python 包的
+MuJoCo venv 通过 `pip check`。
+
+### 2. 主工程 MuJoCo 生成和验证工具
+
+MuJoCo 落地代码放入已有仿真包 `rebotarm_simulation`，不放入
+`rebotarmcontroller` 或 `rebotarm_interactive_control`。
+
+新增主要文件：
+
+```text
+src/rebotarm_simulation/rebotarm_simulation/mujoco_model_profile.py
+src/rebotarm_simulation/rebotarm_simulation/mujoco_runner.py
+src/rebotarm_simulation/rebotarm_simulation/mujoco_cli.py
+docs/mujoco_sim.md
+tests/test_mujoco_model_profile.py
+tests/test_mujoco_headless.py
+```
+
+新增命令入口：
+
+```text
+rebotarm_mujoco
+```
+
+### 3. visual / collision 分离
+
+主工程不直接修改参考仓库 XML，而是从参考 XML 生成物理版模型。
+
+生成器会：
+
+- 将原 STL mesh geom 标为 visual-only：
+  - `contype="0"`
+  - `conaffinity="0"`
+  - `group="1"`
+- 为 base、link1-link6、gripper_base 和 finger pad 新增简化 collision geom。
+- finger pad 使用独立 box collision 和独立摩擦/接触参数。
+- 将 mesh 和 texture 资源路径改为绝对路径，保证生成 XML 可以从
+  `build/mujoco_models/` 加载。
+
+### 4. 电机参数初始保守化
+
+初始 actuator 参数按主工程 URDF effort/range 对齐：
+
+```text
+joint1: ctrlrange -2.8 2.8,   forcerange -27 27, kp 270
+joint2: ctrlrange -3.14 0,    forcerange -27 27, kp 270
+joint3: ctrlrange -3.14 0,    forcerange -27 27, kp 270
+joint4: ctrlrange -1.87 1.57, forcerange -7 7,   kp 70
+joint5: ctrlrange -1.57 1.57, forcerange -7 7,   kp 70
+joint6: ctrlrange -3.14 3.14, forcerange -7 7,   kp 70
+gripper: ctrlrange 0 0.045,   forcerange -20 20, kp 600
+```
+
+### 5. 已完成验证
+
+参考 XML 基线验证：
+
+```text
+reBot-DevArm_fixend.xml: nq=6 nv=6 nu=6 finite=True contacts=1
+reBot-DevArm_gripper.xml: nq=8 nv=8 nu=7 finite=True contacts=1
+sim_reBot_grasp.xml: nq=15 nv=14 nu=7 finite=True contacts=5
+```
+
+主工程生成模型验证：
+
+```text
+python3 -m pytest tests/test_mujoco_model_profile.py -q
+4 passed
+```
+
+生成物理版模型：
+
+```text
+build/mujoco_models/reBot-DevArm_gripper_physics.xml
+build/mujoco_models/sim_reBot_grasp_physics_robot_include.xml
+build/mujoco_models/sim_reBot_grasp_physics.xml
+```
+
+生成模型 smoke：
+
+```text
+nq=8 nv=8 nu=7 finite=True contacts=2 sim_time=1.000
+```
+
+`joint2` 阶跃响应：
+
+```text
+target=-0.6000
+final=-0.5980
+max_abs_error=0.1997
+rms_error=0.0389
+max_abs_velocity=0.7733
+max_abs_actuator_force=27.0000
+sim_time=3.000
+```
+
+基础抓取场景稳定性：
+
+```text
+finite=True
+box_height_m=0.01999994753282892
+max_contacts=6
+final_contacts=6
+sim_time=3.000
+```
+
+MuJoCo venv 依赖健康检查：
+
+```text
+No broken requirements found.
+```
+
+### 6. 后续边界
+
+当前已经完成模型生成、visual/collision 分离、保守电机参数、headless smoke、
+阶跃响应和基础抓取场景稳定性验证。
+
+尚未完成：
+
+- ROS 2 MuJoCo adapter；
+- MoveIt 轨迹接入 MuJoCo `mj_step()`；
+- 多关节轨迹 RMS tracking benchmark；
+- 真机实测电机响应校准；
+- 多物体抓取成功率 benchmark；
+- wrist camera RGB-D 输出与 `rebotarm_vision` 对齐。
+
+## 2026-06-16 MuJoCo ROS 2 前四阶段接入
+
+### 1. 新增独立 ROS adapter
+
+已采纳独立节点方案，不破坏原来的 RViz fake sim：
+
+```text
+src/rebotarm_simulation/rebotarm_simulation/mujoco_adapter_core.py
+src/rebotarm_simulation/rebotarm_simulation/mujoco_metrics.py
+src/rebotarm_simulation/rebotarm_simulation/mujoco_ros_adapter_node.py
+src/rebotarm_simulation/launch/mujoco_moveit_sim.launch.py
+```
+
+新增 console script：
+
+```text
+rebotarm_mujoco_adapter
+```
+
+新增 launch 会 include 原 MoveIt demo，并传入：
+
+```text
+use_fake_joint_states=false
+```
+
+因此 MoveIt/RViz 使用 MuJoCo adapter 发布的 `/rebotarm/joint_states`，
+再由 `GripperVisualJointStateNode` 合成 `/rebotarm/visual_joint_states`。
+
+### 2. 已接入 ROS 接口
+
+MuJoCo adapter 提供：
+
+```text
+/rebotarm/follow_joint_trajectory
+/rebotarm/joint_states
+/rebotarm/trajectory_stop
+/rebotarm/gripper/set
+/rebotarm/gripper/state
+```
+
+MoveIt 控制器配置仍使用原来的：
+
+```text
+/rebotarm/follow_joint_trajectory
+```
+
+### 3. 轨迹指标
+
+执行 `FollowJointTrajectory` 后会输出：
+
+```text
+build/mujoco_runs/latest/trajectory_metrics.csv
+build/mujoco_runs/latest/summary.json
+```
+
+当前一次 ROS action 验证结果：
+
+```text
+Goal accepted
+Goal finished with status: SUCCEEDED
+error_string: MuJoCo trajectory finished
+sample_count: 2202
+joint_count: 6
+max_abs_error: 0.19705242043936322
+rms_error: 0.030329246215821216
+max_abs_velocity: 2.7732680989480762
+max_abs_actuator_force: 27.0
+```
+
+### 4. 夹爪接入和模型修正
+
+`/rebotarm/gripper/set` 已接入 MuJoCo gripper actuator。
+
+调试发现第一版 finger pad collision 会让左右指腹自碰撞，导致夹爪空载无法闭合。
+已在生成器中为以下 body 增加 contact exclude：
+
+```text
+left_finger_link <-> right_finger_link
+```
+
+夹爪 actuator 当前参数：
+
+```text
+ctrlrange 0 0.045
+forcerange -20 20
+kp 600
+kv 60
+```
+
+当前服务验证：
+
+```text
+ros2 service call /rebotarm/gripper/set ... position=0.03
+/rebotarm/gripper/state position=0.030273087383237633
+```
+
+### 5. 运行环境注意
+
+MuJoCo adapter 需要同一个 Python 同时看到 ROS 2 和 MuJoCo。当前本机
+`third_party/rebotarm_mujoco_venv/pyvenv.cfg` 已改为：
+
+```text
+include-system-site-packages = true
+```
+
+新建环境应使用：
+
+```bash
+python3 -m venv --system-site-packages third_party/rebotarm_mujoco_venv
+```
+
+运行前必须：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+```
+
+如果手动用 Python 模块运行，不要覆盖 ROS 的 `PYTHONPATH`，应使用：
+
+```bash
+PYTHONPATH=src/rebotarm_simulation:$PYTHONPATH
+```
+
 ## 工程约束
 
 - 新实现必须遵守 `AGENTS.md` 中的包边界。
