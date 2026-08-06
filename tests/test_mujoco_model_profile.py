@@ -77,3 +77,21 @@ def test_write_profiles_reference_generated_robot_from_scene(tmp_path):
 
     text = scene_xml.read_text(encoding="utf-8")
     assert str(robot_xml.resolve()) in text
+
+
+def test_model_profile_detects_missing_absolute_asset_references(tmp_path):
+    from rebotarm_simulation.mujoco_model_profile import xml_asset_references_are_readable
+
+    stale_xml = tmp_path / "stale.xml"
+    stale_xml.write_text(
+        """<?xml version="1.0"?>
+<mujoco>
+  <asset>
+    <mesh name="base_link" file="/definitely/missing/base_link.STL"/>
+  </asset>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+
+    assert xml_asset_references_are_readable(stale_xml) is False

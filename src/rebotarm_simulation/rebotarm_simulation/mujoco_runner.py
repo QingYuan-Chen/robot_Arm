@@ -5,6 +5,8 @@ from pathlib import Path
 import math
 import time
 
+from .mujoco_grasp_quality import evaluate_grasp_quality
+
 
 @dataclass(frozen=True)
 class SmokeResult:
@@ -22,6 +24,7 @@ class StepResponseResult:
     joint: str
     target: float
     final_position: float
+    final_abs_error: float
     max_abs_error: float
     rms_error: float
     max_abs_velocity: float
@@ -30,12 +33,28 @@ class StepResponseResult:
 
 
 @dataclass(frozen=True)
+class StepResponseSuiteResult:
+    xml_path: Path
+    results: list[StepResponseResult]
+    max_final_abs_error: float
+    max_abs_error: float
+    max_rms_error: float
+    max_abs_velocity: float
+    max_abs_actuator_force: float
+
+
+@dataclass(frozen=True)
 class GraspBenchmarkResult:
     xml_path: Path
     finite: bool
+    initial_box_height_m: float | None
     box_height_m: float | None
     max_contacts: int
     final_contacts: int
+    contact_detected: bool
+    lift_detected: bool
+    grasp_success: bool
+    grasp_status: str
     sim_time: float
 
 
@@ -96,11 +115,33 @@ def run_step_response(
         joint=joint,
         target=float(target),
         final_position=float(data.qpos[qpos_index]),
+        final_abs_error=abs(float(target) - float(data.qpos[qpos_index])),
         max_abs_error=max(abs(error) for error in errors),
         rms_error=float(rms_error),
         max_abs_velocity=float(max_abs_velocity),
         max_abs_actuator_force=float(max_abs_force),
         sim_time=float(data.time),
+    )
+
+
+def run_step_response_suite(
+    xml_path: Path,
+    *,
+    targets: dict[str, float],
+    seconds: float = 3.0,
+) -> StepResponseSuiteResult:
+    results = [
+        run_step_response(xml_path, joint=joint, target=target, seconds=seconds)
+        for joint, target in targets.items()
+    ]
+    return StepResponseSuiteResult(
+        xml_path=xml_path,
+        results=results,
+        max_final_abs_error=max((result.final_abs_error for result in results), default=0.0),
+        max_abs_error=max((result.max_abs_error for result in results), default=0.0),
+        max_rms_error=max((result.rms_error for result in results), default=0.0),
+        max_abs_velocity=max((result.max_abs_velocity for result in results), default=0.0),
+        max_abs_actuator_force=max((result.max_abs_actuator_force for result in results), default=0.0),
     )
 
 
@@ -110,6 +151,7 @@ def run_grasp_benchmark(xml_path: Path, *, seconds: float = 5.0) -> GraspBenchma
     data = mujoco.MjData(model)
     _reset_keyframe_if_present(mujoco, model, data, "0")
 
+    initial_box_z = _body_z_position(mujoco, model, data, "box")
     max_contacts = 0
     steps = max(1, int(seconds / float(model.opt.timestep)))
     for _ in range(steps):
@@ -117,13 +159,23 @@ def run_grasp_benchmark(xml_path: Path, *, seconds: float = 5.0) -> GraspBenchma
         max_contacts = max(max_contacts, int(data.ncon))
 
     box_z = _body_z_position(mujoco, model, data, "box")
+    quality = evaluate_grasp_quality(
+        contact_count=max_contacts,
+        initial_box_height_m=initial_box_z,
+        final_box_height_m=box_z,
+    )
     finite = bool(np.isfinite(data.qpos).all() and np.isfinite(data.qvel).all())
     return GraspBenchmarkResult(
         xml_path=xml_path.resolve(),
         finite=finite,
+        initial_box_height_m=initial_box_z,
         box_height_m=box_z,
         max_contacts=max_contacts,
         final_contacts=int(data.ncon),
+        contact_detected=quality.contact_detected,
+        lift_detected=quality.lift_detected,
+        grasp_success=quality.success,
+        grasp_status=quality.status,
         sim_time=float(data.time),
     )
 
@@ -139,6 +191,8 @@ def _reset_keyframe_if_present(mujoco, model, data, name: str) -> None:
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, name)
     if key_id >= 0:
         mujoco.mj_resetDataKeyframe(model, data, key_id)
+    elif int(getattr(model, "nkey", 0)) > 0:
+        mujoco.mj_resetDataKeyframe(model, data, 0)
     else:
         mujoco.mj_resetData(model, data)
     mujoco.mj_forward(model, data)

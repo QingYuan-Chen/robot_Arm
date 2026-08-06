@@ -22,7 +22,7 @@ def test_generated_physics_profile_loads_and_steps(tmp_path):
     if not DEFAULT_GRIPPER_XML.exists():
         pytest.skip("reference MuJoCo checkout is not available")
 
-    robot_xml = write_physics_profile(tmp_path / "robot.xml", DEFAULT_GRIPPER_XML, include_keyframes=False)
+    robot_xml = write_physics_profile(tmp_path / "robot.xml", DEFAULT_GRIPPER_XML)
     result = run_smoke(robot_xml, seconds=1.0)
 
     assert result.nq == 8
@@ -56,7 +56,7 @@ def test_generated_grasp_scene_loads_and_steps(tmp_path):
     if not DEFAULT_GRIPPER_XML.exists() or not DEFAULT_GRASP_SCENE_XML.exists():
         pytest.skip("reference MuJoCo checkout is not available")
 
-    robot_xml = write_physics_profile(tmp_path / "robot.xml", DEFAULT_GRIPPER_XML)
+    robot_xml = write_physics_profile(tmp_path / "robot.xml", DEFAULT_GRIPPER_XML, include_keyframes=False)
     scene_xml = write_grasp_scene_profile(tmp_path / "scene.xml", robot_xml, DEFAULT_GRASP_SCENE_XML)
     result = run_grasp_benchmark(scene_xml, seconds=1.0)
 

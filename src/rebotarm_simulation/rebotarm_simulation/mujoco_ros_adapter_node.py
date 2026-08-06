@@ -17,11 +17,14 @@ from std_srvs.srv import Trigger
 from .mujoco_adapter_core import (
     ARM_JOINT_NAMES,
     MuJoCoArmAdapter,
+    consume_sim_steps,
+    first_tolerance_violation,
     interpolate_trajectory,
     normalize_trajectory_points,
+    trajectory_error_code_for_stop_reason,
 )
 from .mujoco_metrics import TrajectoryMetricsRecorder
-from .mujoco_model_profile import DEFAULT_GRIPPER_XML, write_physics_profile
+from .mujoco_model_profile import DEFAULT_GRIPPER_XML, write_physics_profile, xml_asset_references_are_readable
 
 
 class MuJoCoRosAdapterNode(Node):
@@ -38,6 +41,10 @@ class MuJoCoRosAdapterNode(Node):
         self.declare_parameter("metrics_dir", "build/mujoco_runs/latest")
         self.declare_parameter("gripper_min_width_m", 0.0)
         self.declare_parameter("gripper_max_width_m", 0.09)
+        self.declare_parameter("path_tolerance_rad", 0.12)
+        self.declare_parameter("goal_tolerance_rad", 0.06)
+        self.declare_parameter("metrics_sample_stride", 1)
+        self.declare_parameter("use_mujoco_viewer", False)
 
         self._arm_namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         self._control_rate_hz = max(float(self.get_parameter("control_rate_hz").value), 1.0)
@@ -45,12 +52,18 @@ class MuJoCoRosAdapterNode(Node):
         self._metrics_dir = Path(str(self.get_parameter("metrics_dir").value))
         self._gripper_min_width_m = float(self.get_parameter("gripper_min_width_m").value)
         self._gripper_max_width_m = float(self.get_parameter("gripper_max_width_m").value)
+        self._path_tolerance_rad = max(float(self.get_parameter("path_tolerance_rad").value), 0.0)
+        self._goal_tolerance_rad = max(float(self.get_parameter("goal_tolerance_rad").value), 0.0)
+        self._metrics_sample_stride = max(int(self.get_parameter("metrics_sample_stride").value), 1)
+        self._use_mujoco_viewer = bool(self.get_parameter("use_mujoco_viewer").value)
         self._lock = threading.RLock()
         self._stop_requested = threading.Event()
 
         model_xml = self._ensure_model_xml()
         self._adapter = MuJoCoArmAdapter(model_xml)
         self._last_publish_time = 0.0
+        self._last_step_wall_time = time.monotonic()
+        self._pending_sim_seconds = 0.0
         self._latest_targets = self._adapter.arm_positions()
 
         self._joint_state_pub = self.create_publisher(
@@ -74,16 +87,31 @@ class MuJoCoRosAdapterNode(Node):
         self.create_service(Trigger, f"/{self._arm_namespace}/trajectory_stop", self._stop_service)
         self.create_service(SetGripper, f"/{self._arm_namespace}/gripper/set", self._set_gripper_service)
         self.create_timer(1.0 / self._control_rate_hz, self._step_and_publish)
+        if self._use_mujoco_viewer:
+            threading.Thread(target=self._run_viewer, daemon=True).start()
         self.get_logger().info(
             f"MuJoCo adapter ready: /{self._arm_namespace}/follow_joint_trajectory, "
             f"/{self._arm_namespace}/joint_states"
         )
 
+    def _run_viewer(self) -> None:
+        try:
+            import mujoco.viewer
+
+            with mujoco.viewer.launch_passive(self._adapter.model, self._adapter.data) as viewer:
+                while rclpy.ok() and viewer.is_running():
+                    with self._lock:
+                        viewer.sync()
+                    time.sleep(1.0 / max(self._publish_rate_hz, 1.0))
+        except Exception as exc:
+            self.get_logger().error(f"MuJoCo viewer failed: {exc}")
+
     def _ensure_model_xml(self) -> Path:
         model_xml = Path(str(self.get_parameter("model_xml").value))
-        if model_xml.exists():
+        auto_generate_model = bool(self.get_parameter("auto_generate_model").value)
+        if model_xml.exists() and xml_asset_references_are_readable(model_xml):
             return model_xml
-        if not bool(self.get_parameter("auto_generate_model").value):
+        if not auto_generate_model:
             raise FileNotFoundError(f"MuJoCo model XML does not exist: {model_xml}")
         source_xml = Path(str(self.get_parameter("source_xml").value))
         self.get_logger().info(f"generating MuJoCo model XML at {model_xml}")
@@ -135,12 +163,19 @@ class MuJoCoRosAdapterNode(Node):
             goal_handle.abort()
             return result
 
-        recorder = TrajectoryMetricsRecorder(self._metrics_dir, joint_names=ARM_JOINT_NAMES)
+        recorder = TrajectoryMetricsRecorder(
+            self._metrics_dir,
+            joint_names=ARM_JOINT_NAMES,
+            sample_stride=self._metrics_sample_stride,
+        )
         feedback = FollowJointTrajectory.Feedback()
         feedback.joint_names = list(ARM_JOINT_NAMES)
-        start_time = time.monotonic()
+        with self._lock:
+            start_sim_time = self._adapter.sim_time
         end_time = trajectory[-1].time_from_start
         stop_reason = "finished"
+        violated_joint = None
+        violated_tolerance = None
 
         while rclpy.ok():
             if goal_handle.is_cancel_requested:
@@ -152,14 +187,15 @@ class MuJoCoRosAdapterNode(Node):
                 goal_handle.canceled()
                 break
 
-            elapsed = min(time.monotonic() - start_time, end_time)
-            targets = interpolate_trajectory(trajectory, elapsed)
             with self._lock:
+                elapsed = min(self._adapter.sim_time - start_sim_time, end_time)
+                targets = interpolate_trajectory(trajectory, elapsed)
                 self._adapter.set_arm_targets(targets)
                 self._latest_targets = list(targets)
                 actual = self._adapter.arm_positions()
                 velocities = self._adapter.arm_velocities()
                 forces = self._adapter.arm_actuator_forces()
+            errors = [target - position for target, position in zip(targets, actual)]
             recorder.record(
                 elapsed=elapsed,
                 targets=list(targets),
@@ -169,27 +205,65 @@ class MuJoCoRosAdapterNode(Node):
             )
             feedback.desired.positions = list(targets)
             feedback.actual.positions = actual
-            feedback.error.positions = [target - position for target, position in zip(targets, actual)]
+            feedback.error.positions = errors
             goal_handle.publish_feedback(feedback)
             if elapsed >= end_time:
-                goal_handle.succeed()
+                violation = first_tolerance_violation(
+                    joint_names=ARM_JOINT_NAMES,
+                    errors=errors,
+                    tolerance=self._goal_tolerance_rad,
+                )
+                if violation is not None:
+                    stop_reason = "goal_tolerance_violated"
+                    violated_joint = violation.joint
+                    violated_tolerance = self._goal_tolerance_rad
+                    goal_handle.abort()
+                else:
+                    goal_handle.succeed()
+                break
+            violation = first_tolerance_violation(
+                joint_names=ARM_JOINT_NAMES,
+                errors=errors,
+                tolerance=self._path_tolerance_rad,
+            )
+            if violation is not None:
+                stop_reason = "path_tolerance_violated"
+                violated_joint = violation.joint
+                violated_tolerance = self._path_tolerance_rad
+                goal_handle.abort()
                 break
             time.sleep(1.0 / self._control_rate_hz)
 
         success = stop_reason == "finished"
-        recorder.finish(success=success, stop_reason=stop_reason)
-        if success:
-            result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
-            result.error_string = "MuJoCo trajectory finished"
-        else:
-            result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
-            result.error_string = f"MuJoCo trajectory {stop_reason}"
+        recorder.finish(
+            success=success,
+            stop_reason=stop_reason,
+            violated_joint=violated_joint,
+            tolerance=violated_tolerance,
+        )
+        result.error_code = trajectory_error_code_for_stop_reason(
+            stop_reason,
+            result_type=FollowJointTrajectory.Result,
+        )
+        result.error_string = (
+            "MuJoCo trajectory finished"
+            if success
+            else f"MuJoCo trajectory {stop_reason}"
+        )
         return result
 
     def _step_and_publish(self) -> None:
         with self._lock:
-            self._adapter.step()
             now = time.monotonic()
+            wall_delta = now - self._last_step_wall_time
+            self._last_step_wall_time = now
+            steps, self._pending_sim_seconds = consume_sim_steps(
+                wall_delta=wall_delta,
+                timestep=self._adapter.timestep,
+                pending_sim_seconds=self._pending_sim_seconds,
+            )
+            if steps > 0:
+                self._adapter.step(steps)
             if now - self._last_publish_time >= 1.0 / self._publish_rate_hz:
                 self._publish_joint_state()
                 self._publish_gripper_state()

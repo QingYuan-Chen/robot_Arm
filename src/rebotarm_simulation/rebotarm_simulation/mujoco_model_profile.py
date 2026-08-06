@@ -160,6 +160,26 @@ def write_grasp_scene_profile(
     return output_xml
 
 
+def xml_asset_references_are_readable(xml_path: Path) -> bool:
+    xml_path = Path(xml_path)
+    if not xml_path.exists():
+        return False
+    try:
+        root = ET.parse(xml_path).getroot()
+    except ET.ParseError:
+        return False
+    for element in list(root.findall(".//mesh")) + list(root.findall(".//texture")):
+        file_name = element.get("file")
+        if not file_name:
+            continue
+        asset_path = Path(file_name)
+        if not asset_path.is_absolute():
+            asset_path = xml_path.parent / asset_path
+        if not asset_path.exists():
+            return False
+    return True
+
+
 def _make_asset_files_absolute(root: ET.Element, asset_dir: Path) -> None:
     for mesh in root.findall(".//mesh"):
         file_name = mesh.get("file")

@@ -13,6 +13,8 @@ def generate_launch_description():
     arm_namespace = LaunchConfiguration("arm_namespace")
     model_xml = LaunchConfiguration("model_xml")
     metrics_dir = LaunchConfiguration("metrics_dir")
+    metrics_sample_stride = LaunchConfiguration("metrics_sample_stride")
+    use_mujoco_viewer = LaunchConfiguration("use_mujoco_viewer")
     control_rate_hz = LaunchConfiguration("control_rate_hz")
     publish_rate_hz = LaunchConfiguration("publish_rate_hz")
     python_executable = LaunchConfiguration("python_executable")
@@ -24,6 +26,8 @@ def generate_launch_description():
             DeclareLaunchArgument("use_rviz", default_value="true"),
             DeclareLaunchArgument("model_xml", default_value="build/mujoco_models/reBot-DevArm_gripper_physics.xml"),
             DeclareLaunchArgument("metrics_dir", default_value="build/mujoco_runs/latest"),
+            DeclareLaunchArgument("metrics_sample_stride", default_value="1"),
+            DeclareLaunchArgument("use_mujoco_viewer", default_value="false"),
             DeclareLaunchArgument("control_rate_hz", default_value="200.0"),
             DeclareLaunchArgument("publish_rate_hz", default_value="50.0"),
             DeclareLaunchArgument("python_executable", default_value="third_party/rebotarm_mujoco_venv/bin/python"),
@@ -38,6 +42,8 @@ def generate_launch_description():
                         "arm_namespace": arm_namespace,
                         "model_xml": model_xml,
                         "metrics_dir": metrics_dir,
+                        "metrics_sample_stride": metrics_sample_stride,
+                        "use_mujoco_viewer": use_mujoco_viewer,
                         "control_rate_hz": control_rate_hz,
                         "publish_rate_hz": publish_rate_hz,
                     }

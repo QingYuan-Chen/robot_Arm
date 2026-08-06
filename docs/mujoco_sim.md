@@ -191,6 +191,24 @@ rebotarm_mujoco_adapter
 /rebotarm/gripper/state
 ```
 
+adapter 使用 MuJoCo `data.time` 作为轨迹插值和完成判断的时间基准。ROS timer
+只提供 wall-clock 调度，实际每次会根据 MuJoCo `timestep` 和累计 wall delta
+补足需要执行的 `mj_step()` 次数，避免模型 `timestep=0.0025` 但 ROS timer
+默认 200Hz 时仿真只以 0.5 倍实时速度运行。
+
+`FollowJointTrajectory` 的 stopped / canceled / tolerance 类 stop reason 会映射为
+非 `SUCCESSFUL` 结果；`summary.json` 仍记录 stop reason 和误差统计，后续
+goal/path tolerance 阈值会基于 step-response 数据继续标定。
+
+当前还支持：
+
+- 单点 delayed trajectory 自动在 `t=0` 插入当前关节状态，避免目标瞬间跳到终点；
+- stale generated XML asset 检查，已有 XML 指向不存在 mesh/texture 时会自动重生成；
+- `step-response-suite` 批量标定入口，输出每个关节的最终误差、RMS、速度和 actuator force；
+- `metrics_sample_stride` 参数，用于长序列下采样写出 CSV；
+- `use_mujoco_viewer` 参数，默认 `false`，需要观察 MuJoCo 原生界面时再打开；
+- grasp benchmark 会输出 contact/lift/success/status，用于后续抓取质量闭环。
+
 启动前需要 source ROS 和本工作区：
 
 ```bash
@@ -252,3 +270,22 @@ ros2 service call /rebotarm/gripper/set \
 ```bash
 ros2 topic echo /rebotarm/gripper/state --once
 ```
+
+批量 step-response 标定：
+
+```bash
+PYTHONPATH=src/rebotarm_simulation \
+third_party/rebotarm_mujoco_venv/bin/python \
+  -m rebotarm_simulation.mujoco_cli step-response-suite \
+  --xml build/mujoco_models/reBot-DevArm_gripper_physics.xml \
+  --seconds 2.0 \
+  --json-output build/mujoco_runs/latest/step_response_suite.json
+```
+
+注意：当前批量标定已经暴露出 joint4 / joint6 在部分较大阶跃目标下最终误差较大。
+后续如果要继续调 `forcerange`、`kp`、`kv`、`damping`，必须先决定约束来源：
+
+- 按真实电机/减速器/电流能力保持保守参数；
+- 或为了仿真演示提高力矩和增益。
+
+这两条路线会得到不同的仿真可信度，不能混为一谈。

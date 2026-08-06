@@ -24,6 +24,13 @@ class JointStateSnapshot:
     efforts: list[float]
 
 
+@dataclass(frozen=True)
+class ToleranceViolation:
+    joint: str
+    error: float
+    abs_error: float
+
+
 def interpolate_trajectory(points: Sequence[TrajectoryPoint], elapsed: float) -> list[float]:
     if not points:
         raise ValueError("trajectory contains no points")
@@ -79,6 +86,14 @@ def normalize_trajectory_points(
 
     if not normalized:
         raise ValueError("trajectory contains no points")
+    if normalized[0].time_from_start > 0.0:
+        normalized.insert(
+            0,
+            TrajectoryPoint(
+                time_from_start=0.0,
+                positions=[float(target_current.get(name, 0.0)) for name in target_names],
+            ),
+        )
     return normalized
 
 
@@ -87,6 +102,58 @@ def gripper_width_to_ctrl(width: float, *, min_width: float = 0.0, max_width: fl
     upper = max(float(min_width), float(max_width))
     clamped = min(max(float(width), lower), upper)
     return clamped * 0.5
+
+
+def consume_sim_steps(
+    *,
+    wall_delta: float,
+    timestep: float,
+    pending_sim_seconds: float,
+) -> tuple[int, float]:
+    if timestep <= 0.0:
+        raise ValueError("MuJoCo timestep must be positive")
+    pending = max(0.0, float(pending_sim_seconds)) + max(0.0, float(wall_delta))
+    steps = int(pending / float(timestep))
+    remainder = pending - float(steps) * float(timestep)
+    return steps, remainder
+
+
+def trajectory_error_code_for_stop_reason(stop_reason: str, *, result_type) -> int:
+    if stop_reason == "finished":
+        return int(result_type.SUCCESSFUL)
+    if stop_reason == "goal_tolerance_violated":
+        return int(result_type.GOAL_TOLERANCE_VIOLATED)
+    return int(result_type.PATH_TOLERANCE_VIOLATED)
+
+
+def first_tolerance_violation(
+    *,
+    joint_names: Sequence[str],
+    errors: Sequence[float],
+    tolerance: float,
+) -> ToleranceViolation | None:
+    if float(tolerance) <= 0.0:
+        return None
+    for joint, error in zip(joint_names, errors):
+        abs_error = abs(float(error))
+        if abs_error > float(tolerance):
+            return ToleranceViolation(joint=str(joint), error=float(error), abs_error=abs_error)
+    return None
+
+
+def default_step_response_targets(motor_profiles: Iterable[object]) -> dict[str, float]:
+    targets: dict[str, float] = {}
+    for profile in motor_profiles:
+        joint = str(getattr(profile, "joint"))
+        if joint == "left_finger":
+            continue
+        lower, upper = _parse_range(str(getattr(profile, "ctrlrange")))
+        midpoint = (lower + upper) * 0.5
+        target = midpoint + (upper - midpoint) * 0.5
+        if upper <= 0.0:
+            target = midpoint * 0.5
+        targets[joint] = float(target)
+    return targets
 
 
 class MuJoCoArmAdapter:
@@ -116,6 +183,10 @@ class MuJoCoArmAdapter:
     @property
     def timestep(self) -> float:
         return float(self.model.opt.timestep)
+
+    @property
+    def sim_time(self) -> float:
+        return float(self.data.time)
 
     def reset(self, keyframe: str | None = None) -> None:
         if keyframe:
@@ -206,3 +277,10 @@ def _time_from_point(point: object) -> float:
     if duration is None:
         return 0.0
     return float(getattr(duration, "sec", 0)) + float(getattr(duration, "nanosec", 0)) * 1e-9
+
+
+def _parse_range(value: str) -> tuple[float, float]:
+    parts = [float(part) for part in str(value).split()]
+    if len(parts) != 2:
+        raise ValueError(f"expected two range values, got: {value}")
+    return parts[0], parts[1]
