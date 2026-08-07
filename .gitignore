@@ -21,8 +21,10 @@ venv/
 .env
 .vscode/
 .idea/
-third_party/*
-!third_party/COLCON_IGNORE
+third_party/rebotarm_mujoco_venv/
+third_party/robotarm_ros2_upstream/
+third_party/rebotarm_ros2_mujoco_snapshot/**/__pycache__/
+third_party/rebotarm_ros2_mujoco_snapshot/**/*.py[cod]
 
 # OS-generated files
 .DS_Store

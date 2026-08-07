@@ -19,7 +19,7 @@
 - Create: `third_party/robotarm_ros2_mujoco_snapshot/README_LOCALIZATION.md`
 - Test: `tests/test_upstream_snapshot_provenance.py`
 
-- [ ] **Step 1: Write the failing provenance test**
+- [x] **Step 1: Write the failing provenance test**
 
 ```python
 def test_upstream_snapshot_is_pinned_and_outside_default_src():
@@ -31,12 +31,12 @@ def test_upstream_snapshot_is_pinned_and_outside_default_src():
     assert not (Path("src") / "rebotarm_simulation_upstream").exists()
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `python3 -m pytest tests/test_upstream_snapshot_provenance.py -q`  
 Expected: FAIL because the snapshot and manifest do not exist yet.
 
-- [ ] **Step 3: Copy the exact source and test scope**
+- [x] **Step 3: Copy the exact source and test scope**
 
 Run from the repository root:
 
@@ -48,13 +48,22 @@ mkdir -p third_party/robotarm_ros2_mujoco_snapshot/tests
 cp -a /home/a/project/rebot_refer/tests/test_mujoco_*.py third_party/robotarm_ros2_mujoco_snapshot/tests/
 cp -a /home/a/project/rebot_refer/tests/test_urdf_to_mjcf.py third_party/robotarm_ros2_mujoco_snapshot/tests/
 cp -a /home/a/project/rebot_refer/src/rebotarm_simulation/README_mujoco.md third_party/robotarm_ros2_mujoco_snapshot/
+mkdir -p third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_bringup/config third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_bringup/launch
+mkdir -p third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_moveit_config/config third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_moveit_config/launch
+cp -a /home/a/project/rebot_refer/src/rebotarm_bringup/config/arm.yaml /home/a/project/rebot_refer/src/rebotarm_bringup/config/gripper.yaml third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_bringup/config/
+cp -a /home/a/project/rebot_refer/src/rebotarm_bringup/launch/interactive_system.launch.py third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_bringup/launch/
+cp -a /home/a/project/rebot_refer/src/rebotarm_moveit_config/config/rebotarm.urdf third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_moveit_config/config/
+cp -a /home/a/project/rebot_refer/src/rebotarm_moveit_config/launch/demo.launch.py third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_moveit_config/launch/
+cp -a /home/a/project/rebot_refer/.gitattributes third_party/robotarm_ros2_mujoco_snapshot/
+mkdir -p third_party/robotarm_ros2_mujoco_snapshot/docs
+cp -a /home/a/project/rebot_refer/docs/rebotarm_feature_commands.md third_party/robotarm_ros2_mujoco_snapshot/docs/
 ```
 
 Write `UPSTREAM_PROVENANCE.json` with the remote, branch, pinned commit, source path,
 license result `PROVISIONAL`, target file inventory and SHA-256 for package.xml, setup.py,
 robot.xml, scene.xml, mujoco_sim.py, mujoco_ros_node.py, motor_control.py and mujoco_health.py.
 
-- [ ] **Step 4: Run the provenance test and snapshot diff**
+- [x] **Step 4: Run the provenance test and snapshot diff**
 
 Run:
 
@@ -65,7 +74,7 @@ diff -qr /home/a/project/rebot_refer/src/rebotarm_simulation third_party/robotar
 
 Expected: test passes and `diff -qr` prints no differences for the copied package.
 
-- [ ] **Step 5: Record the snapshot boundary**
+- [x] **Step 5: Record the snapshot boundary**
 
 Update `Agent/MEMORY.md`, `Agent/PROJECT_STATUS.md` only if the manifest and diff are valid,
 and record the exact copy command and license status in
@@ -78,18 +87,18 @@ and record the exact copy command and license status in
 - Create: `tests/test_upstream_runner.py`
 - Modify: `.gitignore` (ignore only `build/upstream_mujoco_ws/`, `install/upstream_mujoco_ws/`, and `log/upstream_mujoco_ws/`)
 
-- [ ] **Step 1: Write failing runner tests**
+- [x] **Step 1: Write failing runner tests**
 
 Test that `snapshot_python()` points to `third_party/rebotarm_ros2_mujoco_snapshot/src`,
 that the environment sets `PYTHONPATH` to the snapshot package, and that a command rejecting
 `/dev/ttyACM0` or `rebotarmcontroller` raises `ValueError` before subprocess execution.
 
-- [ ] **Step 2: Run the tests and confirm the missing module failure**
+- [x] **Step 2: Run the tests and confirm the missing module failure**
 
 Run: `python3 -m pytest tests/test_upstream_runner.py -q`  
 Expected: FAIL with the runner module missing.
 
-- [ ] **Step 3: Implement the minimal runner**
+- [x] **Step 3: Implement the minimal runner**
 
 Expose:
 
@@ -106,7 +115,7 @@ The runner must use `third_party/rebotarm_mujoco_venv/bin/python` when present, 
 report a clear dependency error. It must set `PYTHONPATH` only for the upstream snapshot,
 never source `install/setup.bash`, and reject hardware words before `subprocess.run`.
 
-- [ ] **Step 4: Run runner tests and a safe upstream health command**
+- [x] **Step 4: Run runner tests and a safe upstream health command**
 
 Run:
 
@@ -114,7 +123,7 @@ Run:
 python3 -m pytest tests/test_upstream_runner.py -q
 python3 scripts/p1_upstream_mujoco/run_upstream.py \
   -m rebotarm_simulation.mujoco_health \
-  --model third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml \
+  --model "$(pwd)/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml" \
   --skip-renderer
 ```
 
@@ -127,18 +136,18 @@ Expected: runner tests pass and health JSON reports `ok=true`; no hardware proce
 - Create: `tests/test_mujoco_baseline_comparison.py`
 - Create: `Agent/evidence/P1/2026-08-07-baseline-comparison.json`
 
-- [ ] **Step 1: Write failing normalization tests**
+- [x] **Step 1: Write failing normalization tests**
 
 Test `normalize_model()` produces `nq/nv/nu/njnt/nbody/ngeom/nsensor`, and
 `compare_records()` preserves backend labels, numeric values, command strings and failures
 without coercing interface mismatches into pass/fail booleans.
 
-- [ ] **Step 2: Run comparison tests to verify they fail**
+- [x] **Step 2: Run comparison tests to verify they fail**
 
 Run: `python3 -m pytest tests/test_mujoco_baseline_comparison.py -q`  
 Expected: FAIL because the harness module is missing.
 
-- [ ] **Step 3: Implement normalization and isolated subprocess calls**
+- [x] **Step 3: Implement normalization and isolated subprocess calls**
 
 The harness must run:
 
@@ -154,9 +163,9 @@ upstream_headless = run_upstream(..., "-m", "rebotarm_simulation.mujoco_cli", "-
 Store raw stdout/stderr and parsed summaries. Mark the known upstream replay assertion as
 `test_defect`, not `runtime_failure`, with its exact test node id.
 
-- [ ] **Step 4: Run the harness and write the first A/B report**
+- [x] **Step 4: Run the harness and write the first A/B report**
 
-Run: `python3 scripts/p1_upstream_mujoco/compare_baselines.py --duration 1 --output Agent/evidence/P1/2026-08-07-baseline-comparison.json`  
+Run: `third_party/rebotarm_mujoco_venv/bin/python scripts/p1_upstream_mujoco/compare_baselines.py --duration 1 --output Agent/evidence/P1/2026-08-07-baseline-comparison.json`
 Expected: JSON contains current/upstream records, model dimensions, health, smoke, trajectory,
 grasp and test summary fields; current backend remains `nu=7`, upstream robot remains `nu=8`.
 
@@ -167,7 +176,7 @@ grasp and test summary fields; current backend remains `nu=7`, upstream robot re
 - Modify: `Agent/MEMORY.md`
 - Create: `Agent/evidence/P1/2026-08-07-upstream-localized-test-report.md`
 
-- [ ] **Step 1: Run copied tests from the snapshot root**
+- [x] **Step 1: Run copied tests from the snapshot root**
 
 Run:
 
@@ -181,12 +190,12 @@ PYTHONPATH="$PWD/src/rebotarm_simulation" \
 Expected baseline is `219 passed, 1 skipped, 1 failed` until the known nested
 `mapping -> tuple` `pytest.approx` assertion is corrected upstream.
 
-- [ ] **Step 2: Run copied health/headless/model checks**
+- [x] **Step 2: Run copied health/headless/model checks**
 
 Run the snapshot runner for `mujoco_health --skip-renderer`, `mujoco_cli --headless --duration 1`,
 and the model contract tests. Record command, commit, output and any failure classification.
 
-- [ ] **Step 3: Update state without overclaiming**
+- [x] **Step 3: Update state without overclaiming**
 
 Only mark the P1 independent-test checkbox complete if the report contains a reviewed test
 defect classification and all required runtime checks pass; do not call the upstream suite
@@ -200,7 +209,7 @@ fully green while the replay assertion remains unchanged.
 - Modify: `Agent/STATE.json` via `Agent/update_state.py`
 - Modify: `Agent/MEMORY.md`
 
-- [ ] **Step 1: Run required repository checks**
+- [x] **Step 1: Run required repository checks**
 
 Run:
 
@@ -211,13 +220,13 @@ python3 -m compileall src/rebotarm_dashboard/rebotarm_dashboard src/rebotarm_tel
 git diff --check
 ```
 
-- [ ] **Step 2: Refresh state and evidence**
+- [x] **Step 2: Refresh state and evidence**
 
 Run `python3 Agent/update_state.py --event verified --actor Codex --note ... --verification ...`
 only after the A/B report and required checks exist. Keep current and upstream test counts
 separate in `Agent/MEMORY.md` and `Agent/STATE.json`.
 
-- [ ] **Step 3: Report comparison effect and remaining gaps**
+- [x] **Step 3: Report comparison effect and remaining gaps**
 
 The handoff must state which backend was better for model health, trajectory residual, gripper,
 contact and startup isolation, and must list unresolved license, actuator-contract, calibration,

@@ -1,0 +1,1045 @@
+{
+  "generated_at": "2026-08-07T05:35:40.919713+00:00",
+  "duration_seconds": 1.0,
+  "current": {
+    "backend": "current",
+    "model": {
+      "path": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+      "nq": 8,
+      "nv": 8,
+      "nu": 7,
+      "njnt": 8,
+      "nbody": 11,
+      "ngeom": 20,
+      "nsensor": 0,
+      "joint_names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6",
+        "left_finger",
+        "right_finger"
+      ],
+      "actuator_names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6",
+        "gripper"
+      ]
+    },
+    "health": {
+      "model_path": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+      "model_loaded": true,
+      "physics_step_finite": true,
+      "joint_count": 8,
+      "actuator_count": 7,
+      "simulation_time": 0.005,
+      "ok": true
+    },
+    "smoke": {
+      "xml_path": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+      "nq": 8,
+      "nv": 8,
+      "nu": 7,
+      "finite": true,
+      "contacts": 3,
+      "sim_time": 0.9999999999999897
+    },
+    "step_response": {
+      "xml_path": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+      "results": [
+        {
+          "joint": "joint1",
+          "target": 1.4,
+          "final_position": 1.3970032970767787,
+          "final_abs_error": 0.002996702923221184,
+          "max_abs_error": 1.3990562323783446,
+          "rms_error": 0.5570793831583383,
+          "max_abs_velocity": 4.066425202467243,
+          "max_abs_actuator_force": 27.0,
+          "sim_time": 0.9999999999999897
+        },
+        {
+          "joint": "joint2",
+          "target": -0.785,
+          "final_position": -0.7975107437360754,
+          "final_abs_error": 0.012510743736075414,
+          "max_abs_error": 0.38468891767142027,
+          "rms_error": 0.13540940785680952,
+          "max_abs_velocity": 2.0008631901760157,
+          "max_abs_actuator_force": 27.0,
+          "sim_time": 0.9999999999999897
+        },
+        {
+          "joint": "joint3",
+          "target": -0.785,
+          "final_position": -0.7477512308823616,
+          "final_abs_error": 0.037248769117638414,
+          "max_abs_error": 0.21348979193567308,
+          "rms_error": 0.05703300733386857,
+          "max_abs_velocity": 1.972919296991663,
+          "max_abs_actuator_force": 27.0,
+          "sim_time": 0.9999999999999897
+        },
+        {
+          "joint": "joint4",
+          "target": 0.7100000000000001,
+          "final_position": 0.3635026787129714,
+          "final_abs_error": 0.34649732128702865,
+          "max_abs_error": 0.3510620764600222,
+          "rms_error": 0.34419945106425776,
+          "max_abs_velocity": 2.488303895677313,
+          "max_abs_actuator_force": 7.0,
+          "sim_time": 0.9999999999999897
+        },
+        {
+          "joint": "joint5",
+          "target": 0.785,
+          "final_position": -0.0010238755832161748,
+          "final_abs_error": 0.7860238755832162,
+          "max_abs_error": 0.7957001063553719,
+          "rms_error": 0.78395981125261,
+          "max_abs_velocity": 3.9722795832660927,
+          "max_abs_actuator_force": 7.0,
+          "sim_time": 0.9999999999999897
+        },
+        {
+          "joint": "joint6",
+          "target": 1.57,
+          "final_position": 1.551084368976341,
+          "final_abs_error": 0.01891563102365912,
+          "max_abs_error": 1.5683048546643357,
+          "rms_error": 0.8626862491238706,
+          "max_abs_velocity": 2.0889149794243242,
+          "max_abs_actuator_force": 7.0,
+          "sim_time": 0.9999999999999897
+        }
+      ],
+      "max_final_abs_error": 0.7860238755832162,
+      "max_abs_error": 1.5683048546643357,
+      "max_rms_error": 0.8626862491238706,
+      "max_abs_velocity": 4.066425202467243,
+      "max_abs_actuator_force": 27.0
+    },
+    "grasp": {
+      "xml_path": "/home/a/project/rebot_Arm/build/upstream_comparison/current_scene.xml",
+      "finite": true,
+      "initial_box_height_m": 0.05,
+      "box_height_m": 0.019892244579820407,
+      "max_contacts": 6,
+      "final_contacts": 6,
+      "contact_detected": true,
+      "lift_detected": false,
+      "grasp_success": false,
+      "grasp_status": "contact_without_lift",
+      "sim_time": 0.9999999999999897
+    },
+    "tests": {
+      "status": "not_run_by_harness",
+      "command": "python3 -m pytest tests -q"
+    }
+  },
+  "upstream": {
+    "backend": "upstream",
+    "model": {
+      "path": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/robot.xml",
+      "nq": 8,
+      "nv": 8,
+      "nu": 8,
+      "njnt": 8,
+      "nbody": 11,
+      "ngeom": 20,
+      "nsensor": 26,
+      "joint_names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6",
+        "left_finger_joint",
+        "right_finger_joint"
+      ],
+      "actuator_names": [
+        "joint1_torque",
+        "joint2_torque",
+        "joint3_torque",
+        "joint4_torque",
+        "joint5_torque",
+        "joint6_torque",
+        "left_finger_force",
+        "right_finger_force"
+      ]
+    },
+    "scene_model": {
+      "path": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml",
+      "nq": 15,
+      "nv": 14,
+      "nu": 8,
+      "njnt": 9,
+      "nbody": 13,
+      "ngeom": 27,
+      "nsensor": 26,
+      "joint_names": [
+        "joint1",
+        "joint2",
+        "joint3",
+        "joint4",
+        "joint5",
+        "joint6",
+        "left_finger_joint",
+        "right_finger_joint",
+        null
+      ],
+      "actuator_names": [
+        "joint1_torque",
+        "joint2_torque",
+        "joint3_torque",
+        "joint4_torque",
+        "joint5_torque",
+        "joint6_torque",
+        "left_finger_force",
+        "right_finger_force"
+      ]
+    },
+    "health": {
+      "result": {
+        "actuator_count": 8,
+        "expected_actuator_count": 8,
+        "expected_joint_count": 8,
+        "headless": true,
+        "joint_count": 8,
+        "model_loaded": true,
+        "model_path": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml",
+        "mujoco_version": "3.3.0",
+        "ok": true,
+        "physics_step_finite": true,
+        "python_version": "3.12.3",
+        "renderer_available": false,
+        "renderer_error": "renderer check skipped",
+        "renderer_probe": {
+          "available": false,
+          "error": "renderer check skipped",
+          "returncode": null,
+          "signal": null,
+          "stderr": "",
+          "stdout": "",
+          "timed_out": false
+        },
+        "simulation_time": 0.002
+      },
+      "returncode": 0,
+      "stderr": ""
+    },
+    "headless": {
+      "result": {
+        "achieved_duration": 1.0000000000000007,
+        "actuator_forces": [
+          -2.582775724537742e-10,
+          -0.7711726511683761,
+          -8.471317232350046,
+          -2.555780598239378,
+          8.954993935785079e-06,
+          0.00010954792593666484,
+          0.0,
+          0.0
+        ],
+        "end_effector_orientation": [
+          -5.056940786551729e-05,
+          -4.2426422674490816e-06,
+          1.6336163521370968e-11,
+          0.9999999987123676
+        ],
+        "end_effector_position": [
+          0.15530584000238085,
+          4.873138905639362e-08,
+          0.19169990248345378
+        ],
+        "gripper_width": 1.0073844539581505e-07,
+        "joint_names": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "left_finger_joint",
+          "right_finger_joint"
+        ],
+        "joint_positions": [
+          5.885071170983561e-13,
+          -1.4622561591522307e-16,
+          -3.206367567055509e-15,
+          2.030210185551437e-13,
+          9.021088655494087e-11,
+          1.215053678117783e-10,
+          1.0128901464155452e-07,
+          5.505692457394674e-10
+        ],
+        "joint_velocities": [
+          -2.582479701550701e-12,
+          6.8405348916208566e-15,
+          6.954488995524968e-14,
+          -3.424363810884104e-13,
+          -1.958371625879649e-10,
+          -2.374227432172517e-10,
+          2.986890439262348e-09,
+          -1.2387800898947706e-09
+        ],
+        "object_poses": {
+          "test_cube": [
+            0.28,
+            1.5053583379831527e-17,
+            0.019945398388627772,
+            1.442724041841905e-17,
+            9.713963827811113e-19,
+            -1.4996441264285176e-18,
+            1.0
+          ]
+        },
+        "requested_duration": 1.0,
+        "simulation_time": 1.0000000000000007
+      },
+      "returncode": 0,
+      "stderr": ""
+    },
+    "step_response": {
+      "results": [
+        {
+          "joint": "joint1",
+          "target": 1.4,
+          "final_abs_error": 0.3641779806307406,
+          "max_abs_error": 1.3999782131882323,
+          "max_abs_velocity": 1.2481077247663972,
+          "max_abs_actuator_force": 12.519198516184554,
+          "sim_time": 1.0000000000000007
+        },
+        {
+          "joint": "joint2",
+          "target": -0.785,
+          "final_abs_error": 0.09374053839513619,
+          "max_abs_error": 0.7849788037405409,
+          "max_abs_velocity": 1.1963444291123395,
+          "max_abs_actuator_force": 11.338463866626036,
+          "sim_time": 1.0000000000000007
+        },
+        {
+          "joint": "joint3",
+          "target": -0.785,
+          "final_abs_error": 0.13624528229842847,
+          "max_abs_error": 0.784983651299713,
+          "max_abs_velocity": 1.2094144924608732,
+          "max_abs_actuator_force": 19.128229630384848,
+          "sim_time": 1.0000000000000007
+        },
+        {
+          "joint": "joint4",
+          "target": 0.7100000000000001,
+          "final_abs_error": 0.6443179618615135,
+          "max_abs_error": 0.7099422936953553,
+          "max_abs_velocity": 0.3261030697878902,
+          "max_abs_actuator_force": 8.471317232357556,
+          "sim_time": 1.0000000000000007
+        },
+        {
+          "joint": "joint5",
+          "target": 0.785,
+          "final_abs_error": 0.2219952707751256,
+          "max_abs_error": 0.7849414538870519,
+          "max_abs_velocity": 0.9065111712984663,
+          "max_abs_actuator_force": 8.471893183648339,
+          "sim_time": 1.0000000000000007
+        },
+        {
+          "joint": "joint6",
+          "target": 1.57,
+          "final_abs_error": 0.11032203499176152,
+          "max_abs_error": 1.5697341747613491,
+          "max_abs_velocity": 1.9567326255816515,
+          "max_abs_actuator_force": 8.47144174083273,
+          "sim_time": 1.0000000000000007
+        }
+      ],
+      "max_final_abs_error": 0.6443179618615135,
+      "max_abs_error": 1.5697341747613491,
+      "max_abs_velocity": 1.9567326255816515,
+      "max_abs_actuator_force": 19.128229630384848,
+      "returncode": 0
+    },
+    "grasp": {
+      "finite": true,
+      "initial_box_height_m": 0.04,
+      "box_height_m": 0.019945398388627772,
+      "max_contacts": 4,
+      "final_contacts": 4,
+      "gripper_width": 0.04046639445230793,
+      "simulation_time": 1.0000000000000007,
+      "returncode": 0
+    },
+    "tests": {
+      "returncode": 1,
+      "status": "failed",
+      "passed": 219,
+      "skipped": 1,
+      "failed": 1,
+      "deselected": 0,
+      "known_test_defect": true,
+      "defect_classification": "test_defect",
+      "stdout_tail": "................................s....................................... [ 32%]\n........................................................................ [ 65%]\n.F...................................................................... [ 97%]\n.....                                                                    [100%]\n=================================== FAILURES ===================================\n____________ test_saved_integration_state_replays_deterministically ____________\n\nruntime_sim = <rebotarm_simulation.mujoco_sim.RebotArmMujoco object at 0x7ec4d7d1e1b0>\n\n    def test_saved_integration_state_replays_deterministically(runtime_sim) -> None:\n        runtime_sim.set_joint_position_targets([0.2, -0.4, -0.5, 0.3, -0.2, 0.4])\n        runtime_sim.set_gripper_width(0.04)\n        runtime_sim.step(15)\n        saved = runtime_sim.save_state()\n        assert isinstance(saved.state, tuple)\n        assert saved.state_spec > 0\n    \n        runtime_sim.step(25)\n        first_state = runtime_sim.get_state()\n        first_contacts = runtime_sim.get_contacts()\n        assert first_contacts, \"replay must exercise contact solver state\"\n        runtime_sim.restore_state(saved)\n        runtime_sim.step(25)\n        replayed_state = runtime_sim.get_state()\n        replayed_contacts = runtime_sim.get_contacts()\n    \n        assert replayed_state.joint_positions == pytest.approx(first_state.joint_positions)\n        assert replayed_state.joint_velocities == pytest.approx(first_state.joint_velocities)\n        assert replayed_state.actuator_forces == pytest.approx(first_state.actuator_forces)\n        assert replayed_state.end_effector_position == pytest.approx(first_state.end_effector_position)\n        assert replayed_state.end_effector_orientation == pytest.approx(first_state.end_effector_orientation)\n>       assert replayed_state.object_poses == pytest.approx(first_state.object_poses)\nE       AssertionError: assert mappingproxy(...98e-19, 1.0)}) == approx({'test...52e-19, 1.0)})\nE         (pytest_assertion plugin: representation of details failed: /usr/lib/python3/dist-packages/_pytest/python_api.py:271: TypeError: unsupported operand type(s) for -: 'tuple' and 'tuple'.\nE          Probably an object has a faulty __repr__.)\n\ntests/test_mujoco_sim_core.py:379: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_mujoco_sim_core.py::test_saved_integration_state_replays_deterministically\n1 failed, 219 passed, 1 skipped in 24.19s\n"
+    }
+  },
+  "comparison": {
+    "backends": [
+      "current",
+      "upstream"
+    ],
+    "differences": {
+      "backend": {
+        "current": "current",
+        "upstream": "upstream"
+      },
+      "grasp.box_height_m": {
+        "current": 0.019892244579820407,
+        "upstream": 0.019945398388627772
+      },
+      "grasp.contact_detected": {
+        "current": true,
+        "upstream": null
+      },
+      "grasp.final_contacts": {
+        "current": 6,
+        "upstream": 4
+      },
+      "grasp.finite": {
+        "current": true,
+        "upstream": true
+      },
+      "grasp.grasp_status": {
+        "current": "contact_without_lift",
+        "upstream": null
+      },
+      "grasp.grasp_success": {
+        "current": false,
+        "upstream": null
+      },
+      "grasp.gripper_width": {
+        "current": null,
+        "upstream": 0.04046639445230793
+      },
+      "grasp.initial_box_height_m": {
+        "current": 0.05,
+        "upstream": 0.04
+      },
+      "grasp.lift_detected": {
+        "current": false,
+        "upstream": null
+      },
+      "grasp.max_contacts": {
+        "current": 6,
+        "upstream": 4
+      },
+      "grasp.returncode": {
+        "current": null,
+        "upstream": 0
+      },
+      "grasp.sim_time": {
+        "current": 0.9999999999999897,
+        "upstream": null
+      },
+      "grasp.simulation_time": {
+        "current": null,
+        "upstream": 1.0000000000000007
+      },
+      "grasp.xml_path": {
+        "current": "/home/a/project/rebot_Arm/build/upstream_comparison/current_scene.xml",
+        "upstream": null
+      },
+      "headless.result.achieved_duration": {
+        "current": null,
+        "upstream": 1.0000000000000007
+      },
+      "headless.result.actuator_forces": {
+        "current": null,
+        "upstream": [
+          -2.582775724537742e-10,
+          -0.7711726511683761,
+          -8.471317232350046,
+          -2.555780598239378,
+          8.954993935785079e-06,
+          0.00010954792593666484,
+          0.0,
+          0.0
+        ]
+      },
+      "headless.result.end_effector_orientation": {
+        "current": null,
+        "upstream": [
+          -5.056940786551729e-05,
+          -4.2426422674490816e-06,
+          1.6336163521370968e-11,
+          0.9999999987123676
+        ]
+      },
+      "headless.result.end_effector_position": {
+        "current": null,
+        "upstream": [
+          0.15530584000238085,
+          4.873138905639362e-08,
+          0.19169990248345378
+        ]
+      },
+      "headless.result.gripper_width": {
+        "current": null,
+        "upstream": 1.0073844539581505e-07
+      },
+      "headless.result.joint_names": {
+        "current": null,
+        "upstream": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "left_finger_joint",
+          "right_finger_joint"
+        ]
+      },
+      "headless.result.joint_positions": {
+        "current": null,
+        "upstream": [
+          5.885071170983561e-13,
+          -1.4622561591522307e-16,
+          -3.206367567055509e-15,
+          2.030210185551437e-13,
+          9.021088655494087e-11,
+          1.215053678117783e-10,
+          1.0128901464155452e-07,
+          5.505692457394674e-10
+        ]
+      },
+      "headless.result.joint_velocities": {
+        "current": null,
+        "upstream": [
+          -2.582479701550701e-12,
+          6.8405348916208566e-15,
+          6.954488995524968e-14,
+          -3.424363810884104e-13,
+          -1.958371625879649e-10,
+          -2.374227432172517e-10,
+          2.986890439262348e-09,
+          -1.2387800898947706e-09
+        ]
+      },
+      "headless.result.object_poses.test_cube": {
+        "current": null,
+        "upstream": [
+          0.28,
+          1.5053583379831527e-17,
+          0.019945398388627772,
+          1.442724041841905e-17,
+          9.713963827811113e-19,
+          -1.4996441264285176e-18,
+          1.0
+        ]
+      },
+      "headless.result.requested_duration": {
+        "current": null,
+        "upstream": 1.0
+      },
+      "headless.result.simulation_time": {
+        "current": null,
+        "upstream": 1.0000000000000007
+      },
+      "headless.returncode": {
+        "current": null,
+        "upstream": 0
+      },
+      "headless.stderr": {
+        "current": null,
+        "upstream": ""
+      },
+      "health.actuator_count": {
+        "current": 7,
+        "upstream": null
+      },
+      "health.joint_count": {
+        "current": 8,
+        "upstream": null
+      },
+      "health.model_loaded": {
+        "current": true,
+        "upstream": null
+      },
+      "health.model_path": {
+        "current": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+        "upstream": null
+      },
+      "health.ok": {
+        "current": true,
+        "upstream": null
+      },
+      "health.physics_step_finite": {
+        "current": true,
+        "upstream": null
+      },
+      "health.result.actuator_count": {
+        "current": null,
+        "upstream": 8
+      },
+      "health.result.expected_actuator_count": {
+        "current": null,
+        "upstream": 8
+      },
+      "health.result.expected_joint_count": {
+        "current": null,
+        "upstream": 8
+      },
+      "health.result.headless": {
+        "current": null,
+        "upstream": true
+      },
+      "health.result.joint_count": {
+        "current": null,
+        "upstream": 8
+      },
+      "health.result.model_loaded": {
+        "current": null,
+        "upstream": true
+      },
+      "health.result.model_path": {
+        "current": null,
+        "upstream": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml"
+      },
+      "health.result.mujoco_version": {
+        "current": null,
+        "upstream": "3.3.0"
+      },
+      "health.result.ok": {
+        "current": null,
+        "upstream": true
+      },
+      "health.result.physics_step_finite": {
+        "current": null,
+        "upstream": true
+      },
+      "health.result.python_version": {
+        "current": null,
+        "upstream": "3.12.3"
+      },
+      "health.result.renderer_available": {
+        "current": null,
+        "upstream": false
+      },
+      "health.result.renderer_error": {
+        "current": null,
+        "upstream": "renderer check skipped"
+      },
+      "health.result.renderer_probe.available": {
+        "current": null,
+        "upstream": false
+      },
+      "health.result.renderer_probe.error": {
+        "current": null,
+        "upstream": "renderer check skipped"
+      },
+      "health.result.renderer_probe.returncode": {
+        "current": null,
+        "upstream": null
+      },
+      "health.result.renderer_probe.signal": {
+        "current": null,
+        "upstream": null
+      },
+      "health.result.renderer_probe.stderr": {
+        "current": null,
+        "upstream": ""
+      },
+      "health.result.renderer_probe.stdout": {
+        "current": null,
+        "upstream": ""
+      },
+      "health.result.renderer_probe.timed_out": {
+        "current": null,
+        "upstream": false
+      },
+      "health.result.simulation_time": {
+        "current": null,
+        "upstream": 0.002
+      },
+      "health.returncode": {
+        "current": null,
+        "upstream": 0
+      },
+      "health.simulation_time": {
+        "current": 0.005,
+        "upstream": null
+      },
+      "health.stderr": {
+        "current": null,
+        "upstream": ""
+      },
+      "model.actuator_names": {
+        "current": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "gripper"
+        ],
+        "upstream": [
+          "joint1_torque",
+          "joint2_torque",
+          "joint3_torque",
+          "joint4_torque",
+          "joint5_torque",
+          "joint6_torque",
+          "left_finger_force",
+          "right_finger_force"
+        ]
+      },
+      "model.joint_names": {
+        "current": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "left_finger",
+          "right_finger"
+        ],
+        "upstream": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "left_finger_joint",
+          "right_finger_joint"
+        ]
+      },
+      "model.nbody": {
+        "current": 11,
+        "upstream": 11
+      },
+      "model.ngeom": {
+        "current": 20,
+        "upstream": 20
+      },
+      "model.njnt": {
+        "current": 8,
+        "upstream": 8
+      },
+      "model.nq": {
+        "current": 8,
+        "upstream": 8
+      },
+      "model.nsensor": {
+        "current": 0,
+        "upstream": 26
+      },
+      "model.nu": {
+        "current": 7,
+        "upstream": 8
+      },
+      "model.nv": {
+        "current": 8,
+        "upstream": 8
+      },
+      "model.path": {
+        "current": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+        "upstream": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/robot.xml"
+      },
+      "scene_model.actuator_names": {
+        "current": null,
+        "upstream": [
+          "joint1_torque",
+          "joint2_torque",
+          "joint3_torque",
+          "joint4_torque",
+          "joint5_torque",
+          "joint6_torque",
+          "left_finger_force",
+          "right_finger_force"
+        ]
+      },
+      "scene_model.joint_names": {
+        "current": null,
+        "upstream": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6",
+          "left_finger_joint",
+          "right_finger_joint",
+          null
+        ]
+      },
+      "scene_model.nbody": {
+        "current": null,
+        "upstream": 13
+      },
+      "scene_model.ngeom": {
+        "current": null,
+        "upstream": 27
+      },
+      "scene_model.njnt": {
+        "current": null,
+        "upstream": 9
+      },
+      "scene_model.nq": {
+        "current": null,
+        "upstream": 15
+      },
+      "scene_model.nsensor": {
+        "current": null,
+        "upstream": 26
+      },
+      "scene_model.nu": {
+        "current": null,
+        "upstream": 8
+      },
+      "scene_model.nv": {
+        "current": null,
+        "upstream": 14
+      },
+      "scene_model.path": {
+        "current": null,
+        "upstream": "/home/a/project/rebot_Arm/third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/scene.xml"
+      },
+      "smoke.contacts": {
+        "current": 3,
+        "upstream": null
+      },
+      "smoke.finite": {
+        "current": true,
+        "upstream": null
+      },
+      "smoke.nq": {
+        "current": 8,
+        "upstream": null
+      },
+      "smoke.nu": {
+        "current": 7,
+        "upstream": null
+      },
+      "smoke.nv": {
+        "current": 8,
+        "upstream": null
+      },
+      "smoke.sim_time": {
+        "current": 0.9999999999999897,
+        "upstream": null
+      },
+      "smoke.xml_path": {
+        "current": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+        "upstream": null
+      },
+      "step_response.max_abs_actuator_force": {
+        "current": 27.0,
+        "upstream": 19.128229630384848
+      },
+      "step_response.max_abs_error": {
+        "current": 1.5683048546643357,
+        "upstream": 1.5697341747613491
+      },
+      "step_response.max_abs_velocity": {
+        "current": 4.066425202467243,
+        "upstream": 1.9567326255816515
+      },
+      "step_response.max_final_abs_error": {
+        "current": 0.7860238755832162,
+        "upstream": 0.6443179618615135
+      },
+      "step_response.max_rms_error": {
+        "current": 0.8626862491238706,
+        "upstream": null
+      },
+      "step_response.results": {
+        "current": [
+          {
+            "joint": "joint1",
+            "target": 1.4,
+            "final_position": 1.3970032970767787,
+            "final_abs_error": 0.002996702923221184,
+            "max_abs_error": 1.3990562323783446,
+            "rms_error": 0.5570793831583383,
+            "max_abs_velocity": 4.066425202467243,
+            "max_abs_actuator_force": 27.0,
+            "sim_time": 0.9999999999999897
+          },
+          {
+            "joint": "joint2",
+            "target": -0.785,
+            "final_position": -0.7975107437360754,
+            "final_abs_error": 0.012510743736075414,
+            "max_abs_error": 0.38468891767142027,
+            "rms_error": 0.13540940785680952,
+            "max_abs_velocity": 2.0008631901760157,
+            "max_abs_actuator_force": 27.0,
+            "sim_time": 0.9999999999999897
+          },
+          {
+            "joint": "joint3",
+            "target": -0.785,
+            "final_position": -0.7477512308823616,
+            "final_abs_error": 0.037248769117638414,
+            "max_abs_error": 0.21348979193567308,
+            "rms_error": 0.05703300733386857,
+            "max_abs_velocity": 1.972919296991663,
+            "max_abs_actuator_force": 27.0,
+            "sim_time": 0.9999999999999897
+          },
+          {
+            "joint": "joint4",
+            "target": 0.7100000000000001,
+            "final_position": 0.3635026787129714,
+            "final_abs_error": 0.34649732128702865,
+            "max_abs_error": 0.3510620764600222,
+            "rms_error": 0.34419945106425776,
+            "max_abs_velocity": 2.488303895677313,
+            "max_abs_actuator_force": 7.0,
+            "sim_time": 0.9999999999999897
+          },
+          {
+            "joint": "joint5",
+            "target": 0.785,
+            "final_position": -0.0010238755832161748,
+            "final_abs_error": 0.7860238755832162,
+            "max_abs_error": 0.7957001063553719,
+            "rms_error": 0.78395981125261,
+            "max_abs_velocity": 3.9722795832660927,
+            "max_abs_actuator_force": 7.0,
+            "sim_time": 0.9999999999999897
+          },
+          {
+            "joint": "joint6",
+            "target": 1.57,
+            "final_position": 1.551084368976341,
+            "final_abs_error": 0.01891563102365912,
+            "max_abs_error": 1.5683048546643357,
+            "rms_error": 0.8626862491238706,
+            "max_abs_velocity": 2.0889149794243242,
+            "max_abs_actuator_force": 7.0,
+            "sim_time": 0.9999999999999897
+          }
+        ],
+        "upstream": [
+          {
+            "joint": "joint1",
+            "target": 1.4,
+            "final_abs_error": 0.3641779806307406,
+            "max_abs_error": 1.3999782131882323,
+            "max_abs_velocity": 1.2481077247663972,
+            "max_abs_actuator_force": 12.519198516184554,
+            "sim_time": 1.0000000000000007
+          },
+          {
+            "joint": "joint2",
+            "target": -0.785,
+            "final_abs_error": 0.09374053839513619,
+            "max_abs_error": 0.7849788037405409,
+            "max_abs_velocity": 1.1963444291123395,
+            "max_abs_actuator_force": 11.338463866626036,
+            "sim_time": 1.0000000000000007
+          },
+          {
+            "joint": "joint3",
+            "target": -0.785,
+            "final_abs_error": 0.13624528229842847,
+            "max_abs_error": 0.784983651299713,
+            "max_abs_velocity": 1.2094144924608732,
+            "max_abs_actuator_force": 19.128229630384848,
+            "sim_time": 1.0000000000000007
+          },
+          {
+            "joint": "joint4",
+            "target": 0.7100000000000001,
+            "final_abs_error": 0.6443179618615135,
+            "max_abs_error": 0.7099422936953553,
+            "max_abs_velocity": 0.3261030697878902,
+            "max_abs_actuator_force": 8.471317232357556,
+            "sim_time": 1.0000000000000007
+          },
+          {
+            "joint": "joint5",
+            "target": 0.785,
+            "final_abs_error": 0.2219952707751256,
+            "max_abs_error": 0.7849414538870519,
+            "max_abs_velocity": 0.9065111712984663,
+            "max_abs_actuator_force": 8.471893183648339,
+            "sim_time": 1.0000000000000007
+          },
+          {
+            "joint": "joint6",
+            "target": 1.57,
+            "final_abs_error": 0.11032203499176152,
+            "max_abs_error": 1.5697341747613491,
+            "max_abs_velocity": 1.9567326255816515,
+            "max_abs_actuator_force": 8.47144174083273,
+            "sim_time": 1.0000000000000007
+          }
+        ]
+      },
+      "step_response.returncode": {
+        "current": null,
+        "upstream": 0
+      },
+      "step_response.xml_path": {
+        "current": "/home/a/project/rebot_Arm/build/upstream_comparison/current_robot.xml",
+        "upstream": null
+      },
+      "tests.command": {
+        "current": "python3 -m pytest tests -q",
+        "upstream": null
+      },
+      "tests.defect_classification": {
+        "current": null,
+        "upstream": "test_defect"
+      },
+      "tests.deselected": {
+        "current": null,
+        "upstream": 0
+      },
+      "tests.failed": {
+        "current": null,
+        "upstream": 1
+      },
+      "tests.known_test_defect": {
+        "current": null,
+        "upstream": true
+      },
+      "tests.passed": {
+        "current": null,
+        "upstream": 219
+      },
+      "tests.returncode": {
+        "current": null,
+        "upstream": 1
+      },
+      "tests.skipped": {
+        "current": null,
+        "upstream": 1
+      },
+      "tests.status": {
+        "current": "not_run_by_harness",
+        "upstream": "failed"
+      },
+      "tests.stdout_tail": {
+        "current": null,
+        "upstream": "................................s....................................... [ 32%]\n........................................................................ [ 65%]\n.F...................................................................... [ 97%]\n.....                                                                    [100%]\n=================================== FAILURES ===================================\n____________ test_saved_integration_state_replays_deterministically ____________\n\nruntime_sim = <rebotarm_simulation.mujoco_sim.RebotArmMujoco object at 0x7ec4d7d1e1b0>\n\n    def test_saved_integration_state_replays_deterministically(runtime_sim) -> None:\n        runtime_sim.set_joint_position_targets([0.2, -0.4, -0.5, 0.3, -0.2, 0.4])\n        runtime_sim.set_gripper_width(0.04)\n        runtime_sim.step(15)\n        saved = runtime_sim.save_state()\n        assert isinstance(saved.state, tuple)\n        assert saved.state_spec > 0\n    \n        runtime_sim.step(25)\n        first_state = runtime_sim.get_state()\n        first_contacts = runtime_sim.get_contacts()\n        assert first_contacts, \"replay must exercise contact solver state\"\n        runtime_sim.restore_state(saved)\n        runtime_sim.step(25)\n        replayed_state = runtime_sim.get_state()\n        replayed_contacts = runtime_sim.get_contacts()\n    \n        assert replayed_state.joint_positions == pytest.approx(first_state.joint_positions)\n        assert replayed_state.joint_velocities == pytest.approx(first_state.joint_velocities)\n        assert replayed_state.actuator_forces == pytest.approx(first_state.actuator_forces)\n        assert replayed_state.end_effector_position == pytest.approx(first_state.end_effector_position)\n        assert replayed_state.end_effector_orientation == pytest.approx(first_state.end_effector_orientation)\n>       assert replayed_state.object_poses == pytest.approx(first_state.object_poses)\nE       AssertionError: assert mappingproxy(...98e-19, 1.0)}) == approx({'test...52e-19, 1.0)})\nE         (pytest_assertion plugin: representation of details failed: /usr/lib/python3/dist-packages/_pytest/python_api.py:271: TypeError: unsupported operand type(s) for -: 'tuple' and 'tuple'.\nE          Probably an object has a faulty __repr__.)\n\ntests/test_mujoco_sim_core.py:379: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_mujoco_sim_core.py::test_saved_integration_state_replays_deterministically\n1 failed, 219 passed, 1 skipped in 24.19s\n"
+      }
+    }
+  }
+}
