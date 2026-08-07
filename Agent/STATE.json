@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07T16:17:09+08:00",
+  "generated_at": "2026-08-07T18:20:25+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
-  "overall_completion_percent": 52.6,
-  "active_phase": "P1 MuJoCo 基线巩固与差距整合",
+  "overall_completion_percent": 53.8,
+  "active_phase": "P2 Gemini 2 SDK 与真实 RGB-D 验收",
   "phases": [
     {
       "id": "P0",
@@ -18,9 +18,9 @@
       "id": "P1",
       "name": "MuJoCo 基线巩固与差距整合",
       "weight": 20,
-      "completed_items": 15,
+      "completed_items": 16,
       "total_items": 16,
-      "completion_percent": 93.8
+      "completion_percent": 100.0
     },
     {
       "id": "P2",
@@ -66,23 +66,20 @@
   "blockers": [
     "P2：真实 Gemini 2 RGB-D、SDK 标定和 depth scale 缺少当前 Ubuntu 硬件验收证据。",
     "P4：Ubuntu 本地 GraspNet 环境、依赖和服务尚未建立。",
-    "P5：当前实际安装的 hand-eye 和 TCP 数据尚未标定。",
-    "P1：上游原始快照仍保留一个测试写法缺陷：`test_saved_integration_state_replays_deterministically` 直接对 `mapping[str, tuple]` 使用 `pytest.approx`；该缺陷只存在于测试断言，临时 test-only compatibility copy 已 `220 passed, 1 skipped`，不阻塞本地默认 backend，但不能宣称未修改上游测试原始全绿。",
-    "P1：current fallback 在线性 ramp 下 joint4/joint5 仍有较大 tracking residual；默认 upstream controller 已通过 ROS 轨迹验收，current fallback 的 tracking/collision/contact calibration 仍待后续单独处理。"
+    "P5：当前实际安装的 hand-eye 和 TCP 数据尚未标定。"
   ],
   "next_actions": [
-    "[已完成] P1：固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`。",
-    "[已完成] P1：独立运行上游 health/headless/model/ROS/motor/collision 测试，形成双基线差异报告；报告已形成，上游重放断言保留为 `test_defect`，不宣称上游全绿。",
-    "[已完成] P1：将固定上游 MuJoCo runtime、模型、ROS adapter 和 launch 直接本地化到 `src/rebotarm_simulation` 并设为默认 `upstream` backend；切换前的 current source 已归档，compatibility modules 与 `simulation_backend:=current` fallback 保留。上游独立 force actuator 语义保留，不做耦合 actuator 对齐测试；原始测试断言缺陷只在临时 test-only copy 中兼容。",
-    "[已完成] P1：将 timeout 接入执行循环；monotonic deadline、非成功结果和失败 hold cleanup 已实现并通过测试。",
-    "[已完成] P1：补 execute-loop 成功、取消、停止、path/goal 容差失败和超时集成测试；ROS 2 + MuJoCo harness 6/6 通过。",
-    "[已完成] P1：补齐 effort、velocity、acceleration、jerk 限制一致性；URDF/MuJoCo effort、MoveIt planner limits 和 runtime guard 已联通，证据已写入 P1。",
-    "[待审核] P1：完成 current fallback 的 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；默认 upstream 已通过 ROS 轨迹验收，不再等待 current controller/dynamics 决策。current fallback 标定可在后续需要对照时单独推进。"
+    "[已完成] P1：upstream-only 收尾；active `rebotarm_simulation` 只安装/启动 package-owned upstream MuJoCo node，current 实现仅留归档，不再是可选 backend。完整测试、MuJoCo 专项、构建、Viewer smoke 和 ROS action 验收通过；证据：`Agent/evidence/P1/2026-08-07-p1-upstream-only-closeout.md`。",
+    "[待执行] P2：连接真实 Gemini 2，只做设备枚举和 RGB/depth 采集预检，不启动机械臂执行。",
+    "[待执行] P2：记录设备信息、实际 stream profiles、intrinsics、distortion 和 RGB-depth extrinsics。",
+    "[待执行] P2：读取并验证 depth scale，明确 SDK、ROS 和内部算法的深度单位。",
+    "[待执行] P2：验证 RGB-D 对齐、分辨率切换、CameraInfo 与时间戳/frame_id 一致性。",
+    "[待执行] P2：采集多个已知距离样本并形成深度误差验收记录。"
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "3f7fc8e",
+    "head": "8186723",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-08-07T16:17:09+08:00 | actor=Codex | event=verified | note=上游 MuJoCo 本地化基线与 current 归档已保存到本地 Git，未推送远端 | verification=commit 3f7fc8e created locally; no remote push; prior source-swap/full-test/build evidence remains valid"
+  "last_event": "- 2026-08-07T18:20:25+08:00 | actor=Codex | event=complete | note=P1 upstream-only MuJoCo 收尾完成；本地提交已创建，现场和缓存已清理，当前切换到 P2 | verification=516 passed, 13 skipped; MuJoCo 62 passed, 7 skipped; layering 18 passed; colcon 3 packages; ROS action SUCCEEDED; cleanup 0 residual processes/serial users/caches"
 }

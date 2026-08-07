@@ -11,7 +11,7 @@
 ## 当前事实
 
 - 当前分支：`codex/mujoco-sim-landing`。
-- 当前 HEAD 基线：`5bd5510`，`Improve MuJoCo execution validation`。
+- 当前 P1 收尾基线：`8186723`，`feat: close P1 on upstream-only mujoco baseline`。
 - `HardwareManager.connect()` 已只建立通信、主动刷新/校验反馈并保持全部电机失能，不再 enable 或启动控制循环。
 - 显式 `enable()` 会先验证反馈和软限位、设置当前位置 hold target、确认全部状态；失败时停止循环并失能回滚。
 - 动作目标和控制入口在显式 enable 前 fail closed；夹爪初始化不再隐式 enable 或启动循环。
