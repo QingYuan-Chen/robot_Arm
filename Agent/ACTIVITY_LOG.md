@@ -38,3 +38,4 @@
 - 2026-08-07T13:43:05+08:00 | actor=Codex | event=checkpoint | note=对比实现已提交；当前 baseline 未被覆盖，快照与 harness 位于独立路径 | verification=commit 098fa3b; full tests 497 passed, 5 skipped; A/B report JSON/MD present
 - 2026-08-07T13:46:28+08:00 | actor=Codex | event=start | note=P1 继续：建立同一目标轨迹的 command-level comparison benchmark | verification=-
 - 2026-08-07T13:52:42+08:00 | actor=Codex | event=checkpoint | note=P1 同一 command contract 对比完成；499 tests passed, 5 skipped；保留 actuator/controller 差异，未替换默认模型 | verification=-
+- 2026-08-07T13:54:01+08:00 | actor=Codex | event=verified | note=同一 command contract 对比与回归验证完成；默认模型保持不变 | verification=-

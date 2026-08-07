@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07T13:52:42+08:00",
+  "generated_at": "2026-08-07T13:54:01+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 47.6,
@@ -80,8 +80,8 @@
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "098fa3b",
+    "head": "7879a45",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-08-07T13:52:42+08:00 | actor=Codex | event=checkpoint | note=P1 同一 command contract 对比完成；499 tests passed, 5 skipped；保留 actuator/controller 差异，未替换默认模型 | verification=-"
+  "last_event": "- 2026-08-07T13:54:01+08:00 | actor=Codex | event=verified | note=同一 command contract 对比与回归验证完成；默认模型保持不变 | verification=-"
 }
