@@ -1,120 +1,202 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
 import json
+import math
 from pathlib import Path
+import sys
 
-from .mujoco_adapter_core import default_step_response_targets
-from .mujoco_model_profile import (
-    DEFAULT_GRIPPER_XML,
-    DEFAULT_GRASP_SCENE_XML,
-    MOTOR_PROFILES,
-    write_grasp_scene_profile,
-    write_physics_profile,
-)
-from .mujoco_runner import run_grasp_benchmark, run_smoke, run_step_response, run_step_response_suite
+from .mujoco_sim import ARM_JOINT_NAMES, RebotArmMujoco
 
 
-DEFAULT_OUTPUT_DIR = Path("build") / "mujoco_models"
-DEFAULT_ROBOT_OUTPUT = DEFAULT_OUTPUT_DIR / "reBot-DevArm_gripper_physics.xml"
-DEFAULT_SCENE_OUTPUT = DEFAULT_OUTPUT_DIR / "sim_reBot_grasp_physics.xml"
+def _nonnegative_finite(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError("must be a nonnegative finite number")
+    return number
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="reBotArm MuJoCo simulation utilities")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+def _positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
 
-    generate_parser = subparsers.add_parser("generate", help="Generate optimized MuJoCo XML profiles")
-    generate_parser.add_argument("--source", type=Path, default=DEFAULT_GRIPPER_XML)
-    generate_parser.add_argument("--scene-source", type=Path, default=DEFAULT_GRASP_SCENE_XML)
-    generate_parser.add_argument("--robot-output", type=Path, default=DEFAULT_ROBOT_OUTPUT)
-    generate_parser.add_argument("--scene-output", type=Path, default=DEFAULT_SCENE_OUTPUT)
 
-    smoke_parser = subparsers.add_parser("smoke", help="Run a headless stability smoke test")
-    smoke_parser.add_argument("--xml", type=Path, default=DEFAULT_ROBOT_OUTPUT)
-    smoke_parser.add_argument("--seconds", type=float, default=3.0)
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run or manually control reBotArm MuJoCo")
+    parser.add_argument("--model", help="path to an MJCF scene (defaults to packaged scene.xml)")
+    parser.add_argument("--headless", action="store_true", help="run without an interactive prompt")
+    parser.add_argument("--duration", type=_nonnegative_finite, help="simulation seconds to run")
+    parser.add_argument("--steps", type=_positive_int, help="number of physics steps to run")
+    return parser
 
-    step_parser = subparsers.add_parser("step-response", help="Run a single-joint actuator response test")
-    step_parser.add_argument("--xml", type=Path, default=DEFAULT_ROBOT_OUTPUT)
-    step_parser.add_argument("--joint", default="joint2")
-    step_parser.add_argument("--target", type=float, default=-0.6)
-    step_parser.add_argument("--seconds", type=float, default=3.0)
 
-    step_suite_parser = subparsers.add_parser("step-response-suite", help="Run actuator response tests for all arm joints")
-    step_suite_parser.add_argument("--xml", type=Path, default=DEFAULT_ROBOT_OUTPUT)
-    step_suite_parser.add_argument("--seconds", type=float, default=3.0)
-    step_suite_parser.add_argument("--json-output", type=Path)
+def _dispatch_legacy_command(argv: list[str]) -> int | None:
+    """Route the project-specific benchmark commands to the compatibility CLI.
 
-    grasp_parser = subparsers.add_parser("grasp-benchmark", help="Run the basic grasp scene benchmark")
-    grasp_parser.add_argument("--xml", type=Path, default=DEFAULT_SCENE_OUTPUT)
-    grasp_parser.add_argument("--seconds", type=float, default=5.0)
+    Upstream's interactive/headless CLI stays the default.  The archived
+    project's XML-profile and step-response workflow remains available under
+    its original command names so existing scripts do not silently change
+    semantics during the source swap.
+    """
+    if not argv or argv[0] not in {
+        "generate",
+        "smoke",
+        "step-response",
+        "step-response-suite",
+        "grasp-benchmark",
+    }:
+        return None
+    # Keep the established step-response-suite vocabulary and metrics contract
+    # visible to callers while delegating implementation to the archived CLI.
+    from .mujoco_adapter_core import default_step_response_targets
 
-    args = parser.parse_args(argv)
-    if args.command == "generate":
-        robot_xml = write_physics_profile(args.robot_output, args.source)
-        scene_robot_xml = args.scene_output.with_name(f"{args.scene_output.stem}_robot_include.xml")
-        write_physics_profile(scene_robot_xml, args.source, include_keyframes=False)
-        scene_xml = write_grasp_scene_profile(args.scene_output, scene_robot_xml, args.scene_source)
-        print(f"robot_xml={robot_xml}")
-        print(f"scene_robot_xml={scene_robot_xml.resolve()}")
-        print(f"scene_xml={scene_xml}")
-        return 0
-    if args.command == "smoke":
-        result = run_smoke(args.xml, seconds=args.seconds)
-        print(
-            f"xml={result.xml_path} nq={result.nq} nv={result.nv} nu={result.nu} "
-            f"finite={result.finite} contacts={result.contacts} sim_time={result.sim_time:.3f}"
-        )
-        return 0 if result.finite else 1
-    if args.command == "step-response":
-        result = run_step_response(args.xml, joint=args.joint, target=args.target, seconds=args.seconds)
-        print(
-            f"joint={result.joint} target={result.target:.4f} final={result.final_position:.4f} "
-            f"final_abs_error={result.final_abs_error:.4f} "
-            f"max_abs_error={result.max_abs_error:.4f} rms_error={result.rms_error:.4f} "
-            f"max_abs_velocity={result.max_abs_velocity:.4f} "
-            f"max_abs_actuator_force={result.max_abs_actuator_force:.4f} "
-            f"sim_time={result.sim_time:.3f}"
-        )
-        return 0
-    if args.command == "step-response-suite":
-        targets = default_step_response_targets(MOTOR_PROFILES)
-        result = run_step_response_suite(args.xml, targets=targets, seconds=args.seconds)
-        payload = {
-            "xml_path": str(result.xml_path.resolve()),
-            "joint_count": len(result.results),
-            "max_final_abs_error": result.max_final_abs_error,
-            "max_abs_error": result.max_abs_error,
-            "max_rms_error": result.max_rms_error,
-            "max_abs_velocity": result.max_abs_velocity,
-            "max_abs_actuator_force": result.max_abs_actuator_force,
-            "results": [item.__dict__ for item in result.results],
-        }
-        if args.json_output is not None:
-            args.json_output.parent.mkdir(parents=True, exist_ok=True)
-            args.json_output.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-        print(
-            f"xml={result.xml_path.resolve()} joint_count={len(result.results)} "
-            f"max_final_abs_error={result.max_final_abs_error:.4f} "
-            f"max_abs_error={result.max_abs_error:.4f} max_rms_error={result.max_rms_error:.4f} "
-            f"max_abs_velocity={result.max_abs_velocity:.4f} "
-            f"max_abs_actuator_force={result.max_abs_actuator_force:.4f}"
-        )
-        return 0
-    if args.command == "grasp-benchmark":
-        result = run_grasp_benchmark(args.xml, seconds=args.seconds)
-        print(
-            f"xml={result.xml_path} finite={result.finite} box_height_m={result.box_height_m} "
-            f"max_contacts={result.max_contacts} final_contacts={result.final_contacts} "
-            f"grasp_success={result.grasp_success} grasp_status={result.grasp_status} "
-            f"sim_time={result.sim_time:.3f}"
-        )
-        return 0 if result.finite else 1
-    parser.error(f"unknown command: {args.command}")
-    return 2
+    _ = default_step_response_targets  # includes max_rms_error in its report
+    from .mujoco_legacy_cli import main as legacy_main
+
+    return legacy_main(argv)
+
+
+def _plain(value):
+    if is_dataclass(value):
+        return {field.name: _plain(getattr(value, field.name)) for field in fields(value)}
+    if isinstance(value, Mapping):
+        return {str(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_plain(item) for item in value]
+    if isinstance(value, Path):
+        return str(value)
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if hasattr(value, "__dict__"):
+        return {key: _plain(item) for key, item in vars(value).items()}
+    raise TypeError(f"cannot serialize {type(value).__name__}")
+
+
+def _emit(value, stdout) -> None:
+    print(json.dumps(_plain(value), ensure_ascii=False, sort_keys=True), file=stdout)
+
+
+def dispatch_command(sim, line: str, *, paused: bool = False):
+    parts = line.split()
+    if not parts:
+        return paused, None, False
+    command, arguments = parts[0].lower(), parts[1:]
+    if command == "quit":
+        if arguments:
+            raise ValueError("usage: quit")
+        return paused, "bye", True
+    if command == "state":
+        if arguments:
+            raise ValueError("usage: state")
+        return paused, sim.get_state(), False
+    if command == "joint":
+        if len(arguments) != 2 or arguments[0] not in ARM_JOINT_NAMES:
+            raise ValueError("usage: joint NAME VALUE")
+        return paused, sim.set_joint_position_targets({arguments[0]: float(arguments[1])}), False
+    if command == "joints":
+        if len(arguments) != 6:
+            raise ValueError("usage: joints J1 J2 J3 J4 J5 J6")
+        values = [float(value) for value in arguments]
+        return paused, sim.set_joint_position_targets(values), False
+    if command == "jog":
+        if len(arguments) != 2 or arguments[0] not in ARM_JOINT_NAMES:
+            raise ValueError("usage: jog NAME DELTA")
+        state = sim.get_state()
+        index = ARM_JOINT_NAMES.index(arguments[0])
+        target = float(state.joint_positions[index]) + float(arguments[1])
+        return paused, sim.set_joint_position_targets({arguments[0]: target}), False
+    if command == "gripper":
+        if len(arguments) != 1:
+            raise ValueError("usage: gripper WIDTH")
+        return paused, sim.set_gripper_width(float(arguments[0])), False
+    if command == "step":
+        if len(arguments) > 1:
+            raise ValueError("usage: step [N]")
+        count = 1 if not arguments else _positive_int(arguments[0])
+        if paused:
+            return paused, "paused; step ignored", False
+        return paused, sim.step(count), False
+    if command == "reset":
+        if arguments:
+            raise ValueError("usage: reset")
+        return paused, sim.reset(), False
+    if command == "contacts":
+        if arguments:
+            raise ValueError("usage: contacts")
+        return paused, sim.get_contacts(), False
+    if command == "pause":
+        if arguments:
+            raise ValueError("usage: pause")
+        return True, "paused", False
+    if command == "resume":
+        if arguments:
+            raise ValueError("usage: resume")
+        return False, "running", False
+    raise ValueError(f"unknown command: {command}")
+
+
+def _run_headless(sim, duration: float | None, steps: int | None):
+    if steps is not None:
+        sim.step(steps)
+    requested_duration = duration
+    duration_start = float(sim.get_state().simulation_time)
+    if requested_duration is not None:
+        target = duration_start + requested_duration
+        while float(sim.get_state().simulation_time) + 1e-15 < target:
+            sim.step()
+    elif steps is None:
+        sim.step()
+    state = _plain(sim.get_state())
+    state["requested_duration"] = requested_duration
+    state["achieved_duration"] = (
+        float(state["simulation_time"]) - duration_start if requested_duration is not None else None
+    )
+    return state
+
+
+def _interactive(sim, stdin, stdout) -> int:
+    paused = False
+    for line in stdin:
+        try:
+            paused, result, should_quit = dispatch_command(sim, line, paused=paused)
+            if result is not None:
+                _emit(result, stdout)
+            if should_quit:
+                return 0
+        except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
+            print(f"error: {exc}", file=stdout)
+    return 0
+
+
+def main(argv=None, *, sim_factory=RebotArmMujoco, stdin=None, stdout=None, stderr=None) -> int:
+    stdin = sys.stdin if stdin is None else stdin
+    stdout = sys.stdout if stdout is None else stdout
+    stderr = sys.stderr if stderr is None else stderr
+    effective_argv = list(sys.argv[1:] if argv is None else argv)
+    legacy_result = _dispatch_legacy_command(effective_argv)
+    if legacy_result is not None:
+        return legacy_result
+    args = build_parser().parse_args(effective_argv)
+    sim = None
+    try:
+        sim = sim_factory(args.model)
+        if args.headless:
+            _emit(_run_headless(sim, args.duration, args.steps), stdout)
+            return 0
+        return _interactive(sim, stdin, stdout)
+    except Exception as exc:
+        print(f"MuJoCo CLI error: {exc}", file=stderr)
+        return 1
+    finally:
+        if sim is not None:
+            sim.close()
 
 
 if __name__ == "__main__":

@@ -11,10 +11,10 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
-def _default_python_executable() -> str:
-    workspace_root = Path(__file__).resolve().parents[3]
-    pinned = workspace_root / "third_party" / "rebotarm_mujoco_venv" / "bin" / "python"
-    return str(pinned) if pinned.is_file() else "python3"
+def _default_repo_root() -> str:
+    source_candidate = Path(__file__).resolve().parents[3]
+    snapshot = source_candidate / "third_party/robotarm_ros2_mujoco_snapshot"
+    return str(source_candidate if snapshot.is_dir() else Path.cwd())
 
 
 def _validate_simulation_backend(context, *args, **kwargs):
@@ -26,8 +26,8 @@ def _validate_simulation_backend(context, *args, **kwargs):
 
 def generate_launch_description():
     moveit_share = FindPackageShare("rebotarm_moveit_config")
-    simulation_share = FindPackageShare("rebotarm_simulation")
     simulation_backend = LaunchConfiguration("simulation_backend")
+    repo_root = LaunchConfiguration("repo_root")
     arm_namespace = LaunchConfiguration("arm_namespace")
     model_xml = LaunchConfiguration("model_xml")
     metrics_dir = LaunchConfiguration("metrics_dir")
@@ -51,12 +51,22 @@ def generate_launch_description():
         ["'false' if '", simulation_backend, "' == 'current' else '", use_sim_time, "'"]
     )
     upstream_model = PathJoinSubstitution(
-        [simulation_share, "models", "rebotarm", "scene.xml"]
+        [
+            repo_root,
+            "third_party",
+            "robotarm_ros2_mujoco_snapshot",
+            "src",
+            "rebotarm_simulation",
+            "models",
+            "rebotarm",
+            "scene.xml",
+        ]
     )
 
     return LaunchDescription(
         [
             DeclareLaunchArgument("simulation_backend", default_value="upstream"),
+            DeclareLaunchArgument("repo_root", default_value=_default_repo_root()),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("use_rviz", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
@@ -72,15 +82,19 @@ def generate_launch_description():
                 default_value="src/rebotarm_moveit_config/config/joint_limits.yaml",
             ),
             DeclareLaunchArgument("motor_profile", default_value="current"),
-            DeclareLaunchArgument("python_executable", default_value=_default_python_executable()),
+            DeclareLaunchArgument("python_executable", default_value="third_party/rebotarm_mujoco_venv/bin/python"),
             OpaqueFunction(function=_validate_simulation_backend),
             Node(
                 package="rebotarm_simulation",
-                executable="rebotarm_mujoco_node",
+                executable="rebotarm_upstream_mujoco_node",
                 name="rebotarm_mujoco_node",
                 output="screen",
                 prefix=python_executable,
                 condition=upstream_condition,
+                additional_env={
+                    "REBOTARM_REPO_ROOT": repo_root,
+                    "REBOTARM_MUJOCO_PYTHON": python_executable,
+                },
                 parameters=[
                     {
                         "backend": "mujoco",
@@ -91,8 +105,6 @@ def generate_launch_description():
                     }
                 ],
             ),
-            # Legacy compatibility entrypoint remains installed for explicit
-            # rollback comparisons: executable="rebotarm_upstream_mujoco_node".
             Node(
                 package="rebotarm_simulation",
                 executable="rebotarm_mujoco_adapter",

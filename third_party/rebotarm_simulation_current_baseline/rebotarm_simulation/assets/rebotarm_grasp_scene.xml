@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Apache-2.0 project-owned MuJoCo scene; no external HJX asset is used. -->
+<mujoco model="reBotArm_grasp_scene">
+  <include file="rebotarm_base.xml"/>
+  <worldbody>
+    <light directional="true" diffuse="0.4 0.4 0.4" pos="-1 -1 1" dir="1 1 -1"/>
+    <light directional="true" diffuse="0.3 0.3 0.3" pos="1 -1 1" dir="-1 1 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" friction="1.0 0.1 0.01" rgba="0.75 0.75 0.75 1"/>
+    <body name="box" pos="0.5 0 0.05">
+      <freejoint name="red_box_joint"/>
+      <inertial pos="0 0 0" mass="0.025" diaginertia="0.002 0.002 0.002"/>
+      <geom name="red_box" type="box" size="0.02 0.02 0.02" friction="1 0.005 0.0001" condim="4" rgba="1 0 0 1"/>
+    </body>
+  </worldbody>
+  <keyframe>
+    <key name="0" qpos="0 -0.8 -1.2 0.6 0 0 0.035 -0.035 0.5 0 0.05 1 0 0 0" ctrl="0 -0.8 -1.2 0.6 0 0 0.035"/>
+  </keyframe>
+</mujoco>
