@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07T14:23:15+08:00",
+  "generated_at": "2026-08-07T14:24:04+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 48.8,
@@ -80,8 +80,8 @@
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "79954af",
+    "head": "05cfb52",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-08-07T14:23:15+08:00 | actor=Codex | event=checkpoint | note=P1 timeout 已接入并验证；保留上游独立 force actuator；端到端 execute-loop integration tests 仍待补齐 | verification=-"
+  "last_event": "- 2026-08-07T14:24:04+08:00 | actor=Codex | event=verified | note=P1 timeout 子项已提交；execute-loop integration tests 作为下一项 | verification=-"
 }
