@@ -228,6 +228,16 @@ class MuJoCoArmAdapter:
     def arm_actuator_forces(self) -> list[float]:
         return [float(self.data.actuator_force[index]) for index in self._actuator_ids]
 
+    def arm_actuator_force_limits(self) -> list[float | None]:
+        limits: list[float | None] = []
+        for actuator_id in self._actuator_ids:
+            if not int(self.model.actuator_forcelimited[actuator_id]):
+                limits.append(None)
+                continue
+            lower, upper = (float(value) for value in self.model.actuator_forcerange[actuator_id])
+            limits.append(max(abs(lower), abs(upper)))
+        return limits
+
     def set_gripper_width(self, width: float, *, min_width: float = 0.0, max_width: float = 0.09) -> float:
         ctrl = gripper_width_to_ctrl(width, min_width=min_width, max_width=max_width)
         if self._gripper_actuator_id is not None:

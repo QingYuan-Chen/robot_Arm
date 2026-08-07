@@ -46,6 +46,9 @@
 - 第二轮 command-level 对比已完成：两套 backend 接收同一六轴目标 `[1.4,-0.785,-0.785,0.710,0.785,1.570] rad` 与 `gripper_width=0.04 m`。Current adapter 的 max final error / max velocity 为 `0.7930 rad` / `5.2087 rad/s`，上游 native runtime 为 `0.3611 rad` / `1.9563 rad/s`；该结果只说明现有控制器响应差异，不能证明模型可直接替换。证据：`Agent/evidence/P1/2026-08-07-baseline-comparison-command-contract.json`，并已合并到主对比 JSON/Markdown。
 - 用户确认保留上游左右独立 force actuator 语义，不再把上游夹爪改造成当前单耦合 gripper actuator，也不再为 actuator 对齐本身扩展测试；后续只在统一高层 command、明确 controller contract 的前提下比较结果。
 - P1 timeout 已接入 `MuJoCoRosAdapterNode`：以 trajectory duration 加 `execution_timeout_margin_sec` 计算 monotonic wall-clock deadline；timeout 映射为非成功 action result，并与 cancel/stop/tolerance failure 一样将 arm targets hold 在当前位置。端到端 ROS action integration tests 仍待补齐。
+- P1 execute-loop integration 已补齐：在 ROS 2 + MuJoCo venv 下 success、cancel、stop、path tolerance、goal tolerance、timeout 六种结果均通过，并验证失败路径 hold 当前姿态；证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。系统 Python 因缺少 `rebotarm_msgs`/MuJoCo 会跳过该组测试，不能替代显式环境验收。
+- P1 limit consistency 已补齐：URDF arm effort 与生成 MuJoCo `forcerange` 为 joint1-3=27、joint4-6=7；MoveIt planner velocity 为 joint1-3=3.0、joint4-6=1.8，均低于 URDF 50/200 硬件上限；acceleration=5.0、jerk=20.0 由 `rebotarm_motion` runtime guard 对实测 velocity/effort 做有限差分检查，违规 abort 并 hold。gripper effort 不做跨 contract 等式比较。证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
+- 3 秒线性 ramp tracking audit 发现当前 joint4/joint5 仍有 `0.3437/0.7843 rad` 最终误差，joint5 峰值速度 `3.7198 rad/s`；上游同一高层命令原生 controller 的最大最终误差 `0.005234 rad`。当前 joint4-6 `forcerange=±7`，上游 arm torque limit 为 `±12.5`；在没有真实硬件证据前不自动提高当前力限或改 gains。证据：`Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`。
 
 ## 当前决策
 
@@ -61,6 +64,7 @@
 - P4：Ubuntu 本地 GraspNet 环境、依赖和服务尚未建立。
 - P5：当前实际安装的 hand-eye 和 TCP 数据尚未标定。
 - P1：上游独立测试已在用户提供的 clean 快照上运行；health/headless 通过，但 `test_saved_integration_state_replays_deterministically` 因嵌套 mapping/tuple 的 `pytest.approx` 断言失败，需上游修正或本地化时隔离。
+- P1：当前模型 joint4/joint5 在线性 ramp 下仍有较大 tracking residual；需要确认 URDF effort 是否为最终安全约束，或批准单独的 MuJoCo calibration profile 后才能继续调参。
 
 ## 最近验证
 

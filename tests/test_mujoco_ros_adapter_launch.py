@@ -28,6 +28,7 @@ def test_mujoco_moveit_launch_starts_adapter_and_moveit_without_fake_joint_state
     assert 'DeclareLaunchArgument("metrics_dir"' in launch_text
     assert 'DeclareLaunchArgument("metrics_sample_stride"' in launch_text
     assert 'DeclareLaunchArgument("execution_timeout_margin_sec"' in launch_text
+    assert '"joint_limits_yaml"' in launch_text or 'joint_limits_yaml' in launch_text
     assert 'DeclareLaunchArgument("use_mujoco_viewer"' in launch_text
     assert 'DeclareLaunchArgument("python_executable"' in launch_text
     assert "prefix=python_executable" in launch_text
@@ -48,6 +49,9 @@ def test_mujoco_ros_adapter_node_owns_required_ros_interfaces():
     assert '"path_tolerance_rad"' in node_text
     assert '"goal_tolerance_rad"' in node_text
     assert '"execution_timeout_margin_sec"' in node_text
+    assert '"joint_limits_yaml"' in node_text
+    assert "TrajectoryRuntimeLimitGuard" in node_text
+    assert 'stop_reason = "runtime_limit_violated"' in node_text
     assert "execution_timeout_seconds" in node_text
     assert 'stop_reason = "timeout"' in node_text
     assert '"metrics_sample_stride"' in node_text

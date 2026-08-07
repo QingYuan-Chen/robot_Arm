@@ -42,3 +42,7 @@
 - 2026-08-07T14:19:27+08:00 | actor=Codex | event=start | note=P1 继续：推进 timeout 接入执行循环，保留上游独立 force actuator 决策 | verification=-
 - 2026-08-07T14:23:15+08:00 | actor=Codex | event=checkpoint | note=P1 timeout 已接入并验证；保留上游独立 force actuator；端到端 execute-loop integration tests 仍待补齐 | verification=-
 - 2026-08-07T14:24:04+08:00 | actor=Codex | event=verified | note=P1 timeout 子项已提交；execute-loop integration tests 作为下一项 | verification=-
+- 2026-08-07T14:25:40+08:00 | actor=Codex | event=start | note=P1 继续：补齐 MuJoCo execute-loop success/cancel/stop/tolerance/timeout integration coverage | verification=-
+- 2026-08-07T14:34:27+08:00 | actor=Codex | event=checkpoint | note=P1 execute-loop 集成六种结果已通过，success/cancel/stop/path-goal tolerance/timeout 覆盖完成 | verification=-
+- 2026-08-07T14:49:04+08:00 | actor=Codex | event=checkpoint | note=P1 runtime limits consistency 与 execute-loop integration 已完成；剩余 joint4-6 tracking/collision/grasp calibration | verification=-
+- 2026-08-07T14:53:09+08:00 | actor=Codex | event=blocked | note=P1 tracking audit found joint4/joint5 residual; stop for review of URDF effort authority versus separate MuJoCo calibration profile | verification=-

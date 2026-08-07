@@ -6,9 +6,9 @@
 2. [已完成] P1：独立运行上游 health/headless/model/ROS/motor/collision 测试，形成双基线差异报告；报告已形成，上游重放断言保留为 `test_defect`，不宣称上游全绿。
 3. [进行中] P1：选择性本地化上游模型、URDF-to-MJCF、motor control、health check 和 viewer 能力；用户确认保留上游独立 force actuator，不再做耦合 actuator 对齐测试；health check、隔离 runner、快照和同一 command contract 对比已完成，motor/viewer 仍待逐项审查。
 4. [已完成] P1：将 timeout 接入执行循环；monotonic deadline、非成功结果和失败 hold cleanup 已实现并通过测试。
-5. P1：补 execute-loop 成功、取消、停止、容差失败和超时集成测试；
-6. P1：补齐 effort、velocity、acceleration、jerk 限制一致性；
-7. P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定。
+5. [已完成] P1：补 execute-loop 成功、取消、停止、path/goal 容差失败和超时集成测试；ROS 2 + MuJoCo harness 6/6 通过。
+6. [已完成] P1：补齐 effort、velocity、acceleration、jerk 限制一致性；URDF/MuJoCo effort、MoveIt planner limits 和 runtime guard 已联通，证据已写入 P1。
+7. [待审核] P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 已确认当前 joint4/joint5 大残差，需确认 URDF effort 是否为最终约束，或批准独立 MuJoCo calibration profile 后再调参。
 
 ## 每次任务开始
 

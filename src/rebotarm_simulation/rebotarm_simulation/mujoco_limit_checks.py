@@ -17,6 +17,14 @@ class PositionLimitMismatch:
     mujoco_upper: float
 
 
+@dataclass(frozen=True)
+class UrdfJointLimit:
+    lower: float
+    upper: float
+    effort: float
+    velocity: float
+
+
 def motor_profile_position_limit_mismatches(
     urdf_path: Path,
     motor_profiles: Iterable[MotorProfile],
@@ -44,8 +52,15 @@ def motor_profile_position_limit_mismatches(
 
 
 def load_urdf_position_limits(urdf_path: Path) -> dict[str, tuple[float, float]]:
+    return {
+        name: (limit.lower, limit.upper)
+        for name, limit in load_urdf_joint_limits(urdf_path).items()
+    }
+
+
+def load_urdf_joint_limits(urdf_path: Path) -> dict[str, UrdfJointLimit]:
     root = ET.parse(urdf_path).getroot()
-    limits: dict[str, tuple[float, float]] = {}
+    limits: dict[str, UrdfJointLimit] = {}
     for joint in root.findall("joint"):
         name = joint.get("name")
         limit = joint.find("limit")
@@ -53,9 +68,16 @@ def load_urdf_position_limits(urdf_path: Path) -> dict[str, tuple[float, float]]
             continue
         lower = limit.get("lower")
         upper = limit.get("upper")
-        if lower is None or upper is None:
+        effort = limit.get("effort")
+        velocity = limit.get("velocity")
+        if lower is None or upper is None or effort is None or velocity is None:
             continue
-        limits[name] = (float(lower), float(upper))
+        limits[name] = UrdfJointLimit(
+            lower=float(lower),
+            upper=float(upper),
+            effort=float(effort),
+            velocity=float(velocity),
+        )
     return limits
 
 

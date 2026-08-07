@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
 import threading
 import time
 
@@ -24,6 +25,10 @@ from .mujoco_adapter_core import (
     normalize_trajectory_points,
     trajectory_error_code_for_stop_reason,
 )
+from rebotarm_motion.trajectory_runtime_limits import (
+    TrajectoryRuntimeLimitGuard,
+    load_joint_runtime_limits,
+)
 from .mujoco_metrics import TrajectoryMetricsRecorder
 from .mujoco_model_profile import DEFAULT_GRIPPER_XML, write_physics_profile, xml_asset_references_are_readable
 
@@ -45,6 +50,10 @@ class MuJoCoRosAdapterNode(Node):
         self.declare_parameter("path_tolerance_rad", 0.12)
         self.declare_parameter("goal_tolerance_rad", 0.06)
         self.declare_parameter("execution_timeout_margin_sec", 2.0)
+        self.declare_parameter(
+            "joint_limits_yaml",
+            "src/rebotarm_moveit_config/config/joint_limits.yaml",
+        )
         self.declare_parameter("metrics_sample_stride", 1)
         self.declare_parameter("use_mujoco_viewer", False)
 
@@ -66,6 +75,7 @@ class MuJoCoRosAdapterNode(Node):
 
         model_xml = self._ensure_model_xml()
         self._adapter = MuJoCoArmAdapter(model_xml)
+        self._runtime_limit_guard = self._build_runtime_limit_guard()
         self._last_publish_time = 0.0
         self._last_step_wall_time = time.monotonic()
         self._pending_sim_seconds = 0.0
@@ -122,6 +132,34 @@ class MuJoCoRosAdapterNode(Node):
         self.get_logger().info(f"generating MuJoCo model XML at {model_xml}")
         return write_physics_profile(model_xml, source_xml)
 
+    def _build_runtime_limit_guard(self) -> TrajectoryRuntimeLimitGuard:
+        configured = Path(str(self.get_parameter("joint_limits_yaml").value))
+        candidates = [configured]
+        if not configured.is_absolute():
+            repository_root = Path(__file__).resolve().parents[3]
+            candidates.append(repository_root / configured)
+        try:
+            from ament_index_python.packages import get_package_share_directory
+
+            candidates.append(
+                Path(get_package_share_directory("rebotarm_moveit_config"))
+                / "config"
+                / "joint_limits.yaml"
+            )
+        except Exception:
+            pass
+        limits_path = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if limits_path is None:
+            searched = ", ".join(str(candidate) for candidate in candidates)
+            raise FileNotFoundError(f"joint limits YAML not found; searched: {searched}")
+
+        limits = load_joint_runtime_limits(limits_path, ARM_JOINT_NAMES)
+        effort_limits = self._adapter.arm_actuator_force_limits()
+        for joint, effort_limit in zip(ARM_JOINT_NAMES, effort_limits):
+            if effort_limit is not None:
+                limits[joint] = replace(limits[joint], max_effort=float(effort_limit))
+        return TrajectoryRuntimeLimitGuard(limits)
+
     def _goal_callback(self, goal_request) -> GoalResponse:
         if not goal_request.trajectory.joint_names or not goal_request.trajectory.points:
             self.get_logger().warn("rejecting empty MuJoCo trajectory goal")
@@ -177,6 +215,9 @@ class MuJoCoRosAdapterNode(Node):
         feedback.joint_names = list(ARM_JOINT_NAMES)
         with self._lock:
             start_sim_time = self._adapter.sim_time
+        runtime_limit_guard = getattr(self, "_runtime_limit_guard", None)
+        if runtime_limit_guard is not None:
+            runtime_limit_guard.reset()
         end_time = trajectory[-1].time_from_start
         deadline = time.monotonic() + execution_timeout_seconds(
             end_time,
@@ -185,6 +226,7 @@ class MuJoCoRosAdapterNode(Node):
         stop_reason = "finished"
         violated_joint = None
         violated_tolerance = None
+        violation_detail = None
 
         while rclpy.ok():
             if goal_handle.is_cancel_requested:
@@ -211,6 +253,22 @@ class MuJoCoRosAdapterNode(Node):
                 velocities = self._adapter.arm_velocities()
                 forces = self._adapter.arm_actuator_forces()
             errors = [target - position for target, position in zip(targets, actual)]
+            if runtime_limit_guard is not None:
+                runtime_violation = runtime_limit_guard.observe(
+                    joint_names=ARM_JOINT_NAMES,
+                    velocities=velocities,
+                    efforts=forces,
+                    elapsed=elapsed,
+                )
+                if runtime_violation is not None:
+                    stop_reason = "runtime_limit_violated"
+                    violated_joint = runtime_violation.joint
+                    violation_detail = (
+                        f"{runtime_violation.kind} {runtime_violation.value:.6f} "
+                        f"> {runtime_violation.limit:.6f}"
+                    )
+                    goal_handle.abort()
+                    break
             recorder.record(
                 elapsed=elapsed,
                 targets=list(targets),
@@ -271,7 +329,11 @@ class MuJoCoRosAdapterNode(Node):
         result.error_string = (
             "MuJoCo trajectory finished"
             if success
-            else f"MuJoCo trajectory {stop_reason}"
+            else (
+                f"MuJoCo trajectory {stop_reason}: {violation_detail}"
+                if violation_detail is not None
+                else f"MuJoCo trajectory {stop_reason}"
+            )
         )
         return result
 

@@ -40,3 +40,51 @@ def test_limit_check_reports_drifted_motor_ctrlrange():
     assert mismatches[0].joint == "joint1"
     assert mismatches[0].urdf_lower == pytest.approx(-2.8)
     assert mismatches[0].mujoco_lower == pytest.approx(-2.7)
+
+
+def test_urdf_effort_velocity_limits_are_exposed_for_cross_layer_checks():
+    from rebotarm_simulation.mujoco_limit_checks import load_urdf_joint_limits
+
+    limits = load_urdf_joint_limits(ROOT / "src/rebotarm_moveit_config/config/rebotarm.urdf")
+
+    assert limits["joint1"].effort == pytest.approx(27.0)
+    assert limits["joint1"].velocity == pytest.approx(50.0)
+    assert limits["joint4"].effort == pytest.approx(7.0)
+    assert limits["joint4"].velocity == pytest.approx(200.0)
+
+
+def test_moveit_runtime_limits_are_conservative_and_complete_for_arm_joints():
+    from rebotarm_motion.trajectory_runtime_limits import load_joint_runtime_limits
+    from rebotarm_simulation.mujoco_limit_checks import load_urdf_joint_limits
+
+    joint_names = [f"joint{index}" for index in range(1, 7)]
+    urdf_limits = load_urdf_joint_limits(
+        ROOT / "src/rebotarm_moveit_config/config/rebotarm.urdf"
+    )
+    runtime_limits = load_joint_runtime_limits(
+        ROOT / "src/rebotarm_moveit_config/config/joint_limits.yaml",
+        joint_names,
+    )
+
+    for name in joint_names:
+        runtime = runtime_limits[name]
+        assert runtime.max_velocity is not None
+        assert runtime.max_velocity <= urdf_limits[name].velocity
+        assert runtime.max_acceleration is not None and runtime.max_acceleration > 0.0
+        assert runtime.max_jerk is not None and runtime.max_jerk > 0.0
+
+
+def test_mujoco_arm_force_limits_match_urdf_effort_limits(tmp_path: Path):
+    pytest.importorskip("mujoco")
+    from rebotarm_simulation.mujoco_adapter_core import MuJoCoArmAdapter
+    from rebotarm_simulation.mujoco_limit_checks import load_urdf_joint_limits
+    from rebotarm_simulation.mujoco_model_profile import write_physics_profile
+
+    adapter = MuJoCoArmAdapter(write_physics_profile(tmp_path / "robot.xml"))
+    urdf_limits = load_urdf_joint_limits(
+        ROOT / "src/rebotarm_moveit_config/config/rebotarm.urdf"
+    )
+
+    assert adapter.arm_actuator_force_limits() == pytest.approx(
+        [urdf_limits[f"joint{index}"].effort for index in range(1, 7)]
+    )

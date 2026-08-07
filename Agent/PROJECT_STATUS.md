@@ -38,9 +38,9 @@
 - [x] 独立运行上游 health/headless/model/ROS/motor/collision 测试并形成双基线差异报告；证据：`Agent/evidence/P1/2026-08-07-baseline-comparison.md` 与 JSON。上游为 `219 passed, 1 skipped, 1 failed`，唯一失败已分类为嵌套 `mapping -> tuple` 的测试断言缺陷，未宣称上游全绿。
 - [ ] 将确认有价值的上游模型、URDF-to-MJCF、motor control、health check 和 viewer 能力本地化到当前 package，保留当前接口和安全边界。
 - [x] 将 timeout 接入执行循环；使用 monotonic wall-clock deadline，超时返回非成功结果并 hold 当前位置，证据：`tests/test_mujoco_adapter_core.py`、`tests/test_mujoco_ros_adapter_launch.py`。
-- [ ] execute-loop 集成测试覆盖成功、取消、停止、容差失败和超时。
-- [ ] 补齐 effort、velocity、acceleration 和 jerk 限制一致性。
-- [ ] 完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定。
+- [x] execute-loop 集成测试覆盖成功、取消、停止、path/goal 容差失败和超时；ROS 2 + MuJoCo 环境 `6 passed`，证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。
+- [x] 补齐 effort、velocity、acceleration 和 jerk 限制一致性；URDF effort / MuJoCo forcerange 一致，MoveIt planner limits 保守且由 `rebotarm_motion` runtime guard 执行，证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
+- [ ] 完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 仍显示 joint4/joint5 大残差，详见 `Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`，等待 effort/calibration profile 决策。
 
 ## P2: Gemini 2 SDK 与真实 RGB-D 验收 [weight=15]
 
