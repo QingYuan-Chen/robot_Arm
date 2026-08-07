@@ -135,6 +135,27 @@ def test_follow_joint_trajectory_stop_reasons_map_to_non_success_codes():
     assert trajectory_error_code_for_stop_reason("goal_tolerance_violated", result_type=result_type) == -5
 
 
+def test_timeout_is_a_non_success_trajectory_stop_reason():
+    from types import SimpleNamespace
+
+    from rebotarm_simulation.mujoco_adapter_core import trajectory_error_code_for_stop_reason
+
+    result_type = SimpleNamespace(
+        SUCCESSFUL=0,
+        PATH_TOLERANCE_VIOLATED=-4,
+        GOAL_TOLERANCE_VIOLATED=-5,
+    )
+
+    assert trajectory_error_code_for_stop_reason("timeout", result_type=result_type) == -4
+
+
+def test_execution_timeout_budget_includes_trajectory_duration_and_margin():
+    from rebotarm_simulation.mujoco_adapter_core import execution_timeout_seconds
+
+    assert execution_timeout_seconds(2.0, margin_sec=1.5) == pytest.approx(3.5)
+    assert execution_timeout_seconds(-1.0, margin_sec=-1.0) > 0.0
+
+
 def test_first_tolerance_violation_reports_joint_and_error():
     from rebotarm_simulation.mujoco_adapter_core import first_tolerance_violation
 

@@ -126,6 +126,18 @@ def trajectory_error_code_for_stop_reason(stop_reason: str, *, result_type) -> i
     return int(result_type.PATH_TOLERANCE_VIOLATED)
 
 
+def execution_timeout_seconds(end_time: float, *, margin_sec: float = 2.0) -> float:
+    """Return a positive wall-clock budget for a trajectory execution.
+
+    The trajectory duration is measured in simulation seconds.  A separate
+    margin leaves room for timer jitter and slower wall-clock execution while
+    still bounding a stalled action callback.
+    """
+    duration = max(float(end_time), 0.0)
+    margin = max(float(margin_sec), 0.0)
+    return max(duration + margin, 1e-6)
+
+
 def first_tolerance_violation(
     *,
     joint_names: Sequence[str],

@@ -4,8 +4,8 @@
 
 1. [已完成] P1：固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`。
 2. [已完成] P1：独立运行上游 health/headless/model/ROS/motor/collision 测试，形成双基线差异报告；报告已形成，上游重放断言保留为 `test_defect`，不宣称上游全绿。
-3. [进行中] P1：选择性本地化上游模型、URDF-to-MJCF、motor control、health check 和 viewer 能力；health check 已本地化，模型/转换器已完成接口审查，隔离 runner、快照和同一 command contract 对比已完成，默认模型暂不替换，motor/viewer 仍待逐项审查。
-4. P1：将 timeout 接入执行循环；
+3. [进行中] P1：选择性本地化上游模型、URDF-to-MJCF、motor control、health check 和 viewer 能力；用户确认保留上游独立 force actuator，不再做耦合 actuator 对齐测试；health check、隔离 runner、快照和同一 command contract 对比已完成，motor/viewer 仍待逐项审查。
+4. [已完成] P1：将 timeout 接入执行循环；monotonic deadline、非成功结果和失败 hold cleanup 已实现并通过测试。
 5. P1：补 execute-loop 成功、取消、停止、容差失败和超时集成测试；
 6. P1：补齐 effort、velocity、acceleration、jerk 限制一致性；
 7. P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定。

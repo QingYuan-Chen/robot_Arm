@@ -17,6 +17,7 @@ def generate_launch_description():
     use_mujoco_viewer = LaunchConfiguration("use_mujoco_viewer")
     control_rate_hz = LaunchConfiguration("control_rate_hz")
     publish_rate_hz = LaunchConfiguration("publish_rate_hz")
+    execution_timeout_margin_sec = LaunchConfiguration("execution_timeout_margin_sec")
     python_executable = LaunchConfiguration("python_executable")
     use_rviz = LaunchConfiguration("use_rviz")
 
@@ -30,6 +31,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_mujoco_viewer", default_value="false"),
             DeclareLaunchArgument("control_rate_hz", default_value="200.0"),
             DeclareLaunchArgument("publish_rate_hz", default_value="50.0"),
+            DeclareLaunchArgument("execution_timeout_margin_sec", default_value="2.0"),
             DeclareLaunchArgument("python_executable", default_value="third_party/rebotarm_mujoco_venv/bin/python"),
             Node(
                 package="rebotarm_simulation",
@@ -46,6 +48,7 @@ def generate_launch_description():
                         "use_mujoco_viewer": use_mujoco_viewer,
                         "control_rate_hz": control_rate_hz,
                         "publish_rate_hz": publish_rate_hz,
+                        "execution_timeout_margin_sec": execution_timeout_margin_sec,
                     }
                 ],
             ),

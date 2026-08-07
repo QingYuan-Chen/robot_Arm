@@ -39,3 +39,5 @@
 - 2026-08-07T13:46:28+08:00 | actor=Codex | event=start | note=P1 继续：建立同一目标轨迹的 command-level comparison benchmark | verification=-
 - 2026-08-07T13:52:42+08:00 | actor=Codex | event=checkpoint | note=P1 同一 command contract 对比完成；499 tests passed, 5 skipped；保留 actuator/controller 差异，未替换默认模型 | verification=-
 - 2026-08-07T13:54:01+08:00 | actor=Codex | event=verified | note=同一 command contract 对比与回归验证完成；默认模型保持不变 | verification=-
+- 2026-08-07T14:19:27+08:00 | actor=Codex | event=start | note=P1 继续：推进 timeout 接入执行循环，保留上游独立 force actuator 决策 | verification=-
+- 2026-08-07T14:23:15+08:00 | actor=Codex | event=checkpoint | note=P1 timeout 已接入并验证；保留上游独立 force actuator；端到端 execute-loop integration tests 仍待补齐 | verification=-

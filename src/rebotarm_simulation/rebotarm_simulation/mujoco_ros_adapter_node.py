@@ -18,6 +18,7 @@ from .mujoco_adapter_core import (
     ARM_JOINT_NAMES,
     MuJoCoArmAdapter,
     consume_sim_steps,
+    execution_timeout_seconds,
     first_tolerance_violation,
     interpolate_trajectory,
     normalize_trajectory_points,
@@ -43,6 +44,7 @@ class MuJoCoRosAdapterNode(Node):
         self.declare_parameter("gripper_max_width_m", 0.09)
         self.declare_parameter("path_tolerance_rad", 0.12)
         self.declare_parameter("goal_tolerance_rad", 0.06)
+        self.declare_parameter("execution_timeout_margin_sec", 2.0)
         self.declare_parameter("metrics_sample_stride", 1)
         self.declare_parameter("use_mujoco_viewer", False)
 
@@ -54,6 +56,9 @@ class MuJoCoRosAdapterNode(Node):
         self._gripper_max_width_m = float(self.get_parameter("gripper_max_width_m").value)
         self._path_tolerance_rad = max(float(self.get_parameter("path_tolerance_rad").value), 0.0)
         self._goal_tolerance_rad = max(float(self.get_parameter("goal_tolerance_rad").value), 0.0)
+        self._execution_timeout_margin_sec = max(
+            float(self.get_parameter("execution_timeout_margin_sec").value), 0.0
+        )
         self._metrics_sample_stride = max(int(self.get_parameter("metrics_sample_stride").value), 1)
         self._use_mujoco_viewer = bool(self.get_parameter("use_mujoco_viewer").value)
         self._lock = threading.RLock()
@@ -173,6 +178,10 @@ class MuJoCoRosAdapterNode(Node):
         with self._lock:
             start_sim_time = self._adapter.sim_time
         end_time = trajectory[-1].time_from_start
+        deadline = time.monotonic() + execution_timeout_seconds(
+            end_time,
+            margin_sec=self._execution_timeout_margin_sec,
+        )
         stop_reason = "finished"
         violated_joint = None
         violated_tolerance = None
@@ -189,6 +198,12 @@ class MuJoCoRosAdapterNode(Node):
 
             with self._lock:
                 elapsed = min(self._adapter.sim_time - start_sim_time, end_time)
+            if elapsed < end_time and time.monotonic() >= deadline:
+                stop_reason = "timeout"
+                goal_handle.abort()
+                break
+
+            with self._lock:
                 targets = interpolate_trajectory(trajectory, elapsed)
                 self._adapter.set_arm_targets(targets)
                 self._latest_targets = list(targets)
@@ -233,6 +248,14 @@ class MuJoCoRosAdapterNode(Node):
                 goal_handle.abort()
                 break
             time.sleep(1.0 / self._control_rate_hz)
+
+        if stop_reason == "finished" and not rclpy.ok():
+            stop_reason = "stopped"
+        if stop_reason != "finished":
+            with self._lock:
+                hold_position = self._adapter.arm_positions()
+                self._adapter.set_arm_targets(hold_position)
+                self._latest_targets = list(hold_position)
 
         success = stop_reason == "finished"
         recorder.finish(

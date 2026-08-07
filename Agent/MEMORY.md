@@ -44,6 +44,8 @@
 - 上游完整 MuJoCo package 已按固定 commit 原样复制到 `third_party/robotarm_ros2_mujoco_snapshot/`；`diff -qr` 与 `/home/a/project/rebot_refer/src/rebotarm_simulation` 无差异，provenance manifest 和 localization README 已加入。该目录不在默认 `src/`，仍受 `PROVISIONAL` license 边界限制。
 - A/B 对比已完成：两套 health/headless 均通过；current `nu=7/nsensor=0`，upstream `nu=8/nsensor=26`；1 秒 step-response 的 max final error 为 `0.7860` vs `0.6443 rad`，max velocity 为 `4.0664` vs `1.9567 rad/s`；两套 grasp smoke 均 contact 但均无 lift success。完整 JSON/解释见 `Agent/evidence/P1/2026-08-07-baseline-comparison.{json,md}`。
 - 第二轮 command-level 对比已完成：两套 backend 接收同一六轴目标 `[1.4,-0.785,-0.785,0.710,0.785,1.570] rad` 与 `gripper_width=0.04 m`。Current adapter 的 max final error / max velocity 为 `0.7930 rad` / `5.2087 rad/s`，上游 native runtime 为 `0.3611 rad` / `1.9563 rad/s`；该结果只说明现有控制器响应差异，不能证明模型可直接替换。证据：`Agent/evidence/P1/2026-08-07-baseline-comparison-command-contract.json`，并已合并到主对比 JSON/Markdown。
+- 用户确认保留上游左右独立 force actuator 语义，不再把上游夹爪改造成当前单耦合 gripper actuator，也不再为 actuator 对齐本身扩展测试；后续只在统一高层 command、明确 controller contract 的前提下比较结果。
+- P1 timeout 已接入 `MuJoCoRosAdapterNode`：以 trajectory duration 加 `execution_timeout_margin_sec` 计算 monotonic wall-clock deadline；timeout 映射为非成功 action result，并与 cancel/stop/tolerance failure 一样将 arm targets hold 在当前位置。端到端 ROS action integration tests 仍待补齐。
 
 ## 当前决策
 
