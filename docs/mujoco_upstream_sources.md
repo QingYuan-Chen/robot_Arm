@@ -10,11 +10,11 @@
 - Branch：`main`
 - Commit：`fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`（2026-07-13，`fix: tune MuJoCo gripper force and viewer jog`）
 - Local snapshot：用户已提供的 `/home/a/project/rebot_refer`，remote 与 commit 已核对且工作区 clean；当前 Git 的 `third_party/robotarm_ros2_mujoco_snapshot/` 为字节保持快照，已完整本地化到 `src/rebotarm_simulation/` 作为默认 ROS 仿真 backend。
-- Source swap：切换前的 package-owned 实现以字节保持方式归档到 `third_party/rebotarm_simulation_current_baseline/`，由 `ARCHIVE_MANIFEST.json` 校验每个文件的 size/SHA-256；它只作为显式 `simulation_backend:=current` fallback 和回滚对照，不参与默认 colcon source。
+- Source swap：切换前的 package-owned 实现以字节保持方式归档到 `third_party/rebotarm_simulation_current_baseline/`，由 `ARCHIVE_MANIFEST.json` 校验每个文件的 size/SHA-256；它只作为历史/回滚证据，不参与 active colcon source，也没有可安装或可选择的 current runtime 入口。
 - Candidate files：`src/rebotarm_simulation/`、`models/rebotarm/`、`config/`、`launch/`、MuJoCo tests and runbooks。
 - Observed capabilities：health/headless CLI、native viewer、ROS 2 adapter、URDF-to-MJCF generator、motor control、gravity compensation、collision/contact acceptance and model contract tests。
 - License evidence：`src/rebotarm_simulation/package.xml` declares `Apache-2.0`，但固定仓库根目录未发现可直接核验的 `LICENSE` 文件；license status 仍记为 `PROVISIONAL`。允许当前工作区本地运行，授权确认前不对外再分发快照。
-- Decision：上游 package 直接作为 P1 默认 MuJoCo backend 使用；当前 package-owned 实现保留在归档与 active source 的 compatibility modules 中，并通过 `simulation_backend:=current` 显式 fallback，两个 backend 通过 launch 条件互斥。
+- Decision：上游 package 是唯一 active MuJoCo runtime；setup/launch 只安装并启动 `rebotarm_mujoco_node`。旧 current modules 可留作源码级历史兼容，但没有 adapter/legacy/wrapper console entrypoint，launch 也没有 backend selector。许可证状态为 `PROVISIONAL`，只允许本地使用和本地 Git 保存，不发布。
 
 ### MuJoCo physics engine
 

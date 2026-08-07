@@ -47,11 +47,6 @@ setup(
             "rebotarm_mujoco_health = rebotarm_simulation.mujoco_health:main",
             "rebotarm_mujoco_cli = rebotarm_simulation.mujoco_cli:main",
             "rebotarm_mujoco = rebotarm_simulation.mujoco_cli:main",
-            "rebotarm_mujoco_adapter = rebotarm_simulation.mujoco_ros_adapter_node:main",
-            "rebotarm_mujoco_legacy_cli = rebotarm_simulation.mujoco_legacy_cli:main",
-            # Retained for rollback comparisons; active launch uses the
-            # upstream node directly from this package.
-            "rebotarm_upstream_mujoco_node = rebotarm_simulation.upstream_backend:main",
             "rebotarm_mujoco_viewer = rebotarm_simulation.mujoco_viewer:main",
             "rebotarm_mujoco_node = rebotarm_simulation.mujoco_ros_node:main",
             "rebotarm_urdf_to_mjcf = rebotarm_simulation.urdf_to_mjcf:main",

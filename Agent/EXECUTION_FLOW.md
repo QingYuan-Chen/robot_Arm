@@ -2,13 +2,12 @@
 
 ## 当前执行队列
 
-1. [已完成] P1：固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`。
-2. [已完成] P1：独立运行上游 health/headless/model/ROS/motor/collision 测试，形成双基线差异报告；报告已形成，上游重放断言保留为 `test_defect`，不宣称上游全绿。
-3. [已完成] P1：将固定上游 MuJoCo runtime、模型、ROS adapter 和 launch 直接本地化到 `src/rebotarm_simulation` 并设为默认 `upstream` backend；切换前的 current source 已归档，compatibility modules 与 `simulation_backend:=current` fallback 保留。上游独立 force actuator 语义保留，不做耦合 actuator 对齐测试；原始测试断言缺陷只在临时 test-only copy 中兼容。
-4. [已完成] P1：将 timeout 接入执行循环；monotonic deadline、非成功结果和失败 hold cleanup 已实现并通过测试。
-5. [已完成] P1：补 execute-loop 成功、取消、停止、path/goal 容差失败和超时集成测试；ROS 2 + MuJoCo harness 6/6 通过。
-6. [已完成] P1：补齐 effort、velocity、acceleration、jerk 限制一致性；URDF/MuJoCo effort、MoveIt planner limits 和 runtime guard 已联通，证据已写入 P1。
-7. [待审核] P1：完成 current fallback 的 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；默认 upstream 已通过 ROS 轨迹验收，不再等待 current controller/dynamics 决策。current fallback 标定可在后续需要对照时单独推进。
+1. [已完成] P1：upstream-only 收尾；active `rebotarm_simulation` 只安装/启动 package-owned upstream MuJoCo node，current 实现仅留归档，不再是可选 backend。完整测试、MuJoCo 专项、构建、Viewer smoke 和 ROS action 验收通过；证据：`Agent/evidence/P1/2026-08-07-p1-upstream-only-closeout.md`。
+2. [待执行] P2：连接真实 Gemini 2，只做设备枚举和 RGB/depth 采集预检，不启动机械臂执行。
+3. [待执行] P2：记录设备信息、实际 stream profiles、intrinsics、distortion 和 RGB-depth extrinsics。
+4. [待执行] P2：读取并验证 depth scale，明确 SDK、ROS 和内部算法的深度单位。
+5. [待执行] P2：验证 RGB-D 对齐、分辨率切换、CameraInfo 与时间戳/frame_id 一致性。
+6. [待执行] P2：采集多个已知距离样本并形成深度误差验收记录。
 
 ## 每次任务开始
 
@@ -59,4 +58,4 @@ P0 实机安全
 → P6 仿真与实机分级系统验收
 ```
 
-P0 已通过。P1 纯仿真工作可以开始，但 P0 通过不自动授权完整实机视觉执行；后续阶段的局部软件开发可以提前进行，不能越过 P2-P6 对应验收门宣称系统完成。
+P0、P1 已通过。当前进入 P2 Gemini 2 RGB-D 验收；P0 通过不自动授权完整实机视觉执行，不能越过 P2-P6 对应验收门宣称系统完成。

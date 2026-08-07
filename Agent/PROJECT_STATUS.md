@@ -36,11 +36,11 @@
 - [x] 修正 grasp scene keyframe 的不合理起始姿态；scene home `qpos` 与 `ctrl` 已同步，证据：`Agent/evidence/P1/2026-08-06-grasp-keyframe.md`、`tests/test_mujoco_model_profile.py`。
 - [x] 固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`、`Agent/evidence/P1/2026-08-07-upstream-snapshot-localization.md`，固定 `main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`，license 结果为 `PROVISIONAL`。
 - [x] 独立运行上游 health/headless/model/ROS/motor/collision 测试并形成双基线差异报告；证据：`Agent/evidence/P1/2026-08-07-baseline-comparison.md` 与 JSON。上游为 `219 passed, 1 skipped, 1 failed`，唯一失败已分类为嵌套 `mapping -> tuple` 的测试断言缺陷，未宣称上游全绿。
-- [x] 将固定上游 MuJoCo runtime、模型、ROS adapter 和 launch 直接本地化到 `src/rebotarm_simulation` 并作为默认 `upstream` backend；切换前的 current source 已归档到 `third_party/rebotarm_simulation_current_baseline`，compatibility modules 与显式 `simulation_backend:=current` fallback 保留，安全边界与单 Action server 约束通过测试和 ROS preflight 验证。证据：`Agent/evidence/P1/2026-08-07-upstream-src-swap.md`、`third_party/rebotarm_simulation_current_baseline/ARCHIVE_MANIFEST.json`。
+- [x] 将固定上游 MuJoCo runtime、模型、ROS adapter 和 launch 直接本地化到 `src/rebotarm_simulation`；切换前的 current source 已归档到 `third_party/rebotarm_simulation_current_baseline`。最终 active runtime 收口为 upstream-only，安全边界与单 Action server 约束通过测试和 ROS preflight 验证。证据：`Agent/evidence/P1/2026-08-07-upstream-src-swap.md`、`third_party/rebotarm_simulation_current_baseline/ARCHIVE_MANIFEST.json`。
 - [x] 将 timeout 接入执行循环；使用 monotonic wall-clock deadline，超时返回非成功结果并 hold 当前位置，证据：`tests/test_mujoco_adapter_core.py`、`tests/test_mujoco_ros_adapter_launch.py`。
 - [x] execute-loop 集成测试覆盖成功、取消、停止、path/goal 容差失败和超时；ROS 2 + MuJoCo 环境 `6 passed`，证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。
 - [x] 补齐 effort、velocity、acceleration 和 jerk 限制一致性；URDF effort / MuJoCo forcerange 一致，MoveIt planner limits 保守且由 `rebotarm_motion` runtime guard 执行，证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
-- [ ] 完成 current fallback 的 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 仍显示 joint4/joint5 大残差，孤立上游 ±12.5 force profile 单独无改善。默认 upstream controller 已通过 ROS 轨迹验收；current fallback 标定仍待后续，详见 `Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`。
+- [x] 按用户最终决策将 current fallback 退出 active runtime 和 P1 验收范围；未把其 joint4-6 tracking/contact 标定误记为成功。旧实现仅保存在 `third_party/rebotarm_simulation_current_baseline` 归档，active setup/launch 不再暴露 current adapter、legacy CLI 或 backend selector；证据：`Agent/evidence/P1/2026-08-07-p1-upstream-only-closeout.md`。
 
 ## P2: Gemini 2 SDK 与真实 RGB-D 验收 [weight=15]
 

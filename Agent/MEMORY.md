@@ -4,8 +4,8 @@
 
 ## 当前焦点
 
-- Active phase / 当前阶段：P1 MuJoCo 基线巩固与差距整合。
-- Completed phase / 已完成阶段：P0 机械臂安全启动与执行门控已通过软件及分级真机验收。
+- Active phase / 当前阶段：P2 Gemini 2 SDK 与真实 RGB-D 验收。
+- Completed phase / 已完成阶段：P0 机械臂安全启动与执行门控、P1 MuJoCo 基线巩固与差距整合均已通过对应验收。
 - Hardware gate / 硬件门：P0 已解除；完整视觉抓取仍需遵守后续 P2-P6 感知、标定和分级系统验收门。
 
 ## 当前事实
@@ -35,12 +35,12 @@
 - 当前 1 秒六轴 step-response 仍有 `max_final_abs_error=0.7860 rad`、`max_abs_error=1.5683 rad`，属于后续 tracking/dynamics calibration 工作，不因环境和授权修复而视为通过。
 - P1 current/upstream capability gap matrix 已建立于 `docs/mujoco_gap_matrix.md`，并由 `tests/test_mujoco_gap_matrix.py` 校验表头、关键能力行和授权边界；矩阵将 grasp keyframe、timeout/execute-loop、limits consistency 标为当前 P1 implement，将 tracking/contact/calibration 标为后续 defer。
 - grasp scene keyframe 已修正：命名 keyframe `0` 现在同时保存 home arm `qpos` 与对应 `ctrl`，避免 reset 后 position actuator 默认回零导致姿态漂移；1 秒 benchmark `finite=True`，但仍为 `contact_without_lift`，因为当前 benchmark 不发送抬升轨迹，接触/抓取质量仍未完成标定。
-- P1 迁移策略已按用户最新决定落地：`huangbinai/robotarm_ros2` 的 `main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4` 作为默认 MuJoCo backend，当前 package-owned MuJoCo 保留为显式 `simulation_backend:=current` fallback/对照基线；上游包含 health/headless、viewer、ROS adapter、URDF-to-MJCF、motor control、collision/contact 和 acceptance 基础设施。
+- P1 最终策略已按用户决定收口为 upstream-only：`huangbinai/robotarm_ros2` 的 `main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4` 已本地化到 active `src/rebotarm_simulation`；setup/launch 不再安装或选择 current adapter、legacy CLI 和 snapshot wrapper。切换前实现仅保存在 `third_party/rebotarm_simulation_current_baseline`，不参与 active runtime。
 - `robotarm_ros2/src/rebotarm_simulation/package.xml` 声明 Apache-2.0，但固定仓库根 LICENSE 文件尚未核验到；已允许当前工作区本地使用默认 upstream backend，仍禁止在授权确认前对外再分发该快照。
 - 用户已提供本机 clean 快照 `/home/a/project/rebot_refer`，remote 为 `https://github.com/huangbinai/robotarm_ros2.git`，固定 `main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`。目标包文件清单、SHA-256 和授权结果记录于 `Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`。
 - 已按 upstream-first 选择性本地化 health check：`rebotarm_simulation.mujoco_health.check_model_health()` 与 `rebotarm_mujoco_health` console script 只检查当前 package-owned XML；TDD、CLI、分层、全量测试和 compileall 均通过。证据：`Agent/evidence/P1/2026-08-07-health-check-localization.md`。
 - URDF-to-MJCF 审查确认上游 `robot.xml` 为 `nu=8/nsensor=26` 的独立 torque/finger actuator 模型，而当前生成模型为 `nu=7/nsensor=0` 并由 `sim_gripper` 保持夹爪契约；本轮决定不直接替换模型。证据：`Agent/evidence/P1/2026-08-07-model-converter-audit.md`。
-- 用户确认采用 A 方案：将上游 MuJoCo runtime、模型、launch、测试、配置和文档完整保留到当前 Git 的 `third_party/robotarm_ros2_mujoco_snapshot/`，通过独立 comparison workspace 与当前 baseline 做 A/B 对比；现在已通过 `upstream_backend.py` 和 launch selector 将 upstream 设为默认，current 仍可显式回退。
+- 用户确认采用 A 方案后又明确只使用上游 MuJoCo：固定快照与 A/B 证据继续保留作 provenance，active runtime 已直接使用本地化 upstream package；不再通过 `upstream_backend.py` 进程边界或 launch selector 启动 current。
 - 上游完整 MuJoCo package 已按固定 commit 原样复制到 `third_party/robotarm_ros2_mujoco_snapshot/`；`diff -qr` 与 `/home/a/project/rebot_refer/src/rebotarm_simulation` 无差异，provenance manifest 和 localization README 已加入。该目录不在默认 `src/`，仍受 `PROVISIONAL` license 边界限制。
 - A/B 对比已完成：两套 health/headless 均通过；current `nu=7/nsensor=0`，upstream `nu=8/nsensor=26`；1 秒 step-response 的 max final error 为 `0.7860` vs `0.6443 rad`，max velocity 为 `4.0664` vs `1.9567 rad/s`；两套 grasp smoke 均 contact 但均无 lift success。完整 JSON/解释见 `Agent/evidence/P1/2026-08-07-baseline-comparison.{json,md}`。
 - 第二轮 command-level 对比已完成：两套 backend 接收同一六轴目标 `[1.4,-0.785,-0.785,0.710,0.785,1.570] rad` 与 `gripper_width=0.04 m`。Current adapter 的 max final error / max velocity 为 `0.7930 rad` / `5.2087 rad/s`，上游 native runtime 为 `0.3611 rad` / `1.9563 rad/s`；该结果只说明现有控制器响应差异，不能证明模型可直接替换。证据：`Agent/evidence/P1/2026-08-07-baseline-comparison-command-contract.json`，并已合并到主对比 JSON/Markdown。
@@ -54,7 +54,7 @@
 ## 当前决策
 
 - `新项目规划.md` 是当前主规划，旧 `项目规划.md` 是 MuJoCo 历史记录。
-- 现有 package-owned MuJoCo 实现保留为 current fallback；固定 upstream 快照通过独立进程边界成为默认 backend，不覆盖快照源码，也不同时启动两个仿真 Action server。
+- active runtime 只允许 package-owned upstream MuJoCo node；旧 package-owned current 实现仅留带 SHA-256 manifest 的归档，不安装 console entrypoint，也不参与 launch。
 - P0 安全优先于任何实机视觉联调。
 - GraspNet 第一阶段采用 `.venv-vision` + `.venv-graspnet` 双环境和 localhost 服务。
 - 自动测试、仿真验收和真机验收分别记录，不能互相替代。
@@ -64,11 +64,10 @@
 - P2：真实 Gemini 2 RGB-D、SDK 标定和 depth scale 缺少当前 Ubuntu 硬件验收证据。
 - P4：Ubuntu 本地 GraspNet 环境、依赖和服务尚未建立。
 - P5：当前实际安装的 hand-eye 和 TCP 数据尚未标定。
-- P1：上游原始快照仍保留一个测试写法缺陷：`test_saved_integration_state_replays_deterministically` 直接对 `mapping[str, tuple]` 使用 `pytest.approx`；该缺陷只存在于测试断言，临时 test-only compatibility copy 已 `220 passed, 1 skipped`，不阻塞本地默认 backend，但不能宣称未修改上游测试原始全绿。
-- P1：current fallback 在线性 ramp 下 joint4/joint5 仍有较大 tracking residual；默认 upstream controller 已通过 ROS 轨迹验收，current fallback 的 tracking/collision/contact calibration 仍待后续单独处理。
 
 ## 最近验证
 
+- 2026-08-07：P1 upstream-only 收尾通过：active setup/launch 不再暴露 current selector/adapter/legacy wrapper；全量 `516 passed, 13 skipped`，MuJoCo/upstream 专项 `62 passed, 7 skipped`，layering 18 passed，compileall 与三包 colcon build 通过；health 为 8 joints/8 actuators、Viewer smoke 正常启动、独立 ROS domain 六轴轨迹 `error_code=0 / SUCCEEDED`。自动抓取序列仍按规划属于 P6 闭环，不作为 P1 完成声明。上游授权仍为 `PROVISIONAL`，只允许本地使用、不发布。
 - 2026-08-07：完成 upstream 默认 backend 切换：原始快照测试为 `219 passed, 1 skipped, 1 failed`，临时 test-only 断言兼容副本为 `220 passed, 1 skipped`；health/headless 通过；默认 `mujoco_moveit_sim.launch.py` 启动 upstream ROS node、`/clock`、joint states、trajectory action 和 gripper services；1 秒六关节轨迹返回 `error_code=0`。current adapter 仅在 `simulation_backend:=current` 时启动，非法 backend fail closed。退出时 MuJoCo process clean，但两条 backend 的 `move_group` 都超过 5 秒 SIGINT grace 后被 SIGTERM，记录为非阻塞 MoveIt cleanup 问题。证据：`Agent/evidence/P1/2026-08-07-upstream-default-backend.{md,json}`。
 - 2026-08-06：P1 授权风险修复：新增 package-owned MJCF baseline/grasp scene，默认 mesh 只解析到本仓库 `rebotarm_bringup`；HJX `NOASSERTION` 来源退出默认运行路径。新模型 `nq=8`、`nv=8`、`nu=7`，1 秒 robot smoke 与 grasp scene 均 finite。
 - 2026-08-06：P1 环境风险修复：直接依赖全部固定，NumPy 降至 1.26.4 并补 cffi 1.17.1；`pip check` 无 broken requirements，MuJoCo/NumPy/SciPy/cffi import 通过。
@@ -109,9 +108,9 @@
 
 ## 下一次交接
 
-1. P1 默认仿真 backend 已切到 upstream；继续使用 upstream 模型/controller 做仿真验证，current 仅作显式 fallback 对照；
-2. 上游原始重放断言仍是测试缺陷，临时 test-only compatibility copy 已全绿，但不能把未修改上游测试报告写成全通过；
-3. HJX 只允许行为级观察，不复制实现或资产；
-4. current fallback 的 joint4-6 tracking、collision/contact 和抓取质量标定仍未完成；
+1. P1 已完成并冻结为 upstream-only 本地仿真基线；上游原始重放断言是测试缺陷，不能把未修改上游测试报告写成全通过；
+2. 上游根 LICENSE 未补齐，当前只允许本地使用和本地 Git 保存，不发布、不推送含上游资产的分支；
+3. P2 从 Gemini 2 设备枚举和只读 RGB/depth 采集开始，不启动机械臂执行；
+4. HJX 只允许行为级观察，不复制实现或资产；
 5. 每完成一个验收项，更新 `PROJECT_STATUS.md` 并运行 `update_state.py`；
 6. 不触碰工作区中与当前任务无关的已有 RViz 修改。

@@ -37,32 +37,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _dispatch_legacy_command(argv: list[str]) -> int | None:
-    """Route the project-specific benchmark commands to the compatibility CLI.
-
-    Upstream's interactive/headless CLI stays the default.  The archived
-    project's XML-profile and step-response workflow remains available under
-    its original command names so existing scripts do not silently change
-    semantics during the source swap.
-    """
-    if not argv or argv[0] not in {
-        "generate",
-        "smoke",
-        "step-response",
-        "step-response-suite",
-        "grasp-benchmark",
-    }:
-        return None
-    # Keep the established step-response-suite vocabulary and metrics contract
-    # visible to callers while delegating implementation to the archived CLI.
-    from .mujoco_adapter_core import default_step_response_targets
-
-    _ = default_step_response_targets  # includes max_rms_error in its report
-    from .mujoco_legacy_cli import main as legacy_main
-
-    return legacy_main(argv)
-
-
 def _plain(value):
     if is_dataclass(value):
         return {field.name: _plain(getattr(value, field.name)) for field in fields(value)}
@@ -180,9 +154,6 @@ def main(argv=None, *, sim_factory=RebotArmMujoco, stdin=None, stdout=None, stde
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
     effective_argv = list(sys.argv[1:] if argv is None else argv)
-    legacy_result = _dispatch_legacy_command(effective_argv)
-    if legacy_result is not None:
-        return legacy_result
     args = build_parser().parse_args(effective_argv)
     sim = None
     try:
