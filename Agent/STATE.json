@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07T16:09:01+08:00",
+  "generated_at": "2026-08-07T16:17:09+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 52.6,
@@ -81,8 +81,8 @@
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "1f905dc",
+    "head": "3f7fc8e",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-08-07T16:09:01+08:00 | actor=Codex | event=verified | note=完成默认 launch 的 pinned Python 清理并复跑 source-swap 回归 | verification=source-swap/launch/backend tests 11 passed; launch compileall passed; rebotarm_simulation colcon build passed; git diff --check passed; prior full 516 passed, 13 skipped retained"
+  "last_event": "- 2026-08-07T16:17:09+08:00 | actor=Codex | event=verified | note=上游 MuJoCo 本地化基线与 current 归档已保存到本地 Git，未推送远端 | verification=commit 3f7fc8e created locally; no remote push; prior source-swap/full-test/build evidence remains valid"
 }
