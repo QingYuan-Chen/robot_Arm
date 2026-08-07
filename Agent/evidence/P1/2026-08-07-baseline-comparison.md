@@ -2,6 +2,7 @@
 
 日期：2026-08-07  
 报告 JSON：[2026-08-07-baseline-comparison.json](2026-08-07-baseline-comparison.json)  
+同一命令契约 JSON：[2026-08-07-baseline-comparison-command-contract.json](2026-08-07-baseline-comparison-command-contract.json)
 上游快照：`main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`  
 测试时长：1 秒 headless physics。
 
@@ -45,6 +46,39 @@ Current 使用 6 个 arm position actuator + 1 个 `gripper` actuator；上游�
 
 该结果说明 upstream motor/control 参数在本次 1 秒响应中更平滑、最终误差较小；但
 它使用不同 actuator 类型、dynamics 和 calibration，尚不能作为替换当前控制器的结论。
+
+### 3.1 同一命令契约复测
+
+第二轮不再逐关节发送不同后端各自的 native command，而是向两套 backend 发送同一个
+6-DOF target vector 和 `gripper_width=0.04 m`：
+
+```text
+joint1..joint6 = [1.4, -0.785, -0.785, 0.710, 0.785, 1.570] rad
+```
+
+| 指标 | Current adapter | Upstream `RebotArmMujoco` | 观察 |
+|---|---:|---:|---|
+| max final abs error | `0.7930 rad` | `0.3611 rad` | Upstream 约低 54.5% |
+| max abs error | `1.5691 rad` | `1.5697 rad` | 起步峰值基本相同 |
+| max abs velocity | `5.2087 rad/s` | `1.9563 rad/s` | Upstream 约低 62.4% |
+| max arm actuator force | `27.0` | `20.0223` | 仍受 actuator 类型/限幅影响 |
+| final gripper width | `0.040403 m` | `0.039620 m` | 命令接近，但闭环实现不同 |
+
+最终关节误差显示差异并非所有轴一致：
+
+| Joint | Current abs error | Upstream abs error |
+|---|---:|---:|
+| joint1 | `0.0018 rad` | `0.3611 rad` |
+| joint2 | `0.0131 rad` | `0.1137 rad` |
+| joint3 | `0.0418 rad` | `0.1012 rad` |
+| joint4 | `0.3464 rad` | `0.0332 rad` |
+| joint5 | `0.7930 rad` | `0.0924 rad` |
+| joint6 | `0.0020 rad` | `0.1104 rad` |
+
+这次结果只证明“同一目标命令”下的现有实现差异，不证明上游模型可直接替换当前模型：
+上游仍使用独立 torque/force actuator 和自有 motor controller，Current 仍使用 position
+actuator 适配器。下一步若要比较控制器本身，必须在隔离 overlay 中统一 actuator 类型、
+limits、gains 和 reset/keyframe，再复测并单独保留该 overlay 证据。
 
 ## 4. Gripper/contact smoke
 

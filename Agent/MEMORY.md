@@ -41,6 +41,9 @@
 - 已按 upstream-first 选择性本地化 health check：`rebotarm_simulation.mujoco_health.check_model_health()` 与 `rebotarm_mujoco_health` console script 只检查当前 package-owned XML；TDD、CLI、分层、全量测试和 compileall 均通过。证据：`Agent/evidence/P1/2026-08-07-health-check-localization.md`。
 - URDF-to-MJCF 审查确认上游 `robot.xml` 为 `nu=8/nsensor=26` 的独立 torque/finger actuator 模型，而当前生成模型为 `nu=7/nsensor=0` 并由 `sim_gripper` 保持夹爪契约；本轮决定不直接替换模型。证据：`Agent/evidence/P1/2026-08-07-model-converter-audit.md`。
 - 用户确认采用 A 方案：将上游 MuJoCo runtime、模型、launch、测试、配置和文档完整保留到当前 Git 的 `third_party/robotarm_ros2_mujoco_snapshot/`，通过独立 comparison workspace 与当前 baseline 做 A/B 对比；设计规格已提交 `b1441c6`，实现尚未开始。
+- 上游完整 MuJoCo package 已按固定 commit 原样复制到 `third_party/robotarm_ros2_mujoco_snapshot/`；`diff -qr` 与 `/home/a/project/rebot_refer/src/rebotarm_simulation` 无差异，provenance manifest 和 localization README 已加入。该目录不在默认 `src/`，仍受 `PROVISIONAL` license 边界限制。
+- A/B 对比已完成：两套 health/headless 均通过；current `nu=7/nsensor=0`，upstream `nu=8/nsensor=26`；1 秒 step-response 的 max final error 为 `0.7860` vs `0.6443 rad`，max velocity 为 `4.0664` vs `1.9567 rad/s`；两套 grasp smoke 均 contact 但均无 lift success。完整 JSON/解释见 `Agent/evidence/P1/2026-08-07-baseline-comparison.{json,md}`。
+- 第二轮 command-level 对比已完成：两套 backend 接收同一六轴目标 `[1.4,-0.785,-0.785,0.710,0.785,1.570] rad` 与 `gripper_width=0.04 m`。Current adapter 的 max final error / max velocity 为 `0.7930 rad` / `5.2087 rad/s`，上游 native runtime 为 `0.3611 rad` / `1.9563 rad/s`；该结果只说明现有控制器响应差异，不能证明模型可直接替换。证据：`Agent/evidence/P1/2026-08-07-baseline-comparison-command-contract.json`，并已合并到主对比 JSON/Markdown。
 
 ## 当前决策
 
@@ -69,6 +72,9 @@
 - 2026-08-07：完成第一个选择性本地化项 health check；新增 finite-state 检查器和 CLI，当前 MuJoCo 专项 `34 passed, 4 skipped`，全量 `489 passed, 4 skipped`。
 - 2026-08-07：完成 URDF-to-MJCF/model 接口审查；确认 actuator、sensor、scene contract 不同，暂不整体迁移上游模型。
 - 2026-08-07：用户确认完整上游本地快照方案；已提交 `docs/superpowers/specs/2026-08-07-upstream-full-localization-design.md`，等待用户审阅后再写实施计划。
+- 2026-08-07：完成 upstream MuJoCo 完整快照本地化；provenance test `2 passed`、package diff clean，准备添加隔离 runner 和 A/B harness。
+- 2026-08-07：完成隔离 runner 与 A/B harness；current/upstream health、model、1 秒 trajectory、gripper/contact 和 upstream test summary 已写入可复核报告。
+- 2026-08-07：完成同一 command contract 复测；保留 actuator/controller contract 差异，未覆盖默认模型或上游快照。
 - 2026-08-06：P0 现场已清理：停止 disabled driver/controller 与 ROS 2 daemon，串口无占用；清除源码 Python/pytest 和临时 channel override 缓存，保留构建、安装、日志和验收证据。
 - 2026-08-06：P1 preflight 定位本机候选上游 `master@bcd584ce...`，嵌套 repo clean；MuJoCo 3.3.0 import 和 ROS package prefix 正常，但 license 文件缺失且 venv `pip check` 暴露两项依赖问题。
 - 2026-08-06：P0 Gate B/C 真机报告 `gate-bc-20260806-211949.json` 为 PASSED：10 秒 hold、222 个 joint samples，最大位置跳变 `0.000381 rad < 0.03 rad`，最大绝对速度 `0.007326 rad/s < 0.05 rad/s`；enable/disable 均成功，最终六轴 status 0、`enabled=false`、控制循环停止。随后独立读取 `/rebotarm/arm_status` 再次确认安全失能。

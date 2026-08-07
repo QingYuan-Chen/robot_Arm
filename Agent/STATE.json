@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-07T13:52:42+08:00",
+  "plan_source": "新项目规划.md",
+  "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
+  "overall_completion_percent": 47.6,
+  "active_phase": "P1 MuJoCo 基线巩固与差距整合",
+  "phases": [
+    {
+      "id": "P0",
+      "name": "机械臂安全启动与执行门控",
+      "weight": 20,
+      "completed_items": 7,
+      "total_items": 7,
+      "completion_percent": 100.0
+    },
+    {
+      "id": "P1",
+      "name": "MuJoCo 基线巩固与差距整合",
+      "weight": 20,
+      "completed_items": 11,
+      "total_items": 16,
+      "completion_percent": 68.8
+    },
+    {
+      "id": "P2",
+      "name": "Gemini 2 SDK 与真实 RGB-D 验收",
+      "weight": 15,
+      "completed_items": 2,
+      "total_items": 8,
+      "completion_percent": 25.0
+    },
+    {
+      "id": "P3",
+      "name": "完整单 Ubuntu 视觉链路",
+      "weight": 15,
+      "completed_items": 2,
+      "total_items": 7,
+      "completion_percent": 28.6
+    },
+    {
+      "id": "P4",
+      "name": "Ubuntu 本地 GraspNet",
+      "weight": 10,
+      "completed_items": 2,
+      "total_items": 7,
+      "completion_percent": 28.6
+    },
+    {
+      "id": "P5",
+      "name": "标定",
+      "weight": 10,
+      "completed_items": 1,
+      "total_items": 6,
+      "completion_percent": 16.7
+    },
+    {
+      "id": "P6",
+      "name": "系统集成与最终验收",
+      "weight": 10,
+      "completed_items": 1,
+      "total_items": 8,
+      "completion_percent": 12.5
+    }
+  ],
+  "blockers": [
+    "P2：真实 Gemini 2 RGB-D、SDK 标定和 depth scale 缺少当前 Ubuntu 硬件验收证据。",
+    "P4：Ubuntu 本地 GraspNet 环境、依赖和服务尚未建立。",
+    "P5：当前实际安装的 hand-eye 和 TCP 数据尚未标定。",
+    "P1：上游独立测试已在用户提供的 clean 快照上运行；health/headless 通过，但 `test_saved_integration_state_replays_deterministically` 因嵌套 mapping/tuple 的 `pytest.approx` 断言失败，需上游修正或本地化时隔离。"
+  ],
+  "next_actions": [
+    "[已完成] P1：固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`。",
+    "[已完成] P1：独立运行上游 health/headless/model/ROS/motor/collision 测试，形成双基线差异报告；报告已形成，上游重放断言保留为 `test_defect`，不宣称上游全绿。",
+    "[进行中] P1：选择性本地化上游模型、URDF-to-MJCF、motor control、health check 和 viewer 能力；health check 已本地化，模型/转换器已完成接口审查，隔离 runner、快照和同一 command contract 对比已完成，默认模型暂不替换，motor/viewer 仍待逐项审查。",
+    "P1：将 timeout 接入执行循环；",
+    "P1：补 execute-loop 成功、取消、停止、容差失败和超时集成测试；",
+    "P1：补齐 effort、velocity、acceleration、jerk 限制一致性；",
+    "P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定。"
+  ],
+  "git": {
+    "branch": "codex/mujoco-sim-landing",
+    "head": "098fa3b",
+    "working_tree_dirty": true
+  },
+  "last_event": "- 2026-08-07T13:52:42+08:00 | actor=Codex | event=checkpoint | note=P1 同一 command contract 对比完成；499 tests passed, 5 skipped；保留 actuator/controller 差异，未替换默认模型 | verification=-"
+}

@@ -1,0 +1,40 @@
+# Agent Activity Log
+
+本文件由 `Agent/update_state.py` 追加。格式：时间、actor、event、note、verification。
+- 2026-08-06T16:53:21+08:00 | actor=Codex | event=checkpoint | note=初始化 Agent 持久化工作区并建立当前规划完成度基线 | verification=docs links and fences ok; package layering 18 passed; prior architecture and MuJoCo subset 44 passed
+- 2026-08-06T16:54:17+08:00 | actor=Codex | event=verified | note=Agent 实时状态、完成度计算和更新执行流程已建立并验证 | verification=python3 -m pytest tests -q: 464 passed, 3 skipped; compileall passed
+- 2026-08-06T17:15:36+08:00 | actor=Codex | event=start | note=开始准备 P0 机械臂安全启动与执行门控，先向用户展示执行规划 | verification=-
+- 2026-08-06T20:07:27+08:00 | actor=Codex | event=start | note=开始实施 P0：连接与使能解耦、隐式使能清理、安全 launch 默认值和回滚测试 | verification=-
+- 2026-08-06T20:22:11+08:00 | actor=Codex | event=checkpoint | note=P0 软件安全门实现完成：连接失能、显式使能、反馈与软限位校验、当前位置 hold、失败回滚、动作拒绝和安全 launch 默认值 | verification=P0 focused tests 10 passed; layering and launch cleanup previously passed
+- 2026-08-06T20:24:11+08:00 | actor=Codex | event=verified | note=P0 软件实施与自动化验收完成，保留真机分级验收为最后一项 | verification=475 passed, 3 skipped; required compileall passed; git diff --check passed
+- 2026-08-06T20:34:00+08:00 | actor=Codex | event=blocked | note=P0 Gate A 未进入连接流程：用户 a 缺少 /dev/ttyACM0 所属 dialout 组权限 | verification=device root:dialout 0660; user groups exclude dialout; lsof/fuser empty
+- 2026-08-06T20:42:02+08:00 | actor=Codex | event=checkpoint | note=P0 Gate A 串口权限已通过专用 udev rule 修复 | verification=/dev/ttyACM0 root:plugdev 0660; current user read/write passed; rule test matched VID/PID/serial
+- 2026-08-06T20:49:17+08:00 | actor=Codex | event=verified | note=P0 Gate A 真机只连接失能验收通过；修复串口桥逐电机反馈收集 | verification=CONNECTED_DISABLED; status codes all 0; enabled false; control loop false; joint states 19.999 Hz; 477 passed, 3 skipped
+- 2026-08-06T20:51:56+08:00 | actor=Codex | event=start | note=准备 P0 Gate B/C 交互式真机验收工具：显式确认、hold 监控、自动 disable 和 JSON 证据 | verification=Gate A passed; no enable will be called during preparation
+- 2026-08-06T20:57:58+08:00 | actor=Codex | event=verified | note=P0 Gate B/C 交互式验收工具准备完成；尚未执行 enable | verification=482 passed, 3 skipped; colcon build passed; console help passed; compileall and diff check passed
+- 2026-08-06T21:05:37+08:00 | actor=Codex | event=blocked | note=P0 Gate B 首次验收 fail closed：夹爪未使能且报告捕获瞬时异常反馈；已完成软件修正，等待现场运动观察确认后重试 | verification=final status all 0; enabled false; control loop false; cleanup stop/disable succeeded; 483 passed, 3 skipped
+- 2026-08-06T21:18:16+08:00 | actor=Codex | event=verified | note=P0 Gate B 固定边界反馈诊断与总线事务隔离修复完成；等待重启旧 driver 后单次真机复测 | verification=P0 focused 21 passed; full 485 passed, 3 skipped; compileall passed; rebotarmcontroller colcon build passed; no hardware enable during build
+- 2026-08-06T21:21:16+08:00 | actor=Codex | event=complete | note=P0 分级真机验收全部通过，阶段完成并切换到 P1 | verification=Gate B/C gate-bc-20260806-211949 PASSED; 222 samples; max jump 0.000381 rad; max speed 0.007326 rad/s; final and independent status disabled/all zero
+- 2026-08-06T21:27:28+08:00 | actor=Codex | event=checkpoint | note=P0 清场、问题闭环记录和 P1 preflight 完成 | verification=driver/controller stopped; serial free; caches cleared; upstream pinned locally; license gap and venv dependency conflicts recorded; MuJoCo 3.3.0 import passed
+- 2026-08-06T21:51:00+08:00 | actor=Codex | event=verified | note=P1 授权和 MuJoCo 环境风险已修复 | verification=package-owned Apache model; HJX NOASSERTION quarantined; pip check passed; MuJoCo 36 passed; full 486 passed, 3 skipped; colcon and compileall passed
+- 2026-08-06T23:02:57+08:00 | actor=Codex | event=start | note=开始执行 P1：建立 current/upstream capability gap matrix | verification=-
+- 2026-08-06T23:06:14+08:00 | actor=Codex | event=verified | note=P1 current/upstream gap matrix 完成，进入 grasp scene keyframe 修正 | verification=python3 -m pytest tests/test_mujoco_gap_matrix.py -q; python3 -m pytest tests/test_package_layering.py -q; python3 -m pytest tests -q; python3 -m compileall src/rebotarm_dashboard/rebotarm_dashboard src/rebotarm_teleop/rebotarm_teleop src/rebotarm_teach/rebotarm_teach src/rebotarm_motion/rebotarm_motion src/rebotarm_interactive_control/rebotarm_interactive_control -q; python3 -m compileall src/rebotarm_bringup/launch -q; git diff --check
+- 2026-08-06T23:06:43+08:00 | actor=Codex | event=checkpoint | note=P1 执行队列已推进到 grasp scene keyframe 修正 | verification=-
+- 2026-08-06T23:14:59+08:00 | actor=Codex | event=start | note=返回当前基线，开始 P1 grasp scene keyframe 修正 | verification=-
+- 2026-08-06T23:24:35+08:00 | actor=Codex | event=verified | note=P1 grasp scene keyframe 已修正，下一步进入 timeout 执行循环 | verification=PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m pytest tests/test_mujoco_*.py -q; python3 -m pytest tests/test_package_layering.py -q; python3 -m pytest tests -q; python3 -m compileall src/rebotarm_dashboard/rebotarm_dashboard src/rebotarm_teleop/rebotarm_teleop src/rebotarm_teach/rebotarm_teach src/rebotarm_motion/rebotarm_motion src/rebotarm_interactive_control/rebotarm_interactive_control -q; python3 -m compileall src/rebotarm_bringup/launch -q; git diff --check
+- 2026-08-06T23:37:16+08:00 | actor=Codex | event=start | note=重新规划 P1：引入 huangbinai/robotarm_ros2 MuJoCo 迁移候选并保持双基线验证 | verification=-
+- 2026-08-06T23:41:38+08:00 | actor=Codex | event=checkpoint | note=P1 已切换为 robotarm_ros2 upstream-first 迁移规划，当前实现保留为 fallback | verification=-
+- 2026-08-06T23:43:58+08:00 | actor=Codex | event=start | note=P1 upstream-first：固定 robotarm_ros2 快照并执行来源/文件/授权预检 | verification=-
+- 2026-08-06T23:54:52+08:00 | actor=Codex | event=start | note=使用 /home/a/project/rebot_refer 固定 robotarm_ros2 快照进行 P1 独立预检 | verification=-
+- 2026-08-06T23:59:42+08:00 | actor=Codex | event=checkpoint | note=完成 robotarm_ros2 本机快照、目标文件清单和授权风险审计；health/headless 通过，独立测试保留 1 个上游断言缺陷 | verification=upstream 219 passed, 1 skipped, 1 failed; health ok=true; headless duration=1
+- 2026-08-07T00:01:40+08:00 | actor=Codex | event=blocked | note=双基线报告完成；上游保存状态重放测试的 pytest.approx 嵌套 mapping/tuple 断言失败，需修正或隔离后才能完成独立测试验收项 | verification=current MuJoCo 36 passed; upstream 219 passed, 1 skipped, 1 failed; health/headless passed
+- 2026-08-07T12:59:36+08:00 | actor=Codex | event=start | note=继续 P1：隔离上游重放断言缺陷并进行选择性本地化前的逐文件映射 | verification=-
+- 2026-08-07T13:03:02+08:00 | actor=Codex | event=checkpoint | note=选择性本地化完成首项 health check；保持 package-owned 模型和接口边界 | verification=health tests 2 passed; current MuJoCo 34 passed, 4 skipped; full tests 489 passed, 4 skipped; layering 18 passed; compileall and diff check passed
+- 2026-08-07T13:05:50+08:00 | actor=Codex | event=start | note=P1 继续：审查 robotarm_ros2 URDF-to-MJCF 与当前模型生成器，准备第二个选择性本地化项 | verification=-
+- 2026-08-07T13:07:25+08:00 | actor=Codex | event=checkpoint | note=完成 URDF-to-MJCF/model 接口审查；确认上游 nu=8 与当前 nu=7 夹爪契约不同，暂不整体替换 | verification=current generated nq=8,nv=8,nu=7; upstream robot nq=8,nv=8,nu=8,nsensor=26; targeted tests 3 passed
+- 2026-08-07T13:13:17+08:00 | actor=Codex | event=start | note=获得 A 方案确认：设计完整 upstream MuJoCo 本地快照与独立对比 workspace | verification=-
+- 2026-08-07T13:15:01+08:00 | actor=Codex | event=checkpoint | note=A 方案设计规格已提交，等待用户审阅；实现仍未开始 | verification=spec self-review passed; commit b1441c6
+- 2026-08-07T13:42:03+08:00 | actor=Codex | event=verified | note=完成 upstream MuJoCo 快照本地化、隔离 runner、A/B harness 与对比报告；当前 baseline 保持默认 | verification=snapshot provenance 2 passed; runner/comparison 9 passed; layering 18 passed; full tests 497 passed, 5 skipped; upstream 219 passed, 1 skipped, 1 test_defect; health/headless/trajectory/gripper-contact comparison written
+- 2026-08-07T13:43:05+08:00 | actor=Codex | event=checkpoint | note=对比实现已提交；当前 baseline 未被覆盖，快照与 harness 位于独立路径 | verification=commit 098fa3b; full tests 497 passed, 5 skipped; A/B report JSON/MD present
+- 2026-08-07T13:46:28+08:00 | actor=Codex | event=start | note=P1 继续：建立同一目标轨迹的 command-level comparison benchmark | verification=-
+- 2026-08-07T13:52:42+08:00 | actor=Codex | event=checkpoint | note=P1 同一 command contract 对比完成；499 tests passed, 5 skipped；保留 actuator/controller 差异，未替换默认模型 | verification=-
