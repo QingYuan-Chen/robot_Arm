@@ -51,4 +51,23 @@ P1 tracking/collision/contact calibration remains open pending a decision on whe
 URDF effort values are authoritative or whether a separately evidenced MuJoCo calibration profile
 is allowed.
 
+## Approved upstream arm force profile check
+
+After approval, an isolated `upstream_arm` profile was generated with joint4-6
+`forcerange=-12.5 12.5` while retaining the current position-actuator controller, geometry,
+gains, damping, and reset state. The same 3-second linear ramp produced:
+
+```text
+joint4 final error 0.343706 rad, max force 12.5
+joint5 final error 0.784344 rad, max force 12.5
+joint6 final error 0.034275 rad, max force 8.9793
+```
+
+The joint4/joint5 errors were unchanged from the ±7 current profile. Therefore the upstream force
+ceiling alone is not the reason for the upstream baseline's better tracking. The effective
+difference is the full upstream torque-control path: cascaded position/velocity control, gravity
+compensation, torque rate limiting/filtering, and upstream dynamics. The upstream controller also
+clips commanded joint4-6 torque using URDF effort=7 even though its MuJoCo actuator XML allows
+±12.5, so copying only the XML actuator ceiling cannot reproduce upstream behavior.
+
 No hardware channel was opened and no real trajectory or gripper command was sent.

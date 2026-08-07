@@ -19,6 +19,7 @@ def generate_launch_description():
     publish_rate_hz = LaunchConfiguration("publish_rate_hz")
     execution_timeout_margin_sec = LaunchConfiguration("execution_timeout_margin_sec")
     joint_limits_yaml = LaunchConfiguration("joint_limits_yaml")
+    motor_profile = LaunchConfiguration("motor_profile")
     python_executable = LaunchConfiguration("python_executable")
     use_rviz = LaunchConfiguration("use_rviz")
 
@@ -37,6 +38,7 @@ def generate_launch_description():
                 "joint_limits_yaml",
                 default_value="src/rebotarm_moveit_config/config/joint_limits.yaml",
             ),
+            DeclareLaunchArgument("motor_profile", default_value="current"),
             DeclareLaunchArgument("python_executable", default_value="third_party/rebotarm_mujoco_venv/bin/python"),
             Node(
                 package="rebotarm_simulation",
@@ -55,6 +57,7 @@ def generate_launch_description():
                         "publish_rate_hz": publish_rate_hz,
                         "execution_timeout_margin_sec": execution_timeout_margin_sec,
                         "joint_limits_yaml": joint_limits_yaml,
+                        "motor_profile": motor_profile,
                     }
                 ],
             ),

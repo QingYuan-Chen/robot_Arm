@@ -49,6 +49,7 @@
 - P1 execute-loop integration 已补齐：在 ROS 2 + MuJoCo venv 下 success、cancel、stop、path tolerance、goal tolerance、timeout 六种结果均通过，并验证失败路径 hold 当前姿态；证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。系统 Python 因缺少 `rebotarm_msgs`/MuJoCo 会跳过该组测试，不能替代显式环境验收。
 - P1 limit consistency 已补齐：URDF arm effort 与生成 MuJoCo `forcerange` 为 joint1-3=27、joint4-6=7；MoveIt planner velocity 为 joint1-3=3.0、joint4-6=1.8，均低于 URDF 50/200 硬件上限；acceleration=5.0、jerk=20.0 由 `rebotarm_motion` runtime guard 对实测 velocity/effort 做有限差分检查，违规 abort 并 hold。gripper effort 不做跨 contract 等式比较。证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
 - 3 秒线性 ramp tracking audit 发现当前 joint4/joint5 仍有 `0.3437/0.7843 rad` 最终误差，joint5 峰值速度 `3.7198 rad/s`；上游同一高层命令原生 controller 的最大最终误差 `0.005234 rad`。当前 joint4-6 `forcerange=±7`，上游 arm torque limit 为 `±12.5`；在没有真实硬件证据前不自动提高当前力限或改 gains。证据：`Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`。
+- 用户确认上游 arm force limit 可采用；已增加隔离 `UPSTREAM_ARM_MOTOR_PROFILES` / `motor_profile:=upstream_arm`，但在保留当前 position-actuator controller、gains 和 dynamics 的前提下，仅把 joint4-6 XML forcerange 改为 ±12.5，joint4/joint5 tracking residual 仍为 `0.3437/0.7843 rad`。因此上游优势来自完整 cascaded torque controller、gravity compensation、rate limiting/filtering 和 dynamics，不是 XML force ceiling 单项；未覆盖当前默认 profile。
 
 ## 当前决策
 

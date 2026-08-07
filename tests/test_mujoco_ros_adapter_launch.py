@@ -50,6 +50,8 @@ def test_mujoco_ros_adapter_node_owns_required_ros_interfaces():
     assert '"goal_tolerance_rad"' in node_text
     assert '"execution_timeout_margin_sec"' in node_text
     assert '"joint_limits_yaml"' in node_text
+    assert '"motor_profile"' in node_text
+    assert "UPSTREAM_ARM_MOTOR_PROFILES" in node_text
     assert "TrajectoryRuntimeLimitGuard" in node_text
     assert 'stop_reason = "runtime_limit_violated"' in node_text
     assert "execution_timeout_seconds" in node_text

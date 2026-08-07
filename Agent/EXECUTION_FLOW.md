@@ -8,7 +8,7 @@
 4. [已完成] P1：将 timeout 接入执行循环；monotonic deadline、非成功结果和失败 hold cleanup 已实现并通过测试。
 5. [已完成] P1：补 execute-loop 成功、取消、停止、path/goal 容差失败和超时集成测试；ROS 2 + MuJoCo harness 6/6 通过。
 6. [已完成] P1：补齐 effort、velocity、acceleration、jerk 限制一致性；URDF/MuJoCo effort、MoveIt planner limits 和 runtime guard 已联通，证据已写入 P1。
-7. [待审核] P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 已确认当前 joint4/joint5 大残差，需确认 URDF effort 是否为最终约束，或批准独立 MuJoCo calibration profile 后再调参。
+7. [待审核] P1：完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；用户已批准上游 arm force limit，隔离 profile 已验证但仅改 forcerange 无法改善 joint4/joint5，下一决策是继续保留当前 controller，还是隔离引入 upstream cascaded torque controller/dynamics。
 
 ## 每次任务开始
 

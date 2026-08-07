@@ -31,6 +31,7 @@ from rebotarm_motion.trajectory_runtime_limits import (
 )
 from .mujoco_metrics import TrajectoryMetricsRecorder
 from .mujoco_model_profile import DEFAULT_GRIPPER_XML, write_physics_profile, xml_asset_references_are_readable
+from .mujoco_model_profile import MOTOR_PROFILES, UPSTREAM_ARM_MOTOR_PROFILES
 
 
 class MuJoCoRosAdapterNode(Node):
@@ -54,6 +55,7 @@ class MuJoCoRosAdapterNode(Node):
             "joint_limits_yaml",
             "src/rebotarm_moveit_config/config/joint_limits.yaml",
         )
+        self.declare_parameter("motor_profile", "current")
         self.declare_parameter("metrics_sample_stride", 1)
         self.declare_parameter("use_mujoco_viewer", False)
 
@@ -130,7 +132,14 @@ class MuJoCoRosAdapterNode(Node):
             raise FileNotFoundError(f"MuJoCo model XML does not exist: {model_xml}")
         source_xml = Path(str(self.get_parameter("source_xml").value))
         self.get_logger().info(f"generating MuJoCo model XML at {model_xml}")
-        return write_physics_profile(model_xml, source_xml)
+        profile_name = str(self.get_parameter("motor_profile").value).strip().lower()
+        if profile_name == "current":
+            motor_profiles = MOTOR_PROFILES
+        elif profile_name == "upstream_arm":
+            motor_profiles = UPSTREAM_ARM_MOTOR_PROFILES
+        else:
+            raise ValueError("motor_profile must be 'current' or 'upstream_arm'")
+        return write_physics_profile(model_xml, source_xml, motor_profiles=motor_profiles)
 
     def _build_runtime_limit_guard(self) -> TrajectoryRuntimeLimitGuard:
         configured = Path(str(self.get_parameter("joint_limits_yaml").value))

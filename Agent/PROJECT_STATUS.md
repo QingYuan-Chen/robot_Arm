@@ -40,7 +40,7 @@
 - [x] 将 timeout 接入执行循环；使用 monotonic wall-clock deadline，超时返回非成功结果并 hold 当前位置，证据：`tests/test_mujoco_adapter_core.py`、`tests/test_mujoco_ros_adapter_launch.py`。
 - [x] execute-loop 集成测试覆盖成功、取消、停止、path/goal 容差失败和超时；ROS 2 + MuJoCo 环境 `6 passed`，证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。
 - [x] 补齐 effort、velocity、acceleration 和 jerk 限制一致性；URDF effort / MuJoCo forcerange 一致，MoveIt planner limits 保守且由 `rebotarm_motion` runtime guard 执行，证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
-- [ ] 完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 仍显示 joint4/joint5 大残差，详见 `Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`，等待 effort/calibration profile 决策。
+- [ ] 完成 joint4-6 跟踪、collision、夹爪接触和抓取质量标定；3 秒线性 ramp 仍显示 joint4/joint5 大残差，孤立上游 ±12.5 force profile 单独无改善，详见 `Agent/evidence/P1/2026-08-07-joint4-6-tracking-audit.md`，等待 full controller/dynamics profile 决策。
 
 ## P2: Gemini 2 SDK 与真实 RGB-D 验收 [weight=15]
 

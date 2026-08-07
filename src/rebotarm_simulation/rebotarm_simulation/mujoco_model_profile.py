@@ -6,24 +6,27 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_GRIPPER_XML = (
-    ROOT
-    / "third_party"
-    / "reBotArm_develop_hjx"
-    / "mujoco"
-    / "xml"
-    / "rebot_gripper"
-    / "reBot-DevArm_gripper.xml"
-)
-DEFAULT_GRASP_SCENE_XML = (
-    ROOT
-    / "third_party"
-    / "reBotArm_develop_hjx"
-    / "mujoco"
-    / "xml"
-    / "rebot_gripper"
-    / "sim_reBot_grasp.xml"
-)
+ASSET_DIR = Path(__file__).resolve().parent / "assets"
+DEFAULT_GRIPPER_XML = ASSET_DIR / "rebotarm_base.xml"
+DEFAULT_GRASP_SCENE_XML = ASSET_DIR / "rebotarm_grasp_scene.xml"
+
+
+def _default_mesh_dir() -> Path:
+    source_meshes = (
+        ROOT / "src" / "rebotarm_bringup" / "description" / "meshes"
+    )
+    if source_meshes.is_dir():
+        return source_meshes
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        return (
+            Path(get_package_share_directory("rebotarm_bringup"))
+            / "description"
+            / "meshes"
+        )
+    except Exception:
+        return source_meshes
 
 
 @dataclass(frozen=True)
@@ -57,7 +60,7 @@ COLLISION_GEOMS = [
     CollisionGeom("link4", "link4_collision", "box", "0.08 0.04 0.04", "0.055 -0.04 -0.02"),
     CollisionGeom("link5", "link5_collision", "cylinder", "0.045 0.055", "0 0 0.035"),
     CollisionGeom("link6", "link6_collision", "cylinder", "0.045 0.065", "0 0 0.06"),
-    CollisionGeom("link6", "gripper_base_collision", "box", "0.06 0.045 0.035", "0 0 0.155"),
+    CollisionGeom("end_link", "gripper_base_collision", "box", "0.06 0.045 0.035"),
     CollisionGeom(
         "left_finger_link",
         "left_finger_pad_collision",
@@ -93,6 +96,19 @@ MOTOR_PROFILES = [
     MotorProfile("left_finger", "0 0.045", "-20 20", "600", "60"),
 ]
 
+# Isolated simulation-only calibration candidate.  This follows the upstream
+# arm torque limits for joint4-6 while keeping the current position-actuator
+# controller and gripper contract.  It must never be used for hardware limits.
+UPSTREAM_ARM_MOTOR_PROFILES = [
+    MotorProfile("joint1", "-2.8 2.8", "-27 27", "270", "24"),
+    MotorProfile("joint2", "-3.14 0", "-27 27", "270", "24"),
+    MotorProfile("joint3", "-3.14 0", "-27 27", "270", "24"),
+    MotorProfile("joint4", "-1.87 1.57", "-12.5 12.5", "70", "10"),
+    MotorProfile("joint5", "-1.57 1.57", "-12.5 12.5", "70", "10"),
+    MotorProfile("joint6", "-3.14 3.14", "-12.5 12.5", "70", "10"),
+    MotorProfile("left_finger", "0 0.045", "-20 20", "600", "60"),
+]
+
 
 ADJACENT_BODY_EXCLUDES = [
     ("base_link", "link1"),
@@ -101,8 +117,9 @@ ADJACENT_BODY_EXCLUDES = [
     ("link3", "link4"),
     ("link4", "link5"),
     ("link5", "link6"),
-    ("link6", "left_finger_link"),
-    ("link6", "right_finger_link"),
+    ("link6", "end_link"),
+    ("end_link", "left_finger_link"),
+    ("end_link", "right_finger_link"),
     ("left_finger_link", "right_finger_link"),
 ]
 
@@ -111,6 +128,7 @@ def build_physics_profile_tree(
     source_xml: Path = DEFAULT_GRIPPER_XML,
     *,
     include_keyframes: bool = True,
+    motor_profiles: list[MotorProfile] = MOTOR_PROFILES,
 ) -> ET.ElementTree:
     source_xml = source_xml.resolve()
     tree = ET.parse(source_xml)
@@ -119,7 +137,7 @@ def build_physics_profile_tree(
     _make_asset_files_absolute(root, source_xml.parent)
     _mark_mesh_geoms_as_visual(root)
     _add_collision_geoms(root)
-    _tune_actuators(root)
+    _tune_actuators(root, motor_profiles)
     _add_contact_excludes(root)
     if include_keyframes:
         _add_keyframes(root)
@@ -133,10 +151,15 @@ def write_physics_profile(
     source_xml: Path = DEFAULT_GRIPPER_XML,
     *,
     include_keyframes: bool = True,
+    motor_profiles: list[MotorProfile] = MOTOR_PROFILES,
 ) -> Path:
     output_xml = output_xml.resolve()
     output_xml.parent.mkdir(parents=True, exist_ok=True)
-    tree = build_physics_profile_tree(source_xml, include_keyframes=include_keyframes)
+    tree = build_physics_profile_tree(
+        source_xml,
+        include_keyframes=include_keyframes,
+        motor_profiles=motor_profiles,
+    )
     ET.indent(tree, space="  ")
     tree.write(output_xml, encoding="utf-8", xml_declaration=True)
     return output_xml
@@ -181,13 +204,17 @@ def xml_asset_references_are_readable(xml_path: Path) -> bool:
 
 
 def _make_asset_files_absolute(root: ET.Element, asset_dir: Path) -> None:
+    mesh_dir = _default_mesh_dir()
     for mesh in root.findall(".//mesh"):
         file_name = mesh.get("file")
         if not file_name:
             continue
         asset_path = Path(file_name)
         if not asset_path.is_absolute():
-            mesh.set("file", str((asset_dir / asset_path).resolve()))
+            local_asset = asset_dir / asset_path
+            if not local_asset.exists():
+                local_asset = mesh_dir / asset_path.name
+            mesh.set("file", str(local_asset.resolve()))
     for texture in root.findall(".//texture"):
         file_name = texture.get("file")
         if not file_name:
@@ -209,6 +236,7 @@ def _mark_mesh_geoms_as_visual(root: ET.Element) -> None:
         geom.set("contype", "0")
         geom.set("conaffinity", "0")
         geom.set("group", "1")
+        geom.set("density", "0")
 
 
 def _add_collision_geoms(root: ET.Element) -> None:
@@ -234,8 +262,8 @@ def _add_collision_geoms(root: ET.Element) -> None:
             geom.set("solimp", spec.solimp)
 
 
-def _tune_actuators(root: ET.Element) -> None:
-    profiles = {profile.joint: profile for profile in MOTOR_PROFILES}
+def _tune_actuators(root: ET.Element, motor_profiles: list[MotorProfile]) -> None:
+    profiles = {profile.joint: profile for profile in motor_profiles}
     for actuator in root.findall(".//actuator/position"):
         joint = actuator.get("joint")
         if joint not in profiles:
@@ -274,12 +302,12 @@ def _add_keyframes(root: ET.Element) -> None:
     if keyframe.find("./key[@name='zero']") is None:
         key = ET.SubElement(keyframe, "key")
         key.set("name", "zero")
-        key.set("qpos", "0 -0.4 -1.0 0.4 0 0 0.035 0.035")
+        key.set("qpos", "0 -0.4 -1.0 0.4 0 0 0.035 -0.035")
         key.set("ctrl", "0 -0.4 -1.0 0.4 0 0 0.035")
     if keyframe.find("./key[@name='home']") is None:
         key = ET.SubElement(keyframe, "key")
         key.set("name", "home")
-        key.set("qpos", "0 -0.8 -1.2 0.6 0 0 0.04 0.04")
+        key.set("qpos", "0 -0.8 -1.2 0.6 0 0 0.04 -0.04")
         key.set("ctrl", "0 -0.8 -1.2 0.6 0 0 0.04")
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -24,6 +25,25 @@ def test_physics_profile_marks_mesh_geoms_as_visual_only():
     assert all(geom.get("contype") == "0" for geom in mesh_geoms)
     assert all(geom.get("conaffinity") == "0" for geom in mesh_geoms)
     assert all(geom.get("group") == "1" for geom in mesh_geoms)
+    assert all(geom.get("density") == "0" for geom in mesh_geoms)
+
+
+def test_default_model_sources_are_project_owned_and_not_hjx_assets():
+    from rebotarm_simulation.mujoco_model_profile import (
+        DEFAULT_GRASP_SCENE_XML,
+        DEFAULT_GRIPPER_XML,
+    )
+
+    for source in (DEFAULT_GRIPPER_XML, DEFAULT_GRASP_SCENE_XML):
+        assert source.exists()
+        assert "rebotarm_simulation/assets" in source.as_posix()
+        assert "reBotArm_develop_hjx" not in source.as_posix()
+
+    module_text = (
+        ROOT
+        / "src/rebotarm_simulation/rebotarm_simulation/mujoco_model_profile.py"
+    ).read_text(encoding="utf-8")
+    assert "reBotArm_develop_hjx" not in module_text
 
 
 def test_physics_profile_adds_simplified_collision_geoms():
@@ -61,6 +81,34 @@ def test_physics_profile_uses_urdf_aligned_motor_ranges_and_forces():
     assert actuators["left_finger"].get("forcerange") == "-20 20"
 
 
+def test_upstream_arm_force_profile_is_explicit_and_keeps_default_baseline_unchanged():
+    from rebotarm_simulation.mujoco_model_profile import (
+        DEFAULT_GRIPPER_XML,
+        UPSTREAM_ARM_MOTOR_PROFILES,
+        build_physics_profile_tree,
+    )
+
+    current = build_physics_profile_tree(DEFAULT_GRIPPER_XML).getroot()
+    upstream_arm = build_physics_profile_tree(
+        DEFAULT_GRIPPER_XML,
+        motor_profiles=UPSTREAM_ARM_MOTOR_PROFILES,
+    ).getroot()
+    current_actuators = {
+        actuator.get("joint"): actuator
+        for actuator in current.findall(".//actuator/position")
+    }
+    upstream_actuators = {
+        actuator.get("joint"): actuator
+        for actuator in upstream_arm.findall(".//actuator/position")
+    }
+
+    assert current_actuators["joint4"].get("forcerange") == "-7 7"
+    assert upstream_actuators["joint4"].get("forcerange") == "-12.5 12.5"
+    assert upstream_actuators["joint5"].get("forcerange") == "-12.5 12.5"
+    assert upstream_actuators["joint6"].get("forcerange") == "-12.5 12.5"
+    assert upstream_actuators["left_finger"].get("forcerange") == "-20 20"
+
+
 def test_write_profiles_reference_generated_robot_from_scene(tmp_path):
     from rebotarm_simulation.mujoco_model_profile import (
         DEFAULT_GRASP_SCENE_XML,
@@ -95,3 +143,17 @@ def test_model_profile_detects_missing_absolute_asset_references(tmp_path):
     )
 
     assert xml_asset_references_are_readable(stale_xml) is False
+
+
+def test_grasp_scene_keyframe_holds_home_pose_after_reset():
+    from rebotarm_simulation.mujoco_model_profile import DEFAULT_GRASP_SCENE_XML
+
+    key = ET.parse(DEFAULT_GRASP_SCENE_XML).getroot().find("./keyframe/key[@name='0']")
+    assert key is not None
+
+    qpos = [float(value) for value in key.get("qpos", "").split()]
+    ctrl = [float(value) for value in key.get("ctrl", "").split()]
+
+    assert qpos[:6] == [0.0, -0.8, -1.2, 0.6, 0.0, 0.0]
+    assert ctrl[:6] == qpos[:6]
+    assert len(ctrl) == 7
