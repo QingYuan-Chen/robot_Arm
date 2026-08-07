@@ -46,3 +46,4 @@
 - 2026-08-07T14:34:27+08:00 | actor=Codex | event=checkpoint | note=P1 execute-loop 集成六种结果已通过，success/cancel/stop/path-goal tolerance/timeout 覆盖完成 | verification=-
 - 2026-08-07T14:49:04+08:00 | actor=Codex | event=checkpoint | note=P1 runtime limits consistency 与 execute-loop integration 已完成；剩余 joint4-6 tracking/collision/grasp calibration | verification=-
 - 2026-08-07T14:53:09+08:00 | actor=Codex | event=blocked | note=P1 tracking audit found joint4/joint5 residual; stop for review of URDF effort authority versus separate MuJoCo calibration profile | verification=-
+- 2026-08-07T14:54:01+08:00 | actor=Codex | event=blocked | note=P1 代码与证据已提交；joint4/joint5 tracking calibration 暂停等待 effort authority 决策 | verification=-
