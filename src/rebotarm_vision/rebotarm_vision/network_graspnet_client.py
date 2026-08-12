@@ -26,13 +26,13 @@ class NetworkGraspNetClient:
                 payload = json.loads(response.read().decode("utf-8"))
             if not isinstance(payload, dict):
                 self._last_debug_message = "invalid_json_root"
-                return self._last_payload
+                return {"candidates": [], "backend_configured": False, "stale": True}
             self._last_payload = payload
             self._last_debug_message = f"ok candidates={len(payload.get('candidates', []))}"
             return payload
         except Exception as exc:
             self._last_debug_message = f"exception:{type(exc).__name__}:{exc}"
-            return self._last_payload
+            return {"candidates": [], "backend_configured": False, "stale": True}
 
     @property
     def last_debug_message(self) -> str:

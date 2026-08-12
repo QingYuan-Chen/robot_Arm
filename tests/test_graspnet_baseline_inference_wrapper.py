@@ -224,3 +224,18 @@ def test_graspnet_candidates_are_filtered_by_target_bbox_projection():
     assert len(candidates) == 1
     assert candidates[0]["score"] == pytest.approx(0.9)
     assert candidates[0]["target_filter"] == "yolo_projection"
+
+
+def test_training_knn_fallback_matches_legacy_one_based_indices():
+    pytest.importorskip("torch")
+    module = _load_wrapper()
+    module.sys.modules.pop("knn_modules", None)
+    module.install_training_knn_fallback()
+
+    import torch
+
+    ref = torch.tensor([[[0.0, 1.0, 3.0]]])
+    query = torch.tensor([[[0.1, 2.8]]])
+    indices = module.sys.modules["knn_modules"].knn(ref, query, k=1)
+
+    assert indices.tolist() == [[[1, 3]]]

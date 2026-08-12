@@ -49,6 +49,11 @@ class ArmActions:
         )
 
     def goal_callback(self, _goal_request):
+        if not self._hardware.ready_for_motion:
+            self._node.get_logger().warning(
+                "Rejecting motion goal: hardware is not explicitly enabled and ready"
+            )
+            return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
     def cancel_move_to_pose(self, _goal_handle):

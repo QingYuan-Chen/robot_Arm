@@ -27,7 +27,7 @@
         <geom type="mesh" mesh="link1" rgba="0.627451 0.627451 0.627451 1"/>
         <body name="link2" pos="0.020084 0.031625 0.05555" quat="0.707105 -0.707108 0 0">
           <inertial pos="-0.132256 -0.0030617 -0.0308307" quat="0.00176765 0.707354 0.00179466 0.706855" mass="1.3266" diaginertia="0.0128139 0.0125599 0.000733734"/>
-          <joint name="joint2" axis="0 0 -1" range="-3.14 0" damping="6" actuatorfrcrange="-27 27"/>
+          <joint name="joint2" axis="0 0 -1" range="-3.14 0.02" damping="6" actuatorfrcrange="-27 27"/>
           <geom type="mesh" mesh="link2" rgba="0.627451 0.627451 0.627451 1"/>
           <body name="link3" pos="-0.264 0 0">
             <inertial pos="0.12104 -0.0536211 -0.0310138" quat="-0.00138181 0.704593 0.00278372 0.709605" mass="0.8353" diaginertia="0.00648251 0.00632715 0.000467564"/>

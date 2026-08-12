@@ -9,8 +9,8 @@ rebotarm_visual_grasp_executor:
     visual_lift_check_enabled: false
     visual_lift_min_delta_m: 0.03
     place_after_grasp_enabled: false
-    place_position_xyz: [0.20, -0.20, 0.25]
-    place_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    place_position_xyz: [-0.20, -0.20, 0.25]
+    place_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
     place_open_position_m: 0.08
     place_open_max_effort: 0.25
     place_retreat_z_m: 0.06

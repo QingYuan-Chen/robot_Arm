@@ -15,6 +15,7 @@ from enum import Enum, auto
 from typing import Any, Sequence
 
 from .trajectory_sampler import ARM_JOINT_NAMES, NamedTrajectoryPoint, TrajectorySampler
+from .virtual_camera import VirtualCameraConfig, VirtualCameraWorker
 
 
 DEFAULT_MAX_TRAJECTORY_POINTS = 10_000
@@ -308,16 +309,19 @@ def create_node_class():
     """Import ROS lazily and return the concrete node class."""
     import rclpy
     from control_msgs.action import FollowJointTrajectory
+    from geometry_msgs.msg import TransformStamped
     from rclpy.action import ActionServer, CancelResponse, GoalResponse
     from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
     from rclpy.clock import Clock as RclpyClock
     from rclpy.clock import ClockType
     from rclpy.node import Node
-    from rebotarm_msgs.msg import JointMotorState
+    from rclpy.qos import qos_profile_sensor_data
+    from rebotarm_msgs.msg import Detection2D, Detection2DArray, JointMotorState
     from rebotarm_msgs.srv import SetGripper
     from rosgraph_msgs.msg import Clock
-    from sensor_msgs.msg import JointState
+    from sensor_msgs.msg import CameraInfo, Image, JointState
     from std_srvs.srv import Trigger
+    from tf2_ros import StaticTransformBroadcaster
     from trajectory_msgs.msg import JointTrajectoryPoint
 
     from .mujoco_sim import RebotArmMujoco
@@ -337,6 +341,21 @@ def create_node_class():
             self.declare_parameter("goal_velocity_tolerance", 0.05)
             self.declare_parameter("goal_time_tolerance_sec", 5.0)
             self.declare_parameter("feedback_rate_hz", 20.0)
+            self.declare_parameter("virtual_camera.enabled", False)
+            self.declare_parameter("virtual_camera.camera_name", "fixed_camera")
+            self.declare_parameter(
+                "virtual_camera.frame_id", "mujoco_fixed_camera_optical_frame"
+            )
+            self.declare_parameter("virtual_camera.parent_body_name", "base_link")
+            self.declare_parameter("virtual_camera.parent_frame_id", "base_link")
+            self.declare_parameter("virtual_camera.width", 640)
+            self.declare_parameter("virtual_camera.height", 480)
+            self.declare_parameter("virtual_camera.rate_hz", 15.0)
+            self.declare_parameter("virtual_camera.max_depth_m", 2.0)
+            self.declare_parameter("virtual_camera.annotation_bodies", ["bottle"])
+            self.declare_parameter(
+                "virtual_camera.annotation_topic", "/grasp/ground_truth_detections"
+            )
             if self.get_parameter("backend").value != "mujoco":
                 raise ValueError("simulation backend must be mujoco")
             if self.get_parameter("headless").value is not True:
@@ -371,7 +390,7 @@ def create_node_class():
             self._sim = RebotArmMujoco(model_path or None)
             self._lock = threading.RLock()
             self._sim_access = SerializedSimulationAccess(self._sim, self._lock)
-            self._sim_access.run(lambda sim: sim.set_joint_position_targets(initial))
+            self._sim_access.run(lambda sim: sim.reset_joint_positions(initial))
             # Gate/active lock is intentionally distinct. Lock order is always
             # gate first, then simulation; the timer only takes simulation.
             self._active = ActiveTrajectory()
@@ -382,6 +401,31 @@ def create_node_class():
             self._timer_callback_group = MutuallyExclusiveCallbackGroup()
             self._physics_clock = RclpyClock(clock_type=ClockType.STEADY_TIME)
             self._stamp = MonotonicStamp()
+            self._virtual_camera_worker = None
+            self._virtual_camera_config = None
+            self._next_virtual_camera_time = 0.0
+            if bool(self.get_parameter("virtual_camera.enabled").value):
+                self._virtual_camera_config = VirtualCameraConfig(
+                    camera_name=str(
+                        self.get_parameter("virtual_camera.camera_name").value
+                    ),
+                    frame_id=str(self.get_parameter("virtual_camera.frame_id").value),
+                    parent_body_name=str(
+                        self.get_parameter("virtual_camera.parent_body_name").value
+                    ),
+                    parent_frame_id=str(
+                        self.get_parameter("virtual_camera.parent_frame_id").value
+                    ),
+                    width=int(self.get_parameter("virtual_camera.width").value),
+                    height=int(self.get_parameter("virtual_camera.height").value),
+                    rate_hz=float(self.get_parameter("virtual_camera.rate_hz").value),
+                    max_depth_m=float(
+                        self.get_parameter("virtual_camera.max_depth_m").value
+                    ),
+                    annotation_bodies=tuple(
+                        self.get_parameter("virtual_camera.annotation_bodies").value
+                    ),
+                )
 
             self._joint_pub = self.create_publisher(
                 JointState, f"/{self._arm_namespace}/joint_states", 10
@@ -390,6 +434,49 @@ def create_node_class():
                 JointMotorState, f"/{self._arm_namespace}/gripper/state", 10
             )
             self._clock_pub = self.create_publisher(Clock, "/clock", 10)
+            self._color_pub = None
+            self._depth_pub = None
+            self._color_info_pub = None
+            self._depth_info_pub = None
+            self._annotation_pub = None
+            self._virtual_camera_tf_broadcaster = None
+            if self._virtual_camera_config is not None:
+                self._color_pub = self.create_publisher(
+                    Image, "/camera/color/image_raw", qos_profile_sensor_data
+                )
+                self._depth_pub = self.create_publisher(
+                    Image, "/camera/depth/image_raw", qos_profile_sensor_data
+                )
+                self._color_info_pub = self.create_publisher(
+                    CameraInfo, "/camera/color/camera_info", qos_profile_sensor_data
+                )
+                self._depth_info_pub = self.create_publisher(
+                    CameraInfo, "/camera/depth/camera_info", qos_profile_sensor_data
+                )
+                annotation_topic = str(
+                    self.get_parameter("virtual_camera.annotation_topic").value
+                ).strip()
+                if not annotation_topic:
+                    raise ValueError("virtual_camera.annotation_topic must be non-empty")
+                self._annotation_pub = self.create_publisher(
+                    Detection2DArray, annotation_topic, qos_profile_sensor_data
+                )
+                self._virtual_camera_tf_broadcaster = StaticTransformBroadcaster(self)
+                self._virtual_camera_worker = VirtualCameraWorker(
+                    self._sim_access,
+                    self._virtual_camera_config,
+                    on_frame=self._publish_virtual_frame,
+                    on_ready=self._virtual_camera_ready,
+                    on_error=self._virtual_camera_error,
+                )
+                self.get_logger().info(
+                    "MuJoCo virtual RGB-D configured: "
+                    f"camera={self._virtual_camera_config.camera_name}, "
+                    f"size={self._virtual_camera_config.width}x"
+                    f"{self._virtual_camera_config.height}, "
+                    f"rate={self._virtual_camera_config.rate_hz:g} Hz, "
+                    f"frame={self._virtual_camera_config.frame_id}"
+                )
             self._action_server = ActionServer(
                 self,
                 FollowJointTrajectory,
@@ -614,8 +701,134 @@ def create_node_class():
             gripper.status_code = 0
             self._gripper_pub.publish(gripper)
 
+            self._publish_virtual_camera(state.simulation_time, stamp.clock)
+
+        def _publish_virtual_camera(self, simulation_time: float, stamp) -> None:
+            if self._virtual_camera_worker is None or self._virtual_camera_config is None:
+                return
+            if simulation_time + 1e-12 < self._next_virtual_camera_time:
+                return
+            period = 1.0 / self._virtual_camera_config.rate_hz
+            self._next_virtual_camera_time += period
+            if self._next_virtual_camera_time <= simulation_time:
+                skipped = math.floor(
+                    (simulation_time - self._next_virtual_camera_time) / period
+                ) + 1
+                self._next_virtual_camera_time += skipped * period
+            self._virtual_camera_worker.submit((stamp.sec, stamp.nanosec))
+
+        def _publish_virtual_frame(self, frame, intrinsics, stamp_parts) -> None:
+            stamp_sec, stamp_nanosec = stamp_parts
+            color = Image()
+            color.header.stamp.sec = stamp_sec
+            color.header.stamp.nanosec = stamp_nanosec
+            color.header.frame_id = self._virtual_camera_config.frame_id
+            color.height = self._virtual_camera_config.height
+            color.width = self._virtual_camera_config.width
+            color.encoding = "rgb8"
+            color.is_bigendian = 0
+            color.step = self._virtual_camera_config.width * 3
+            color.data = frame.rgb.tobytes()
+            self._color_pub.publish(color)
+
+            depth = Image()
+            depth.header.stamp.sec = stamp_sec
+            depth.header.stamp.nanosec = stamp_nanosec
+            depth.header.frame_id = self._virtual_camera_config.frame_id
+            depth.height = self._virtual_camera_config.height
+            depth.width = self._virtual_camera_config.width
+            depth.encoding = "mono16"
+            depth.is_bigendian = 0
+            depth.step = self._virtual_camera_config.width * 2
+            depth.data = frame.depth_mm.tobytes()
+            self._depth_pub.publish(depth)
+
+            self._color_info_pub.publish(
+                self._camera_info_message(stamp_parts, intrinsics)
+            )
+            self._depth_info_pub.publish(
+                self._camera_info_message(stamp_parts, intrinsics)
+            )
+
+            annotations = Detection2DArray()
+            annotations.header.stamp.sec = stamp_sec
+            annotations.header.stamp.nanosec = stamp_nanosec
+            annotations.header.frame_id = self._virtual_camera_config.frame_id
+            for item in frame.annotations:
+                detection = Detection2D()
+                detection.header.stamp.sec = stamp_sec
+                detection.header.stamp.nanosec = stamp_nanosec
+                detection.header.frame_id = self._virtual_camera_config.frame_id
+                detection.class_name = item.class_name
+                detection.confidence = 1.0
+                detection.center_u = item.center_u
+                detection.center_v = item.center_v
+                detection.x_min = item.x_min
+                detection.y_min = item.y_min
+                detection.x_max = item.x_max
+                detection.y_max = item.y_max
+                detection.has_obb = False
+                detection.obb_points_xy = []
+                detection.has_mask = True
+                detection.mask_polygon_xy = list(item.mask_polygon_xy)
+                annotations.detections.append(detection)
+            self._annotation_pub.publish(annotations)
+
+        def _camera_info_message(self, stamp_parts, intrinsics):
+            message = CameraInfo()
+            message.header.stamp.sec = stamp_parts[0]
+            message.header.stamp.nanosec = stamp_parts[1]
+            message.header.frame_id = self._virtual_camera_config.frame_id
+            message.height = intrinsics.height
+            message.width = intrinsics.width
+            message.distortion_model = "plumb_bob"
+            message.d = [0.0] * 5
+            message.k = [
+                intrinsics.fx, 0.0, intrinsics.cx,
+                0.0, intrinsics.fy, intrinsics.cy,
+                0.0, 0.0, 1.0,
+            ]
+            message.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+            message.p = [
+                intrinsics.fx, 0.0, intrinsics.cx, 0.0,
+                0.0, intrinsics.fy, intrinsics.cy, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+            ]
+            return message
+
+        def _virtual_camera_ready(self, intrinsics, extrinsics) -> None:
+            transform = TransformStamped()
+            transform.header.frame_id = extrinsics.parent_frame_id
+            transform.child_frame_id = extrinsics.child_frame_id
+            transform.transform.translation.x = extrinsics.translation_xyz[0]
+            transform.transform.translation.y = extrinsics.translation_xyz[1]
+            transform.transform.translation.z = extrinsics.translation_xyz[2]
+            transform.transform.rotation.x = extrinsics.rotation_xyzw[0]
+            transform.transform.rotation.y = extrinsics.rotation_xyzw[1]
+            transform.transform.rotation.z = extrinsics.rotation_xyzw[2]
+            transform.transform.rotation.w = extrinsics.rotation_xyzw[3]
+            self._virtual_camera_tf_broadcaster.sendTransform(transform)
+            self.get_logger().info(
+                "MuJoCo virtual RGB-D renderer ready: "
+                f"fx={intrinsics.fx:.3f}, fy={intrinsics.fy:.3f}, "
+                f"cx={intrinsics.cx:.3f}, cy={intrinsics.cy:.3f}, "
+                f"tf={extrinsics.parent_frame_id}->{extrinsics.child_frame_id}"
+            )
+
+        def _virtual_camera_error(self, exc: BaseException) -> None:
+            self.get_logger().error(
+                "MuJoCo virtual camera worker failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
         def destroy_node(self):
             self._action_server.destroy()
+            if self._virtual_camera_worker is not None:
+                stopped = self._virtual_camera_worker.close()
+                if not stopped:
+                    self.get_logger().error(
+                        "MuJoCo virtual camera worker did not stop within timeout"
+                    )
             self._sim_access.run(lambda sim: sim.close())
             return super().destroy_node()
 

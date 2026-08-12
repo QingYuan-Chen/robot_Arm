@@ -153,12 +153,14 @@ with RebotArmMujoco() as sim:
     sim.reset(seed=7)
     sim.set_joint_position_targets([0.1, -0.2, -0.2, 0.2, 0.0, 0.0])
     sim.set_gripper_width(0.05)
-    sim.set_object_pose("test_cube", [0.45, 0.0, 0.44], [0.0, 0.0, 0.0, 1.0])
+    sim.set_object_pose("bottle", [0.45, 0.0, 0.44], [0.0, 0.0, 0.0, 1.0])
     saved = sim.save_state()
     state = sim.step(10)
     sim.restore_state(saved)
     contacts = sim.get_contacts()
 ```
+
+当前 canonical scene / 规范仿真场景使用 `bottle` 作为与真机示例一致的目标；它是可复现的 bottle proxy / 瓶子代理几何，不代表真实瓶子的动力学、接触或抓取标定已经完成。
 
 `get_state()` 返回关节位置/速度、执行器力、末端位姿、夹爪宽度、物体位姿
 和仿真时间。公开的末端与物体四元数顺序都是 XYZW；MuJoCo 内部 WXYZ 已在

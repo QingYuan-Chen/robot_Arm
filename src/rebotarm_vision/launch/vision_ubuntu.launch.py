@@ -13,6 +13,17 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("yolo_device", default_value="0"),
+            DeclareLaunchArgument(
+                "yolo_model_path",
+                default_value=str(vision_share / "models" / "yolo26s-seg.pt"),
+            ),
+            DeclareLaunchArgument(
+                "handeye_config",
+                default_value=str(vision_share / "config" / "handeye.yaml"),
+            ),
+            DeclareLaunchArgument("start_ordinary_grasp", default_value="false"),
+            DeclareLaunchArgument("ordinary_grasp_root", default_value=""),
+            DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     str(vision_share / "launch" / "vision.launch.py")
@@ -21,11 +32,14 @@ def generate_launch_description():
                     "camera_config": str(
                         vision_share / "config" / "camera_ubuntu.yaml"
                     ),
-                    "yolo_model_path": str(
-                        vision_share / "models" / "yolo11n-seg.pt"
-                    ),
+                    "yolo_model_path": LaunchConfiguration("yolo_model_path"),
                     "yolo_device": LaunchConfiguration("yolo_device"),
-                    "start_ordinary_grasp": "false",
+                    "handeye_config": LaunchConfiguration("handeye_config"),
+                    "start_ordinary_grasp": LaunchConfiguration("start_ordinary_grasp"),
+                    "ordinary_grasp_root": LaunchConfiguration("ordinary_grasp_root"),
+                    "ordinary_depth_quality_enabled": LaunchConfiguration(
+                        "ordinary_depth_quality_enabled"
+                    ),
                 }.items(),
             )
         ]

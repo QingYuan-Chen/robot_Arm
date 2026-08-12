@@ -649,19 +649,19 @@ ordinary_grasp.cy: 361.8166198730469
 ordinary grasp -> /grasp/plan -> MoveIt2
 ```
 
-当前偏差收敛重点是 `end_link -> grasp_tcp`：
+当前运行采用 upstream MuJoCo 的显式名义工具点 `ee_site=-0.105 m`；实物 TCP pivot 标定已按工程决策取消，故此值不是实机残差验收结果：
 
 ```yaml
 rebotarm_grasp_tcp_frame:
   ros__parameters:
-    tcp_offset_xyz: [0.0, 0.0, 0.0]
+    tcp_offset_xyz: [-0.105, 0.0, 0.0]
 
 rebotarm_grasp_preview_sender:
   ros__parameters:
-    tcp_offset_xyz: [0.0, 0.0, 0.0]
+    tcp_offset_xyz: [-0.105, 0.0, 0.0]
 ```
 
-标定后两个位置的 `tcp_offset_xyz` 要保持一致。
+真实视觉配置中的两个位置保持 `[-0.105, 0.0, 0.0]` 一致；仿真执行 launch 不再重复加该偏移，因为 upstream MuJoCo 模型内部已定义 `ee_site`。
 
 ## 17. Eye-in-hand 外参配置
 

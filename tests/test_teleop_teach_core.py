@@ -1189,7 +1189,7 @@ class WebRobotAssetTests(unittest.TestCase):
         limits = load_urdf_joint_limits(urdf_path, ("joint1", "joint2", "missing_joint"))
 
         self.assertEqual(limits["joint1"], (-2.8, 2.8))
-        self.assertEqual(limits["joint2"], (-3.14, 0.0))
+        self.assertEqual(limits["joint2"], (-3.14, 0.02))
         self.assertNotIn("missing_joint", limits)
 
     def test_merge_joint_limits_prefers_urdf_and_falls_back_to_params(self) -> None:

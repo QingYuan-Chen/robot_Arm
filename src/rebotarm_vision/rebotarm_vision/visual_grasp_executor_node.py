@@ -27,6 +27,7 @@ from .grasp_preview_sender_node import (
 )
 from .gripper_quality import close_contact_success
 from .gripper_policy import GripperPolicyConfig, resolve_gripper_command
+from .message_freshness import is_message_fresh, message_age_sec
 from .place_task_policy import PlaceTaskConfig, build_place_stages
 from .retreat_policy import RetreatPolicyConfig
 from .trajectory_recovery_policy import RecoveryConfig, recovery_decision_for_stage
@@ -75,13 +76,16 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("input_topic", "/grasp/filtered_plan")
         self.declare_parameter("candidates_topic", "/grasp/filtered_candidates")
         self.declare_parameter("target_frame", "base_link")
-        self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
+        self.declare_parameter("tcp_offset_xyz", [-0.105, 0.0, 0.0])
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
         self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
         self.declare_parameter("grasp_base_z_offset_m", 0.0)
         self.declare_parameter("pose_policy", "base_axis")
-        self.declare_parameter("fixed_grasp_orientation_xyzw", [0.0, 0.0, 0.0, 1.0])
-        self.declare_parameter("base_approach_axis_xyz", [1.0, 0.0, 0.0])
+        self.declare_parameter(
+            "fixed_grasp_orientation_xyzw",
+            [0.0, 0.0, -0.707106781, 0.707106781],
+        )
+        self.declare_parameter("base_approach_axis_xyz", [0.0, -1.0, 0.0])
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         self.declare_parameter("min_grasp_z_m", 0.0)
         self.declare_parameter("lift_z_m", 0.08)
@@ -112,7 +116,7 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("safe_retreat_enabled", True)
         self.declare_parameter("safe_retreat_min_lift_z_m", 0.12)
         self.declare_parameter("safe_retreat_distance_m", 0.06)
-        self.declare_parameter("safe_retreat_axis_xyz", [-1.0, 0.0, 0.5])
+        self.declare_parameter("safe_retreat_axis_xyz", [0.0, 1.0, 0.5])
         self.declare_parameter("safe_home_after_grasp", False)
         self.declare_parameter("service_timeout_sec", 20.0)
         self.declare_parameter("pregrasp_wait_sec", 0.5)
@@ -144,12 +148,16 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("visual_lift_check_enabled", False)
         self.declare_parameter("visual_lift_min_delta_m", 0.03)
         self.declare_parameter("place_after_grasp_enabled", False)
-        self.declare_parameter("place_position_xyz", [0.20, -0.20, 0.25])
-        self.declare_parameter("place_orientation_xyzw", [0.0, 0.0, 0.0, 1.0])
+        self.declare_parameter("place_position_xyz", [-0.20, -0.20, 0.25])
+        self.declare_parameter(
+            "place_orientation_xyzw",
+            [0.0, 0.0, -0.707106781, 0.707106781],
+        )
         self.declare_parameter("place_open_position_m", 0.08)
         self.declare_parameter("place_open_max_effort", 0.25)
         self.declare_parameter("place_retreat_z_m", 0.06)
         self.declare_parameter("trajectory_precheck_enabled", True)
+        self.declare_parameter("max_plan_age_sec", 1.0)
 
         self._arm_namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         self._input_topic = str(self.get_parameter("input_topic").value)
@@ -161,6 +169,7 @@ class VisualGraspExecutorNode(Node):
         self._grasp_base_z_offset_m = float(self.get_parameter("grasp_base_z_offset_m").value)
         self._service_timeout_sec = float(self.get_parameter("service_timeout_sec").value)
         self._motion_result_timeout_sec = float(self.get_parameter("motion_result_timeout_sec").value)
+        self._max_plan_age_sec = float(self.get_parameter("max_plan_age_sec").value)
         self._execution_mode = str(self.get_parameter("execution_mode").value).strip().lower()
         self._stage_waits = {
             "move_to_pregrasp": float(self.get_parameter("pregrasp_wait_sec").value),
@@ -245,9 +254,34 @@ class VisualGraspExecutorNode(Node):
         return tuple(float(value) for value in values)
 
     def _on_plan(self, plan: GraspPlan) -> None:
-        if plan.valid:
-            self._latest_plan = deepcopy(plan)
-            self._plan_revision += 1
+        if not plan.valid:
+            return
+        if not self._plan_is_fresh(plan):
+            return
+        self._latest_plan = deepcopy(plan)
+        self._plan_revision += 1
+
+    def _plan_is_fresh(self, plan: GraspPlan | None) -> bool:
+        if plan is None:
+            return False
+        header = getattr(plan, "header", None)
+        stamp = getattr(header, "stamp", None)
+        now_ns = int(self.get_clock().now().nanoseconds)
+        age_sec = message_age_sec(
+            stamp,
+            now_ns=now_ns,
+        )
+        if not is_message_fresh(
+            stamp,
+            now_ns=now_ns,
+            max_age_sec=self._max_plan_age_sec,
+        ):
+            self.get_logger().warn(
+                "visual grasp executor rejected stale or unset plan: "
+                f"age_sec={age_sec} max_plan_age_sec={self._max_plan_age_sec}"
+            )
+            return False
+        return True
 
     def _on_candidates(self, candidates: GraspCandidateArray) -> None:
         if candidates.candidates:
@@ -258,9 +292,9 @@ class VisualGraspExecutorNode(Node):
             response.success = False
             response.message = "visual grasp already running"
             return response
-        if self._latest_plan is None:
+        if self._latest_plan is None or not self._plan_is_fresh(self._latest_plan):
             response.success = False
-            response.message = "no valid grasp plan received"
+            response.message = "no fresh valid grasp plan received"
             return response
         self._running = True
         self._run_counter += 1
@@ -581,6 +615,8 @@ class VisualGraspExecutorNode(Node):
     def _verify_after_lift(self) -> tuple[bool, str]:
         if not self._execution_enabled():
             return True, "plan_only: grasp verification skipped"
+        if not self._gripper_execution_enabled():
+            return True, "gripper disabled: grasp verification skipped"
         visual_delta = 0.0
         visual_available = False
         if bool(self.get_parameter("visual_lift_check_enabled").value) and self._latest_plan is not None:

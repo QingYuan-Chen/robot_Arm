@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -28,6 +28,7 @@ def generate_launch_description():
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     execution_mode = LaunchConfiguration("execution_mode")
     start_vision = LaunchConfiguration("start_vision")
+    vision_profile = LaunchConfiguration("vision_profile")
     vision_camera_config = LaunchConfiguration("vision_camera_config")
     vision_handeye_config = LaunchConfiguration("vision_handeye_config")
     start_ordinary_grasp = LaunchConfiguration("start_ordinary_grasp")
@@ -35,10 +36,15 @@ def generate_launch_description():
     ordinary_depth_quality_enabled = LaunchConfiguration("ordinary_depth_quality_enabled")
     start_graspnet_baseline = LaunchConfiguration("start_graspnet_baseline")
     graspnet_candidates_topic = LaunchConfiguration("graspnet_candidates_topic")
+    graspnet_output_frame_id = LaunchConfiguration("graspnet_output_frame_id")
     graspnet_source_mode = LaunchConfiguration("graspnet_source_mode")
+    graspnet_config = LaunchConfiguration("graspnet_config")
     graspnet_candidates_url = LaunchConfiguration("graspnet_candidates_url")
     graspnet_network_timeout_ms = LaunchConfiguration("graspnet_network_timeout_ms")
     graspnet_network_poll_hz = LaunchConfiguration("graspnet_network_poll_hz")
+    graspnet_local_infer_url = LaunchConfiguration("graspnet_local_infer_url")
+    graspnet_local_timeout_ms = LaunchConfiguration("graspnet_local_timeout_ms")
+    graspnet_max_input_skew_ms = LaunchConfiguration("graspnet_max_input_skew_ms")
     graspnet_model_root = LaunchConfiguration("graspnet_model_root")
     graspnet_checkpoint_path = LaunchConfiguration("graspnet_checkpoint_path")
     graspnet_device = LaunchConfiguration("graspnet_device")
@@ -58,6 +64,8 @@ def generate_launch_description():
     start_visual_grasp_executor = LaunchConfiguration("start_visual_grasp_executor")
     start_visual_grasp_markers = LaunchConfiguration("start_visual_grasp_markers")
     start_motion_execution = LaunchConfiguration("start_motion_execution")
+    execute_gripper = LaunchConfiguration("execute_gripper")
+    start_sim_trajectory_controller = LaunchConfiguration("start_sim_trajectory_controller")
     gripper_open_axis_local_xyz = LaunchConfiguration("gripper_open_axis_local_xyz")
     show_tcp_markers = LaunchConfiguration("show_tcp_markers")
     show_approach_arrow = LaunchConfiguration("show_approach_arrow")
@@ -143,6 +151,7 @@ def generate_launch_description():
     place_open_max_effort = LaunchConfiguration("place_open_max_effort")
     place_retreat_z_m = LaunchConfiguration("place_retreat_z_m")
     trajectory_precheck_enabled = LaunchConfiguration("trajectory_precheck_enabled")
+    max_plan_age_sec = LaunchConfiguration("max_plan_age_sec")
 
     interactive_system = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -202,10 +211,49 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([vision_share, "launch", "vision.launch.py"])
             ),
-            condition=IfCondition(start_vision),
+            condition=IfCondition(
+                PythonExpression(
+                    [
+                        "'",
+                        start_vision,
+                        "' == 'true' and '",
+                        vision_profile,
+                        "' == 'network'",
+                    ]
+                )
+            ),
             launch_arguments={
                 "camera_config": vision_camera_config,
                 "handeye_config": vision_handeye_config,
+                "start_ordinary_grasp": start_ordinary_grasp,
+                "ordinary_grasp_root": ordinary_grasp_root,
+                "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
+            }.items(),
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([vision_share, "launch", "vision.launch.py"])
+            ),
+            condition=IfCondition(
+                PythonExpression(
+                    [
+                        "'",
+                        start_vision,
+                        "' == 'true' and '",
+                        vision_profile,
+                        "' == 'ubuntu_native'",
+                    ]
+                )
+            ),
+            launch_arguments={
+                "camera_config": PathJoinSubstitution(
+                    [vision_share, "config", "camera_ubuntu.yaml"]
+                ),
+                "handeye_config": vision_handeye_config,
+                "yolo_model_path": PathJoinSubstitution(
+                    [vision_share, "models", "yolo26s-seg.pt"]
+                ),
+                "yolo_device": "0",
                 "start_ordinary_grasp": start_ordinary_grasp,
                 "ordinary_grasp_root": ordinary_grasp_root,
                 "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
@@ -263,17 +311,20 @@ def generate_launch_description():
             output="screen",
             condition=IfCondition(start_graspnet_baseline),
             parameters=[
-                graspnet_policy_params,
+                graspnet_config,
                 {
                     "input_color_topic": "/camera/color/image_raw",
                     "input_depth_topic": "/camera/depth/image_raw",
                     "input_detections_topic": "/grasp/detections",
                     "output_candidates_topic": graspnet_candidates_topic,
-                    "output_frame_id": "camera_depth_frame",
+                    "output_frame_id": graspnet_output_frame_id,
                     "source_mode": graspnet_source_mode,
                     "network_candidates_url": graspnet_candidates_url,
                     "network_timeout_ms": graspnet_network_timeout_ms,
                     "network_poll_hz": graspnet_network_poll_hz,
+                    "local_infer_url": graspnet_local_infer_url,
+                    "local_timeout_ms": graspnet_local_timeout_ms,
+                    "max_input_skew_ms": graspnet_max_input_skew_ms,
                     "model_root": graspnet_model_root,
                     "checkpoint_path": graspnet_checkpoint_path,
                     "device": graspnet_device,
@@ -290,8 +341,11 @@ def generate_launch_description():
             output="screen",
             condition=IfCondition(start_candidate_ik_filter),
             parameters=[
-                grasp_pose_policy_params,
-                table_safety_params,
+                # Keep this complete candidate-filter profile in one launch
+                # dictionary.  A node-specific YAML entry overrides the /**
+                # dictionary generated by launch_ros even when the dictionary
+                # is listed later, which otherwise makes these launch
+                # arguments ineffective on ROS 2 Jazzy.
                 {
                     "input_topic": candidate_ik_input_topic,
                     "output_topic": filtered_candidates_topic,
@@ -339,7 +393,17 @@ def generate_launch_description():
             executable="rebotarm_sim_trajectory_controller",
             name="rebotarm_sim_trajectory_controller",
             output="screen",
-            condition=UnlessCondition(use_hardware),
+            condition=IfCondition(
+                PythonExpression(
+                    [
+                        "'",
+                        use_hardware,
+                        "'.lower() != 'true' and '",
+                        start_sim_trajectory_controller,
+                        "'.lower() == 'true'",
+                    ]
+                )
+            ),
             parameters=[
                 {
                     "arm_namespace": arm_namespace,
@@ -414,8 +478,9 @@ def generate_launch_description():
                     "safe_retreat_distance_m": safe_retreat_distance_m,
                     "safe_retreat_axis_xyz": safe_retreat_axis_xyz,
                     "safe_home_after_grasp": safe_home_after_grasp,
-                    "execute_gripper": True,
+                    "execute_gripper": execute_gripper,
                     "execution_mode": execution_mode,
+                    "max_plan_age_sec": max_plan_age_sec,
                     "plan_only_stage_pause_sec": plan_only_stage_pause_sec,
                     "refresh_plan_at_pregrasp_enabled": False,
                     "refresh_plan_at_pregrasp_required": False,
@@ -449,11 +514,17 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("channel", default_value="auto"),
-            DeclareLaunchArgument("use_hardware", default_value="true"),
-            DeclareLaunchArgument("shutdown_safe_home", default_value="true"),
+            DeclareLaunchArgument("use_hardware", default_value="false"),
+            DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
-            DeclareLaunchArgument("execution_mode", default_value="execute"),
+            DeclareLaunchArgument("execution_mode", default_value="plan_only"),
             DeclareLaunchArgument("start_vision", default_value="true"),
+            DeclareLaunchArgument(
+                "vision_profile",
+                default_value="network",
+                choices=["network", "ubuntu_native"],
+                description="Vision input profile: network bridge or native Ubuntu Gemini 2",
+            ),
             DeclareLaunchArgument(
                 "vision_camera_config",
                 default_value=PathJoinSubstitution([vision_share, "config", "camera.yaml"]),
@@ -467,10 +538,15 @@ def generate_launch_description():
             DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
             DeclareLaunchArgument("start_graspnet_baseline", default_value="true"),
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
+            DeclareLaunchArgument("graspnet_output_frame_id", default_value="camera_depth_frame"),
             DeclareLaunchArgument("graspnet_source_mode", default_value="network"),
+            DeclareLaunchArgument("graspnet_config", default_value=graspnet_policy_params),
             DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
             DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),
             DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
+            DeclareLaunchArgument("graspnet_local_infer_url", default_value="http://127.0.0.1:8081/infer"),
+            DeclareLaunchArgument("graspnet_local_timeout_ms", default_value="2000"),
+            DeclareLaunchArgument("graspnet_max_input_skew_ms", default_value="100"),
             DeclareLaunchArgument("graspnet_model_root", default_value=""),
             DeclareLaunchArgument("graspnet_checkpoint_path", default_value=""),
             DeclareLaunchArgument("graspnet_device", default_value="cuda:0"),
@@ -481,8 +557,11 @@ def generate_launch_description():
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),
             DeclareLaunchArgument("candidate_ik_input_topic", default_value="/grasp/graspnet_candidates"),
             DeclareLaunchArgument("start_visual_ready", default_value="true"),
-            DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="true"),
-            DeclareLaunchArgument("visual_ready_joint_positions", default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]"),
+            DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false"),
+            DeclareLaunchArgument(
+                "visual_ready_joint_positions",
+                default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]",
+            ),
             DeclareLaunchArgument("visual_ready_duration_sec", default_value="4.0"),
             DeclareLaunchArgument("visual_ready_wait_timeout_sec", default_value="12.0"),
             DeclareLaunchArgument("visual_ready_max_start_delta_rad", default_value="2.5"),
@@ -490,6 +569,12 @@ def generate_launch_description():
             DeclareLaunchArgument("start_visual_grasp_executor", default_value="true"),
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),
             DeclareLaunchArgument("start_motion_execution", default_value="true"),
+            DeclareLaunchArgument("execute_gripper", default_value="true"),
+            DeclareLaunchArgument(
+                "start_sim_trajectory_controller",
+                default_value="true",
+                description="Start the RViz-only kinematic action server when no external simulation backend owns the namespace",
+            ),
             DeclareLaunchArgument("gripper_open_axis_local_xyz", default_value="[0.0, 1.0, 0.0]"),
             DeclareLaunchArgument("show_tcp_markers", default_value="true"),
             DeclareLaunchArgument("show_approach_arrow", default_value="true"),
@@ -503,14 +588,17 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_collision_check_service", default_value="/check_state_validity"),
             DeclareLaunchArgument("candidate_collision_group_name", default_value="arm_with_gripper"),
             DeclareLaunchArgument("pose_mode", default_value="pregrasp"),
-            DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.04, 0.0, 0.0]"),
+            DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.105, 0.0, 0.0]"),
             DeclareLaunchArgument("target_base_offset_xyz", default_value="[0.0, 0.0, 0.0]"),
             DeclareLaunchArgument("base_z_offset_m", default_value="0.05"),
             DeclareLaunchArgument("min_target_z_m", default_value="0.0"),
             DeclareLaunchArgument("grasp_base_z_offset_m", default_value="0.0"),
             DeclareLaunchArgument("pose_policy", default_value="base_axis"),
-            DeclareLaunchArgument("fixed_grasp_orientation_xyzw", default_value="[0.0, 0.0, 0.0, 1.0]"),
-            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[1.0, 0.0, 0.0]"),
+            DeclareLaunchArgument(
+                "fixed_grasp_orientation_xyzw",
+                default_value="[0.0, 0.0, -0.707106781, 0.707106781]",
+            ),
+            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]"),
             DeclareLaunchArgument("base_pregrasp_distance_m", default_value="0.06"),
             DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose"),
             DeclareLaunchArgument("candidate_orientation_yaw_offsets_rad", default_value="[0.0]"),
@@ -522,8 +610,8 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120"),
             DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),
             DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true"),
-            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]"),
-            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]"),
+            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]"),
+            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]"),
             DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15"),
             DeclareLaunchArgument("candidate_score_joint_distance_weight", default_value="0.15"),
             DeclareLaunchArgument("candidate_score_joint6_weight", default_value="0.35"),
@@ -550,7 +638,7 @@ def generate_launch_description():
             DeclareLaunchArgument("safe_retreat_enabled", default_value="true"),
             DeclareLaunchArgument("safe_retreat_min_lift_z_m", default_value="0.12"),
             DeclareLaunchArgument("safe_retreat_distance_m", default_value="0.06"),
-            DeclareLaunchArgument("safe_retreat_axis_xyz", default_value="[-1.0, 0.0, 0.5]"),
+            DeclareLaunchArgument("safe_retreat_axis_xyz", default_value="[0.0, 1.0, 0.5]"),
             DeclareLaunchArgument("safe_home_after_grasp", default_value="false"),
             DeclareLaunchArgument("moveit_planning_time", default_value="8.0"),
             DeclareLaunchArgument("moveit_num_planning_attempts", default_value="5"),
@@ -569,12 +657,16 @@ def generate_launch_description():
             DeclareLaunchArgument("visual_lift_check_enabled", default_value="false"),
             DeclareLaunchArgument("visual_lift_min_delta_m", default_value="0.03"),
             DeclareLaunchArgument("place_after_grasp_enabled", default_value="false"),
-            DeclareLaunchArgument("place_position_xyz", default_value="[0.20, -0.20, 0.25]"),
-            DeclareLaunchArgument("place_orientation_xyzw", default_value="[0.0, 0.0, 0.0, 1.0]"),
+            DeclareLaunchArgument("place_position_xyz", default_value="[-0.20, -0.20, 0.25]"),
+            DeclareLaunchArgument(
+                "place_orientation_xyzw",
+                default_value="[0.0, 0.0, -0.707106781, 0.707106781]",
+            ),
             DeclareLaunchArgument("place_open_position_m", default_value="0.08"),
             DeclareLaunchArgument("place_open_max_effort", default_value="0.25"),
             DeclareLaunchArgument("place_retreat_z_m", default_value="0.06"),
             DeclareLaunchArgument("trajectory_precheck_enabled", default_value="true"),
+            DeclareLaunchArgument("max_plan_age_sec", default_value="1.0"),
             interactive_system,
             visual_ready_startup,
             RegisterEventHandler(

@@ -1,6 +1,14 @@
+from pathlib import Path
+
 from setuptools import find_packages, setup
 
 package_name = "rebotarm_vision"
+repo_root = Path(__file__).resolve().parents[2]
+vision_model = repo_root / "tools" / "yolo26s-seg.pt"
+vision_model_source = Path("../../tools/yolo26s-seg.pt")
+
+if not vision_model.is_file():
+    raise FileNotFoundError(f"vision model not found: {vision_model}")
 
 setup(
     name=package_name,
@@ -21,6 +29,7 @@ setup(
                 "config/flat_graspnet.yaml",
                 "config/grasp_pose_policy.yaml",
                 "config/graspnet_policy.yaml",
+                "config/graspnet_ubuntu.yaml",
                 "config/gripper_policy.yaml",
                 "config/handeye.yaml",
                 "config/retry_policy.yaml",
@@ -30,7 +39,7 @@ setup(
                 "config/visual_servo.yaml",
             ],
         ),
-        (f"share/{package_name}/models", ["models/yolo11n-seg.pt"]),
+        (f"share/{package_name}/models", [str(vision_model_source)]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -54,6 +63,7 @@ setup(
             "rebotarm_tcp_calibration = rebotarm_vision.tcp_calibration_node:main",
             "rebotarm_debug_camera_preview = rebotarm_vision.debug_camera_preview:main",
             "rebotarm_grasp_depth_probe = rebotarm_vision.grasp_depth_probe_node:main",
+            "rebotarm_offline_yolo_node = rebotarm_vision.offline_yolo_node:main",
         ],
     },
 )

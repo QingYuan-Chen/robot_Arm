@@ -39,7 +39,10 @@ class VisualReadyNode(Node):
         self.declare_parameter("auto_move_on_start", True)
         self.declare_parameter("exit_after_startup_move", False)
         self.declare_parameter("startup_delay_sec", 0.0)
-        self.declare_parameter("joint_positions", [0.0, -0.1, -0.2, 0.2, 0.0, 0.0])
+        self.declare_parameter(
+            "joint_positions",
+            [-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0],
+        )
         self.declare_parameter("duration_sec", 4.0)
         self.declare_parameter("wait_timeout_sec", 12.0)
         self.declare_parameter("max_start_delta_rad", 1.0)

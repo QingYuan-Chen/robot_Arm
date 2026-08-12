@@ -17,6 +17,49 @@ def test_upstream_mujoco_entrypoint_and_launch_are_installed():
     assert "<exec_depend>rebotarm_msgs</exec_depend>" in package_text
 
 
+def test_mujoco_only_launch_accepts_namespace_and_initial_state_overrides():
+    launch_text = (
+        ROOT / "src/rebotarm_simulation/launch/mujoco_sim.launch.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'DeclareLaunchArgument("mujoco_arm_namespace", default_value="rebotarm")' in launch_text
+    assert 'DeclareLaunchArgument(\n                "initial_joint_positions",' in launch_text
+    assert '"arm_namespace": mujoco_arm_namespace' in launch_text
+    assert '"initial_joint_positions": initial_joint_positions' in launch_text
+
+
+def test_mujoco_only_launch_exposes_opt_in_virtual_camera_without_new_backend():
+    launch_text = (
+        ROOT / "src/rebotarm_simulation/launch/mujoco_sim.launch.py"
+    ).read_text(encoding="utf-8")
+    config_text = (
+        ROOT / "src/rebotarm_simulation/config/mujoco_sim.yaml"
+    ).read_text(encoding="utf-8")
+    node_text = (
+        ROOT / "src/rebotarm_simulation/rebotarm_simulation/mujoco_ros_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'DeclareLaunchArgument("enable_virtual_camera", default_value="false")' in launch_text
+    assert '"virtual_camera.enabled": ParameterValue(' in launch_text
+    assert 'additional_env={"MUJOCO_GL": mujoco_gl}' in launch_text
+    assert "virtual_camera.enabled: false" in config_text
+    assert "virtual_camera.parent_body_name: base_link" in config_text
+    assert "virtual_camera.parent_frame_id: base_link" in config_text
+    assert '"/camera/color/image_raw"' in node_text
+    assert '"/camera/depth/image_raw"' in node_text
+    assert '"/camera/depth/camera_info"' in node_text
+    assert '"/grasp/ground_truth_detections"' in node_text
+    assert "StaticTransformBroadcaster" in node_text
+    assert "rebotarm_mujoco_node" in launch_text
+    assert "rebotarm_sim_trajectory_controller" not in launch_text
+
+    package_text = (ROOT / "src/rebotarm_simulation/package.xml").read_text(
+        encoding="utf-8"
+    )
+    assert "<exec_depend>geometry_msgs</exec_depend>" in package_text
+    assert "<exec_depend>tf2_ros</exec_depend>" in package_text
+
+
 def test_mujoco_moveit_launch_starts_upstream_node_and_moveit_without_fake_joint_states():
     launch_text = (
         ROOT / "src/rebotarm_simulation/launch/mujoco_moveit_sim.launch.py"

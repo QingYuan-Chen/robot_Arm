@@ -1,6 +1,10 @@
 # Eye-in-hand calibration result for Gemini2 mounted near the gripper.
-# Generated from filtered samples by removing outliers: [11, 5, 4, 19].
-# ROS TF uses end_link -> camera_depth_frame.
+# Upstream hand-eye calibration parameters / 上游手眼标定参数.
+# Source: /home/a/project/rebot_refer, commit
+# 152f8f14ceec5cc8fc61664ff63915187a412800.
+# ROS TF uses end_link -> camera_depth_frame. The active aligned RGB-D path
+# deprojects with color intrinsics; do not apply factory color/depth extrinsics
+# a second time.
 handeye:
   parent_frame: end_link
   child_frame: camera_depth_frame

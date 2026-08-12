@@ -1,13 +1,14 @@
 rebotarm_vision_node:
   ros__parameters:
     camera.type: gemini2
-    camera.color_width: 1280
-    camera.color_height: 720
+    # Verified Gemini 2 HW D2C pair on this Ubuntu host.
+    camera.color_width: 640
+    camera.color_height: 480
     camera.color_fps: 30
     camera.color_format: MJPG
     camera.enable_depth: true
-    camera.depth_width: 1280
-    camera.depth_height: 720
+    camera.depth_width: 640
+    camera.depth_height: 400
     camera.depth_fps: 30
     camera.enable_align: true
     camera.warmup_frames: 15
@@ -35,6 +36,9 @@ rebotarm_vision_node:
     ros.show_preview: false
     ros.preview_window_name: RebotArm Ubuntu Vision
     ros.loop_rate_hz: 15.0
+    # Large 640x480 bgr8 samples are fragmented and lost with Fast DDS
+    # BEST_EFFORT on this host; RELIABLE passed the C++ payload control.
+    ros.image_reliability: reliable
     ros.enable_detection: true
     ros.enable_network_detection: false
 
@@ -67,4 +71,6 @@ rebotarm_grasp_tcp_frame:
   ros__parameters:
     parent_frame: end_link
     child_frame: grasp_tcp
-    tcp_offset_xyz: [-0.04, 0.0, 0.0]
+    # Upstream explicit ee_site nominal value; physical TCP pivot calibration
+    # is intentionally canceled and this remains a CAD/model-derived value.
+    tcp_offset_xyz: [-0.105, 0.0, 0.0]

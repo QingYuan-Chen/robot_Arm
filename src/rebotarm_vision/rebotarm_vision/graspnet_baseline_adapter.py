@@ -148,6 +148,13 @@ def payload_to_candidate_array(
     )
     for candidate, name in zip(candidates.candidates, class_names):
         candidate.class_name = name
+    timestamp_ns = int(payload.get("timestamp_ns", 0) or 0)
+    if timestamp_ns > 0:
+        candidates.header.stamp.sec = timestamp_ns // 1_000_000_000
+        candidates.header.stamp.nanosec = timestamp_ns % 1_000_000_000
+        for candidate in candidates.candidates:
+            candidate.header.stamp.sec = candidates.header.stamp.sec
+            candidate.header.stamp.nanosec = candidates.header.stamp.nanosec
     return candidates
 
 

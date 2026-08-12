@@ -34,7 +34,7 @@
         <geom name="link1_link1_collision" type="mesh" mesh="link1" class="collision" contype="1" conaffinity="1" group="3" />
         <body name="link2" pos="0.020084 0.031625 0.05555" quat="0.707105 -0.707108 0 0">
           <inertial pos="-0.132256 -0.0030617 -0.0308307" quat="0.00176765 0.707354 0.00179466 0.706855" mass="1.3266" diaginertia="0.0128139 0.0125599 0.000733734" />
-          <joint name="joint2" pos="0 0 0" axis="0 0 -1" range="-3.14 0" actuatorfrcrange="-27 27" damping="10" armature="0.02" frictionloss="0.02" />
+          <joint name="joint2" pos="0 0 0" axis="0 0 -1" range="-3.14 0.02" actuatorfrcrange="-27 27" damping="10" armature="0.02" frictionloss="0.02" />
           <geom name="link2_link2_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="link2" class="visual" />
           <geom name="link2_link2_collision" type="mesh" mesh="link2" class="collision" contype="1" conaffinity="1" group="3" />
           <body name="link3" pos="-0.264 0 0">
@@ -44,17 +44,17 @@
             <geom name="link3_link3_collision" type="mesh" mesh="link3" class="collision" contype="1" conaffinity="1" group="3" />
             <body name="link4" pos="0.2426 -0.054 -0.001625">
               <inertial pos="0.0608201 -0.0511712 -0.0302995" quat="0.619751 0.601248 0.365808 0.347267" mass="0.52" diaginertia="0.000889485 0.000667165 0.000323211" />
-              <joint name="joint4" pos="0 0 0" axis="0 0 1" range="-1.87 1.57" actuatorfrcrange="-12.5 12.5" damping="3" armature="0.005" frictionloss="0.01" />
+              <joint name="joint4" pos="0 0 0" axis="0 0 1" range="-1.87 1.57" actuatorfrcrange="-7 7" damping="3" armature="0.005" frictionloss="0.01" />
               <geom name="link4_link4_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="link4" class="visual" />
               <geom name="link4_link4_collision" type="mesh" mesh="link4" class="collision" contype="1" conaffinity="1" group="3" />
               <body name="link5" pos="0.078308 -0.0375 -0.03" quat="0.707105 -0.707108 0 0">
                 <inertial pos="-0.00502802 1.73866e-06 0.0386233" quat="0.644154 0.196994 0.180566 0.716697" mass="0.383" diaginertia="0.000217429 0.000212237 0.000157335" />
-                <joint name="joint5" pos="0 0 0" axis="0 0 1" range="-1.57 1.57" actuatorfrcrange="-12.5 12.5" damping="3" armature="0.005" frictionloss="0.01" />
+                <joint name="joint5" pos="0 0 0" axis="0 0 1" range="-1.57 1.57" actuatorfrcrange="-7 7" damping="3" armature="0.005" frictionloss="0.01" />
                 <geom name="link5_link5_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="link5" class="visual" />
                 <geom name="link5_link5_collision" type="mesh" mesh="link5" class="collision" contype="1" conaffinity="1" group="3" />
                 <body name="link6" pos="0.028008 0 0.04" quat="0.707105 0 0.707108 0">
                   <inertial pos="3.76419e-06 -0.000100909 0.0253309" mass="0.3663" diaginertia="0.00015554 0.00015554 0.00013966" />
-                  <joint name="joint6" pos="0 0 0" axis="0 0 1" range="-3.14 3.14" actuatorfrcrange="-12.5 12.5" damping="1" armature="0.002" frictionloss="0.005" />
+                  <joint name="joint6" pos="0 0 0" axis="0 0 1" range="-3.14 3.14" actuatorfrcrange="-7 7" damping="1" armature="0.002" frictionloss="0.005" />
                   <geom name="link6_link6_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="link6" class="visual" />
                   <geom name="link6_link6_collision" type="mesh" mesh="link6" class="collision" contype="1" conaffinity="1" group="3" />
                   <body name="end_link" pos="0 0 0.15539" quat="3.27579e-05 0.707108 -3.27581e-05 0.707105">
@@ -103,9 +103,9 @@
     <motor name="joint1_torque" joint="joint1" gear="1" ctrlrange="-27.0 27.0" ctrllimited="true" forcelimited="true" forcerange="-27.0 27.0" />
     <motor name="joint2_torque" joint="joint2" gear="1" ctrlrange="-27.0 27.0" ctrllimited="true" forcelimited="true" forcerange="-27.0 27.0" />
     <motor name="joint3_torque" joint="joint3" gear="1" ctrlrange="-27.0 27.0" ctrllimited="true" forcelimited="true" forcerange="-27.0 27.0" />
-    <motor name="joint4_torque" joint="joint4" gear="1" ctrlrange="-12.5 12.5" ctrllimited="true" forcelimited="true" forcerange="-12.5 12.5" />
-    <motor name="joint5_torque" joint="joint5" gear="1" ctrlrange="-12.5 12.5" ctrllimited="true" forcelimited="true" forcerange="-12.5 12.5" />
-    <motor name="joint6_torque" joint="joint6" gear="1" ctrlrange="-12.5 12.5" ctrllimited="true" forcelimited="true" forcerange="-12.5 12.5" />
+    <motor name="joint4_torque" joint="joint4" gear="1" ctrlrange="-7.0 7.0" ctrllimited="true" forcelimited="true" forcerange="-7.0 7.0" />
+    <motor name="joint5_torque" joint="joint5" gear="1" ctrlrange="-7.0 7.0" ctrllimited="true" forcelimited="true" forcerange="-7.0 7.0" />
+    <motor name="joint6_torque" joint="joint6" gear="1" ctrlrange="-7.0 7.0" ctrllimited="true" forcelimited="true" forcerange="-7.0 7.0" />
     <motor name="left_finger_force" joint="left_finger_joint" gear="1" ctrlrange="-20.0 20.0" ctrllimited="true" forcelimited="true" forcerange="-20.0 20.0" />
     <motor name="right_finger_force" joint="right_finger_joint" gear="1" ctrlrange="-20.0 20.0" ctrllimited="true" forcelimited="true" forcerange="-20.0 20.0" />
   </actuator>

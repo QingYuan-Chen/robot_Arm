@@ -100,12 +100,13 @@ def test_rebotarm_vision_exposes_grasp_console_entrypoints():
     }.issubset(scripts)
 
 
-def test_visual_grasp_system_launch_defaults_to_real_execute_mode():
+def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert 'DeclareLaunchArgument("use_hardware", default_value="true")' in launch_text
+    assert 'DeclareLaunchArgument("use_hardware", default_value="false")' in launch_text
     assert 'DeclareLaunchArgument("use_local_rviz", default_value="true")' in launch_text
-    assert 'DeclareLaunchArgument("execution_mode", default_value="execute")' in launch_text
+    assert 'DeclareLaunchArgument("execution_mode", default_value="plan_only")' in launch_text
+    assert 'DeclareLaunchArgument("execute_gripper", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("start_grasp_preview",' in launch_text
     assert (
         'DeclareLaunchArgument("start_visual_grasp_executor", default_value="false")'
@@ -127,7 +128,22 @@ def test_visual_grasp_system_launch_defaults_to_real_execute_mode():
 def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert 'DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.04, 0.0, 0.0]")' in launch_text
+    assert 'DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.105, 0.0, 0.0]")' in launch_text
+
+
+def test_real_grasp_profiles_follow_upstream_explicit_ee_site_nominal():
+    expected = "[-0.105, 0.0, 0.0]"
+    for relative in (
+        "src/rebotarm_vision/config/camera.yaml",
+        "src/rebotarm_vision/config/camera_ubuntu.yaml",
+        "src/rebotarm_vision/config/flat_graspnet.yaml",
+    ):
+        assert f"tcp_offset_xyz: {expected}" in _read(relative)
+
+    upstream_model = _read(
+        "third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/robot.xml"
+    )
+    assert 'name="ee_site" pos="-0.105 0 0"' in upstream_model
 
 
 def test_visual_grasp_strategy_defaults_are_split_into_yaml_profiles():
@@ -160,8 +176,7 @@ def test_visual_grasp_strategy_defaults_are_split_into_yaml_profiles():
     assert "visual_ready_params" in launch_text
     assert "flat_graspnet_params" in launch_text
     assert "parameters=[\n            visual_ready_params," in launch_text
-    assert "graspnet_policy_params,\n                {" in launch_text
-    assert "grasp_pose_policy_params,\n                table_safety_params," in launch_text
+    assert "graspnet_config,\n                {" in launch_text
     assert "grasp_pose_policy_params,\n                gripper_policy_params," in launch_text
     assert "retry_policy_params,\n                retreat_policy_params," in launch_text
     assert "visual_servo_params,\n                table_safety_params," in launch_text
@@ -197,9 +212,9 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     node_text = _read("src/rebotarm_vision/rebotarm_vision/visual_ready_node.py")
 
     assert 'DeclareLaunchArgument("start_visual_ready", default_value="true")' in launch_text
-    assert 'DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="true")' in launch_text
+    assert 'DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false")' in launch_text
     assert (
-        'DeclareLaunchArgument("visual_ready_joint_positions", default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]")'
+        'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"'
         in launch_text
     )
     assert 'DeclareLaunchArgument("visual_ready_startup_delay_sec", default_value="0.0")' in launch_text
@@ -220,7 +235,7 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'self.declare_parameter("exit_after_startup_move", False)' in node_text
     assert 'bool(node.get_parameter("exit_after_startup_move").value)' in node_text
     assert 'self.declare_parameter("startup_delay_sec", 0.0)' in node_text
-    assert 'self.declare_parameter("joint_positions", [0.0, -0.1, -0.2, 0.2, 0.0, 0.0])' in node_text
+    assert "[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]" in node_text
     assert 'f"/{namespace}/visual_ready/move"' in node_text
     assert "create_service(" in node_text
     assert "Trigger," in node_text
@@ -288,8 +303,8 @@ def test_visual_ready_hold_launch_starts_real_controller_without_moveit_stack():
 
     assert 'executable="reBotArmController"' in launch_text
     assert 'executable="rebotarm_visual_ready"' in launch_text
-    assert 'DeclareLaunchArgument("visual_ready_joint_positions", default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]")' in launch_text
-    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="true")' in launch_text
+    assert 'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"' in launch_text
+    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in launch_text
     assert '"auto_move_on_start": True' in launch_text
     assert '"exit_after_startup_move": True' in launch_text
     assert "interactive_system.launch.py" not in launch_text
@@ -301,25 +316,48 @@ def test_visual_ready_hold_launch_starts_real_controller_without_moveit_stack():
 def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
     launch_text = _read("src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py")
 
-    assert 'PathJoinSubstitution([bringup_share, "launch", "visual_grasp_system.launch.py"])' in launch_text
+    assert '[bringup_share, "launch", "visual_grasp_system.launch.py"]' in launch_text
+    assert 'executable="rebotarm_mujoco_node"' in launch_text
     assert 'DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim")' in launch_text
     assert '"arm_namespace": sim_arm_namespace' in launch_text
     assert '"use_hardware": "false"' in launch_text
+    assert '"start_sim_trajectory_controller": "false"' in launch_text
     assert '"start_visual_ready": "false"' in launch_text
     assert '"use_local_rviz": use_local_rviz' in launch_text
+    assert 'SetParameter(name="use_sim_time", value=use_sim_time)' in launch_text
     assert '"execution_mode": "execute"' in launch_text
     assert '"start_vision": "true"' in launch_text
+    assert '"vision_profile": "ubuntu_native"' in launch_text
     assert '"start_graspnet_baseline": "true"' in launch_text
+    assert '"graspnet_source_mode": "local_service"' in launch_text
+    assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
+    assert '"graspnet_local_infer_url": graspnet_local_infer_url' in launch_text
+    assert 'SetEnvironmentVariable(name="PYTHONPATH", value=_vision_pythonpath())' in launch_text
     assert '"candidate_ik_input_topic": "/grasp/graspnet_candidates"' in launch_text
     assert '"candidate_pose_policy": "preserve_candidate_pose"' in launch_text
     assert '"candidate_max_candidates_per_frame": "20"' in launch_text
-    assert '"candidate_joint_state_topic": ["/", sim_arm_namespace, "/visual_joint_states"]' in launch_text
+    assert '"candidate_joint_state_topic": [' in launch_text
+    assert '"/visual_joint_states",' in launch_text
     assert '"candidate_max_joint6_delta_rad": "0.0"' in launch_text
     assert '"tcp_offset_xyz": "[0.0, 0.0, 0.0]"' in launch_text
     assert '"gripper_grasp_enabled": "false"' in launch_text
     assert '"grasp_verification_enabled": "false"' in launch_text
+    assert '"max_plan_age_sec": "3.0"' in launch_text
     assert '"moveit_planning_time": "8.0"' in launch_text
     assert "reBotArmController" not in launch_text
+
+
+def test_visual_grasp_system_can_disable_rviz_only_controller_for_external_mujoco():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+
+    assert 'start_sim_trajectory_controller = LaunchConfiguration("start_sim_trajectory_controller")' in launch_text
+    assert 'DeclareLaunchArgument(\n                "start_sim_trajectory_controller",' in launch_text
+    assert "start_sim_trajectory_controller," in launch_text
+    assert '"local_infer_url": graspnet_local_infer_url' in launch_text
+    assert '"local_timeout_ms": graspnet_local_timeout_ms' in launch_text
+    assert '"max_input_skew_ms": graspnet_max_input_skew_ms' in launch_text
+    assert "graspnet_config," in launch_text
+    assert 'DeclareLaunchArgument("graspnet_config", default_value=graspnet_policy_params)' in launch_text
 
 
 def test_sim_trajectory_controller_publishes_gripper_state_for_rviz_finger_links():
@@ -338,15 +376,15 @@ def test_sim_trajectory_controller_publishes_gripper_state_for_rviz_finger_links
     assert "self._latest_gripper_position = float(msg.position)" in visual_text
 
 
-def test_visual_grasp_system_forwards_hardware_channel_and_disables_on_shutdown():
+def test_visual_grasp_system_forwards_hardware_channel_and_uses_safe_shutdown_default():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
     interactive_text = _read("src/rebotarm_bringup/launch/interactive_system.launch.py")
 
     assert 'DeclareLaunchArgument("channel", default_value="auto")' in launch_text
-    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="true")' in launch_text
+    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in launch_text
     assert '"channel": channel' in launch_text
     assert '"shutdown_safe_home": shutdown_safe_home' in launch_text
-    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="true")' in interactive_text
+    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in interactive_text
     assert '"shutdown_safe_home": shutdown_safe_home' in interactive_text
     assert 'DeclareLaunchArgument("start_motion_execution", default_value="true")' in launch_text
     assert 'executable="PoseExecutionNode"' in launch_text
@@ -620,6 +658,7 @@ def test_visual_grasp_executor_wires_retry_verification_place_and_recovery():
     assert "if index == int(candidates.best_index):" in executor_text
     assert "continue" in executor_text
     assert "def _verify_after_lift" in executor_text
+    assert 'return True, "gripper disabled: grasp verification skipped"' in executor_text
     assert "def _append_place_stages" in executor_text
     assert "def _precheck_execute_pose" in executor_text
     assert 'name="retry_safe_retreat"' in executor_text
@@ -709,8 +748,8 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert "CandidateWorkspaceGateConfig" in gate_policy_text
     assert "candidate_workspace_gate(" in gate_policy_text
     assert 'self.declare_parameter("candidate_workspace_gate_enabled", False)' in node_text
-    assert 'self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])' in node_text
-    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])' in node_text
     assert 'self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)' in node_text
     assert "variants = self._candidate_target_variants(msg, candidate.pose)" in node_text
     assert "for pregrasp, grasp, variant_label in variants:" in node_text
@@ -767,8 +806,10 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120")' in launch_text
     assert 'DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120")' in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]")' in launch_text
+    assert 'DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]")' in launch_text
+    assert 'default_value="[0.0, 0.0, -0.707106781, 0.707106781]"' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15")' in launch_text
     assert '"joint_state_topic": candidate_joint_state_topic' in launch_text
     assert '"service_timeout_sec": candidate_filter_service_timeout_sec' in launch_text
@@ -790,11 +831,11 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
     profile_text = _read("src/rebotarm_vision/config/flat_graspnet.yaml")
 
     assert "candidate_pose_policy: preserve_candidate_pose" in profile_text
-    assert "tcp_offset_xyz: [-0.04, 0.0, 0.0]" in profile_text
+    assert "tcp_offset_xyz: [-0.105, 0.0, 0.0]" in profile_text
     assert "target_base_offset_xyz: [0.0, 0.0, 0.0]" in profile_text
     assert "candidate_workspace_gate_enabled: true" in profile_text
-    assert "candidate_workspace_min_xyz: [0.18, -0.35, 0.0]" in profile_text
-    assert "candidate_workspace_max_xyz: [0.64, 0.35, 0.45]" in profile_text
+    assert "candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]" in profile_text
+    assert "candidate_workspace_max_xyz: [0.35, -0.18, 0.45]" in profile_text
     assert "candidate_max_grasp_to_object_center_m: 0.15" in profile_text
     assert "candidate_max_candidates_per_frame: 20" in profile_text
     assert "candidate_pregrasp_min_z_m: 0.120" in profile_text
@@ -893,6 +934,7 @@ def test_low_level_trajectory_stop_holds_current_position_immediately():
 
     assert "self._endpos_ctrl._stop_send.set()" in stop_body
     assert "self.hold_current_position()" in stop_body
+    assert "if self._enabled:" in stop_body
     assert 'self.set_state_machine("IDLE")' in stop_body
 
 
@@ -1406,11 +1448,11 @@ def test_moveit_demo_standalone_publishes_fake_visual_joint_state_source():
     assert 'use_moveit_fake_joint_states' in interactive_text
 
 
-def test_controller_shutdown_runs_safe_home_before_disable_by_default():
+def test_controller_shutdown_safe_home_is_explicit_opt_in_before_disable():
     controller_text = _read("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
     hardware_text = _read("src/rebotarmcontroller/rebotarmcontroller/hardware_manager.py")
 
-    assert 'self.declare_parameter("shutdown_safe_home", True)' in controller_text
+    assert 'self.declare_parameter("shutdown_safe_home", False)' in controller_text
     assert "and self.hardware.enabled" in controller_text
     assert "self._conditional_safe_home_before_shutdown()" in controller_text
     assert "self.hardware.stop_active_motion()" in controller_text
@@ -1427,7 +1469,7 @@ def test_controller_shutdown_runs_safe_home_before_disable_by_default():
     assert "def gripper_active(self) -> bool:" in hardware_text
     assert "def gripper_mode(self) -> str:" in hardware_text
     assert "except Exception:" in hardware_text
-    assert "self.shutdown()" in hardware_text
+    assert "self._disconnect_after_failed_connect()" in hardware_text
     assert 'self.get_logger().error(f"hardware connect failed; disabled before exit: {exc}")' in controller_text
     assert "node = None" in controller_text
     assert "if node is not None:" in controller_text

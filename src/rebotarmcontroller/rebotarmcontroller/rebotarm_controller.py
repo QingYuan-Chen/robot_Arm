@@ -32,7 +32,7 @@ class reBotArmController(Node):
         self.declare_parameter("cmd_arbitration", "reject")
         self.declare_parameter("frame_id", "base_link")
         self.declare_parameter("ee_frame_id", "end_link")
-        self.declare_parameter("shutdown_safe_home", True)
+        self.declare_parameter("shutdown_safe_home", False)
         self.declare_parameter("teach_record_path", "teleop_records/teach_record.jsonl")
         self.declare_parameter("teach_record_rate_hz", 150.0)
         self.declare_parameter("teach_record_require_gravity_comp", True)
@@ -96,7 +96,8 @@ class reBotArmController(Node):
 
         self.get_logger().info(
             f"reBotArmController started: namespace=/{self.arm_namespace}, "
-            f"joints={self.hardware.joint_names}"
+            f"joints={self.hardware.joint_names}, "
+            f"lifecycle={self.hardware.lifecycle_state}; explicit enable required"
         )
 
     def publish_arm_status(self) -> None:

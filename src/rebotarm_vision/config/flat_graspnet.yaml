@@ -5,11 +5,12 @@
 # pregrasp-height, joint-motion, and gripper gates.
 flat_graspnet:
   candidate_pose_policy: preserve_candidate_pose
-  tcp_offset_xyz: [-0.04, 0.0, 0.0]
+  # Keep aligned with upstream MuJoCo ee_site: pos="-0.105 0 0".
+  tcp_offset_xyz: [-0.105, 0.0, 0.0]
   target_base_offset_xyz: [0.0, 0.0, 0.0]
   candidate_workspace_gate_enabled: true
-  candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
-  candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
+  candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+  candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
   candidate_max_grasp_to_object_center_m: 0.15
   candidate_max_candidates_per_frame: 20
   candidate_orientation_yaw_offsets_rad: [0.0]
@@ -23,4 +24,3 @@ flat_graspnet:
   candidate_max_joint6_delta_rad: 1.5708
   candidate_joint6_symmetry_enabled: true
   candidate_joint6_symmetry_angle_rad: 3.141592653589793
-

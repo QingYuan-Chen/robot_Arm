@@ -80,7 +80,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("shutdown_safe_home", default_value="true"),
+            DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
             DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),

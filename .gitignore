@@ -17,6 +17,8 @@ htmlcov/
 # Local environments and editor settings
 .venv/
 .venv-vision/
+.venv-graspnet/
+.local-models/
 venv/
 .env
 .vscode/

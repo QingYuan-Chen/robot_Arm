@@ -6,7 +6,14 @@ from pathlib import Path
 import cv2
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
+from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
 
 from rebotarm_msgs.msg import Detection2DArray
@@ -18,6 +25,7 @@ from .converters.image_msgs import camera_info_to_msg, color_to_msg, depth_to_ms
 from .converters.network_detection_msgs import detection_json_to_msg
 from .detector.network_detection_client import NetworkDetectionClient, NetworkDetectionConfig
 from .detector.yolo_detector import YoloDetector
+from .timestamp_policy import select_frame_timestamp_ns
 from .utils.visualization import draw_detections
 
 
@@ -28,15 +36,21 @@ class RebotArmVisionNode(Node):
         self._declare_parameters()
         self._load_parameters()
         self._preview_window_created = False
+        image_qos = self._image_qos_profile()
 
         self.color_pub = self.create_publisher(
             Image,
             "/camera/color/image_raw",
-            qos_profile_sensor_data,
+            image_qos,
         )
         self.depth_pub = self.create_publisher(
             Image,
             "/camera/depth/image_raw",
+            image_qos,
+        )
+        self.color_camera_info_pub = self.create_publisher(
+            CameraInfo,
+            "/camera/color/camera_info",
             qos_profile_sensor_data,
         )
         self.depth_camera_info_pub = self.create_publisher(
@@ -54,7 +68,7 @@ class RebotArmVisionNode(Node):
             self.annotated_pub = self.create_publisher(
                 Image,
                 "/camera/color/annotated",
-                qos_profile_sensor_data,
+                image_qos,
             )
 
         self.camera = self._create_camera_driver()
@@ -93,6 +107,7 @@ class RebotArmVisionNode(Node):
             self.get_logger().warn("camera warmup incomplete, continuing with frame retries")
 
         self.empty_frame_count = 0
+        self._vision_failure_latched = False
         self._detection_log_countdown = 0
         if self.show_preview:
             display_env = os.environ.get("DISPLAY", "").strip()
@@ -177,6 +192,7 @@ class RebotArmVisionNode(Node):
         self.declare_parameter("ros.show_preview", False)
         self.declare_parameter("ros.preview_window_name", "RebotArm Vision Preview")
         self.declare_parameter("ros.loop_rate_hz", 10.0)
+        self.declare_parameter("ros.image_reliability", "best_effort")
         self.declare_parameter("ros.enable_detection", False)
         self.declare_parameter("ros.enable_network_detection", False)
 
@@ -213,11 +229,20 @@ class RebotArmVisionNode(Node):
         self.show_preview = bool(self.get_parameter("ros.show_preview").value)
         self.preview_window_name = str(self.get_parameter("ros.preview_window_name").value)
         self.loop_rate_hz = float(self.get_parameter("ros.loop_rate_hz").value)
+        self.image_reliability = str(
+            self.get_parameter("ros.image_reliability").value
+        ).strip().lower()
         self.enable_detection = bool(self.get_parameter("ros.enable_detection").value)
         self.enable_network_detection = bool(self.get_parameter("ros.enable_network_detection").value)
+        self.ros_use_sim_time = bool(self.get_parameter("use_sim_time").value)
 
         if self.enable_network_detection and not self.network_detections_url:
             raise RuntimeError("camera.network_detections_url must not be empty when network detection is enabled")
+
+        if self.image_reliability not in {"best_effort", "reliable"}:
+            raise RuntimeError(
+                "ros.image_reliability must be 'best_effort' or 'reliable'"
+            )
 
         if self.enable_detection and not self.enable_network_detection:
             if not self.model_path:
@@ -225,10 +250,25 @@ class RebotArmVisionNode(Node):
             if not Path(self.model_path).exists():
                 raise FileNotFoundError(f"YOLO model not found: {self.model_path}")
 
+    def _image_qos_profile(self) -> QoSProfile:
+        reliability = (
+            ReliabilityPolicy.RELIABLE
+            if self.image_reliability == "reliable"
+            else ReliabilityPolicy.BEST_EFFORT
+        )
+        return QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5,
+            reliability=reliability,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
     def _on_timer(self) -> None:
         color_bgr, depth_mm = self.camera.get_frame()
         if color_bgr is None and depth_mm is None:
             self.empty_frame_count += 1
+            self._publish_empty_detection()
+            self._record_frame_failure("empty")
             if self.empty_frame_count % 10 == 0:
                 self.get_logger().warn(
                     f"empty frames encountered: {self.empty_frame_count}, "
@@ -237,8 +277,10 @@ class RebotArmVisionNode(Node):
             return
 
         depth_expected = self.enable_depth
-        if color_bgr is None or (depth_expected and depth_mm is None):
+        frame_complete = color_bgr is not None and (not depth_expected or depth_mm is not None)
+        if not frame_complete:
             self.empty_frame_count += 1
+            self._record_frame_failure("partial")
             if self.empty_frame_count % 10 == 0:
                 self.get_logger().warn(
                     f"partial frames encountered: {self.empty_frame_count}, "
@@ -246,28 +288,48 @@ class RebotArmVisionNode(Node):
                 )
         else:
             self.empty_frame_count = 0
-        stamp = self.get_clock().now().to_msg()
+            if self._vision_failure_latched:
+                self.get_logger().info("vision frame stream recovered; fail-closed latch cleared")
+            self._vision_failure_latched = False
+        receipt_stamp = self.get_clock().now().to_msg()
+        color_stamp = self._frame_stamp("color", receipt_stamp)
+        depth_stamp = self._frame_stamp("depth", receipt_stamp)
         preview_image = color_bgr
 
         if color_bgr is not None:
-            self.color_pub.publish(color_to_msg(color_bgr, stamp, self.frame_id_color))
-        if depth_mm is not None:
-            self.depth_pub.publish(depth_to_msg(depth_mm, stamp, self.frame_id_depth))
-            camera_info = self._camera_info_payload(depth_mm)
+            self.color_pub.publish(color_to_msg(color_bgr, color_stamp, self.frame_id_color))
+            camera_info = self._camera_info_payload("color", color_bgr)
             if camera_info is not None:
-                self.depth_camera_info_pub.publish(camera_info_to_msg(camera_info, stamp, self.frame_id_depth))
+                self.color_camera_info_pub.publish(
+                    camera_info_to_msg(camera_info, color_stamp, self.frame_id_color)
+                )
+        if depth_mm is not None:
+            self.depth_pub.publish(depth_to_msg(depth_mm, depth_stamp, self.frame_id_depth))
+            camera_info = self._camera_info_payload("depth", depth_mm)
+            if camera_info is not None:
+                self.depth_camera_info_pub.publish(
+                    camera_info_to_msg(camera_info, depth_stamp, self.frame_id_depth)
+                )
+
+        if not frame_complete:
+            self._publish_empty_detection(color_stamp)
+            return
 
         if self.network_detection_client is not None and color_bgr is not None:
             payload = self.network_detection_client.fetch()
-            detection_msg = detection_json_to_msg(payload, stamp, self.frame_id_color)
+            detection_msg = detection_json_to_msg(payload, color_stamp, self.frame_id_color)
             self.detection_pub.publish(detection_msg)
             if self.annotated_pub is not None:
                 annotated = draw_detections(color_bgr, detection_msg)
-                self.annotated_pub.publish(color_to_msg(annotated, stamp, self.frame_id_color))
+                self.annotated_pub.publish(
+                    color_to_msg(annotated, color_stamp, self.frame_id_color)
+                )
                 preview_image = annotated
         elif self.detector is not None and color_bgr is not None:
             results = self.detector.infer(color_bgr)
-            detection_msg = result_to_detection_array_msg(results, stamp, self.frame_id_color)
+            detection_msg = result_to_detection_array_msg(
+                results, color_stamp, self.frame_id_color
+            )
             self.detection_pub.publish(detection_msg)
             self._detection_log_countdown += 1
             if self._detection_log_countdown >= 20:
@@ -279,7 +341,9 @@ class RebotArmVisionNode(Node):
 
             if self.annotated_pub is not None:
                 annotated = draw_detections(color_bgr, detection_msg)
-                self.annotated_pub.publish(color_to_msg(annotated, stamp, self.frame_id_color))
+                self.annotated_pub.publish(
+                    color_to_msg(annotated, color_stamp, self.frame_id_color)
+                )
                 preview_image = annotated
             elif self.show_preview:
                 preview_image = draw_detections(color_bgr, detection_msg)
@@ -298,13 +362,50 @@ class RebotArmVisionNode(Node):
                 self._preview_window_created = False
                 self.get_logger().info("preview window closed")
 
-    def _camera_info_payload(self, depth_mm):
+    def _record_frame_failure(self, kind: str) -> None:
+        threshold = max(int(self.max_empty_frames), 1)
+        if self.empty_frame_count < threshold or self._vision_failure_latched:
+            return
+        self._vision_failure_latched = True
+        self.get_logger().error(
+            "vision input fail-closed: "
+            f"{self.empty_frame_count} consecutive {kind} frames reached "
+            f"camera.max_empty_frames={threshold}; empty detections will continue"
+        )
+
+    def _publish_empty_detection(self, stamp=None) -> None:
+        detection_msg = Detection2DArray()
+        detection_msg.header.stamp = stamp or self.get_clock().now().to_msg()
+        detection_msg.header.frame_id = self.frame_id_color
+        self.detection_pub.publish(detection_msg)
+
+    def _frame_stamp(self, stream: str, fallback_stamp):
+        camera_timestamp_ns = None
+        getter = getattr(self.camera, "get_frame_timestamp_ns", None)
+        if callable(getter):
+            camera_timestamp_ns = getter(stream)
+        receipt_timestamp_ns = (
+            int(fallback_stamp.sec) * 1_000_000_000 + int(fallback_stamp.nanosec)
+        )
+        timestamp_ns = select_frame_timestamp_ns(
+            camera_timestamp_ns,
+            receipt_timestamp_ns,
+            use_sim_time=self.ros_use_sim_time,
+        )
+        if timestamp_ns == receipt_timestamp_ns:
+            return fallback_stamp
+        return Time(nanoseconds=timestamp_ns).to_msg()
+
+    def _camera_info_payload(self, stream: str, image):
         getter = getattr(self.camera, "get_camera_info", None)
         if callable(getter):
-            camera_info = getter()
+            try:
+                camera_info = getter(stream)
+            except TypeError:
+                camera_info = getter()
             if isinstance(camera_info, dict):
                 return camera_info
-        height, width = depth_mm.shape[:2]
+        height, width = image.shape[:2]
         return {
             "width": int(width),
             "height": int(height),
@@ -329,9 +430,12 @@ def main(args=None) -> None:
     node = RebotArmVisionNode()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

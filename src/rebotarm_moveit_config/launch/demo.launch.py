@@ -22,6 +22,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
     arm_namespace = LaunchConfiguration("arm_namespace")
     use_fake_joint_states = LaunchConfiguration("use_fake_joint_states")
+    use_sim_time = LaunchConfiguration("use_sim_time")
     moveit_share = FindPackageShare("rebotarm_moveit_config")
     rviz_config = PathJoinSubstitution([moveit_share, "rviz", "moveit.rviz"])
 
@@ -77,6 +78,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_rviz", default_value="true"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("use_fake_joint_states", default_value="true"),
+            DeclareLaunchArgument("use_sim_time", default_value="false"),
             LogInfo(msg="move_group planning params:\n" + planning_debug_summary),
             Node(
                 package="tf2_ros",
@@ -84,13 +86,14 @@ def generate_launch_description():
                 name="static_transform_publisher",
                 output="screen",
                 arguments=["--frame-id", "world", "--child-frame-id", "base_link"],
+                parameters=[{"use_sim_time": use_sim_time}],
             ),
             Node(
                 package="rebotarm_interactive_control",
                 executable="GripperVisualJointStateNode",
                 name="gripper_visual_joint_state_node",
                 output="screen",
-                parameters=[{"arm_namespace": arm_namespace}],
+                parameters=[{"arm_namespace": arm_namespace, "use_sim_time": use_sim_time}],
             ),
             Node(
                 package="joint_state_publisher",
@@ -100,7 +103,7 @@ def generate_launch_description():
                 condition=IfCondition(use_fake_joint_states),
                 parameters=[
                     moveit_config.robot_description,
-                    {"rate": 30.0},
+                    {"rate": 30.0, "use_sim_time": use_sim_time},
                 ],
                 remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
             ),
@@ -109,7 +112,7 @@ def generate_launch_description():
                 executable="robot_state_publisher",
                 name="robot_state_publisher",
                 output="screen",
-                parameters=[moveit_config.robot_description],
+                parameters=[moveit_config.robot_description, {"use_sim_time": use_sim_time}],
                 remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
             ),
             Node(
@@ -123,6 +126,7 @@ def generate_launch_description():
                     ompl_planning_yaml,
                     trajectory_execution,
                     sensors_3d,
+                    {"use_sim_time": use_sim_time},
                 ],
             ),
             Node(
@@ -139,6 +143,7 @@ def generate_launch_description():
                     moveit_config.robot_description_kinematics,
                     moveit_config.joint_limits,
                     ompl_planning_yaml,
+                    {"use_sim_time": use_sim_time},
                 ],
                 condition=IfCondition(use_rviz),
             ),

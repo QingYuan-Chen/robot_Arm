@@ -156,7 +156,7 @@
       xyz="0 0 -1" />
     <limit
       lower="-3.14"
-      upper="0"
+      upper="0.02"
       effort="27"
       velocity="50" />
   </joint>

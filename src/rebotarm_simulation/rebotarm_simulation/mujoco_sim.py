@@ -196,6 +196,32 @@ class RebotArmMujoco:
             self._mj.mj_resetData(self._model, self._data)
         return self._finish_reset()
 
+    def reset_joint_positions(self, positions: Sequence[float]) -> SimulationState:
+        """Reset the six arm joints to an exact measured start state.
+
+        This is intended for deterministic sim-to-real replay. It changes the
+        simulated state only; it does not command a physical controller.
+        """
+        self._ensure_open()
+        values = _finite_vector(positions, len(ARM_JOINT_NAMES), "joint positions")
+        for index, (joint_id, value) in enumerate(zip(self._joint_ids[:6], values)):
+            lower, upper = (float(bound) for bound in self._model.jnt_range[joint_id])
+            if value < lower or value > upper:
+                raise ValueError(
+                    f"{ARM_JOINT_NAMES[index]} position {value} outside [{lower}, {upper}]"
+                )
+            self._data.qpos[int(self._model.jnt_qposadr[joint_id])] = value
+            self._data.qvel[int(self._model.jnt_dofadr[joint_id])] = 0.0
+            self._position_targets[index] = value
+        self._data.ctrl[:] = 0.0
+        self._arm_controller.reset()
+        self._control_phase = 0
+        self._mj.mj_forward(self._model, self._data)
+        self._seed_arm_torque_from_gravity()
+        self._apply_motor_control()
+        self._mj.mj_forward(self._model, self._data)
+        return self.get_state()
+
     def _finish_reset(self) -> SimulationState:
         for index, joint_id in enumerate(self._joint_ids):
             qpos_address = int(self._model.jnt_qposadr[joint_id])

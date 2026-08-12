@@ -112,6 +112,7 @@ def test_network_graspnet_payload_converts_to_candidates():
         "frame_id": "camera_depth_frame",
         "source": "windows_graspnet_baseline",
         "backend_configured": True,
+        "timestamp_ns": 1_700_000_000_123_456_789,
         "candidates": [
             {
                 "class_name": "bottle",
@@ -133,6 +134,9 @@ def test_network_graspnet_payload_converts_to_candidates():
     assert candidates.candidates[0].confidence == pytest.approx(0.88)
     assert candidates.candidates[0].pose.position.x == pytest.approx(0.12)
     assert candidates.candidates[0].jaw_width == pytest.approx(0.042)
+    assert candidates.header.stamp.sec == 1_700_000_000
+    assert candidates.header.stamp.nanosec == 123_456_789
+    assert candidates.candidates[0].header.stamp.sec == 1_700_000_000
 
 
 def test_graspnet_unavailable_backend_is_explicitly_disabled():
@@ -143,6 +147,29 @@ def test_graspnet_unavailable_backend_is_explicitly_disabled():
     assert backend.available is False
     with pytest.raises(RuntimeError, match="GraspNet baseline backend is not configured"):
         backend.infer(points=np.zeros((1, 3)), colors=np.zeros((1, 3)), max_grasps=5)
+
+
+def test_candidate_filter_tf_failure_publishes_no_ranked_candidates():
+    from rebotarm_msgs.msg import GraspCandidate, GraspCandidateArray
+    from rebotarm_vision.candidate_ik_filter_node import CandidateIkFilterNode
+
+    msg = GraspCandidateArray()
+    msg.header.frame_id = "camera_depth_frame"
+    msg.candidates.append(GraspCandidate())
+    published = []
+    warnings = []
+    node = object.__new__(CandidateIkFilterNode)
+    node.get_parameter = lambda _name: type("Parameter", (), {"value": 10})()
+    node._candidate_target_variants = lambda _msg, _pose: (_ for _ in ()).throw(
+        RuntimeError("TF lookup unavailable")
+    )
+    node._publish_ranked = lambda original, ranked: published.append((original, ranked))
+    node.get_logger = lambda: type("Logger", (), {"warn": warnings.append})()
+
+    CandidateIkFilterNode._on_candidates_unlocked(node, msg)
+
+    assert published == [(msg, [])]
+    assert warnings == ["candidate IK filter rejected candidate: TF lookup unavailable"]
 
 
 def test_preserve_input_safety_gate_allows_low_grasp_when_width_is_valid():
@@ -171,4 +198,3 @@ def test_preserve_input_safety_gate_allows_low_grasp_when_width_is_valid():
 
     assert CandidateIkFilterNode._candidate_safety_gate(node, candidate, grasp=low_grasp) is True
     assert CandidateIkFilterNode._candidate_safety_gate(node, candidate, grasp=safe_grasp) is True
-

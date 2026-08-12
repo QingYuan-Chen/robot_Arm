@@ -87,6 +87,7 @@ def test_interactive_control_keeps_dashboard_compatibility_imports() -> None:
 
 def test_layered_packages_do_not_depend_on_interactive_control_package() -> None:
     package_roots = [
+        ROOT / "src/rebotarm_calibration/rebotarm_calibration",
         ROOT / "src/rebotarm_dashboard/rebotarm_dashboard",
         ROOT / "src/rebotarm_motion/rebotarm_motion",
         ROOT / "src/rebotarm_teach/rebotarm_teach",

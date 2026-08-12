@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import importlib.util
 import os
 import sys
+import types
 from typing import Any
 
 import numpy as np
@@ -11,6 +13,57 @@ import numpy as np
 DEFAULT_NUM_POINT = 20000
 DEFAULT_WORKSPACE_MIN_DEPTH_M = 0.05
 DEFAULT_WORKSPACE_MAX_DEPTH_M = 1.5
+
+
+def install_training_knn_fallback() -> None:
+    """Provide the training-only knn import without building the legacy extension.
+
+    The official model imports label-generation helpers even in eval mode. Those
+    helpers import ``knn_modules``, although inference never calls them. A small
+    torch implementation keeps that import valid and is also correct if a caller
+    explicitly uses the helper on modest tensors.
+    """
+    if "knn_modules" in sys.modules:
+        return
+    import torch
+
+    module = types.ModuleType("knn_modules")
+
+    def knn(ref, query, k=1):
+        ref_points = ref.transpose(1, 2).contiguous()
+        query_points = query.transpose(1, 2).contiguous()
+        distances = torch.cdist(query_points.float(), ref_points.float())
+        return torch.topk(distances, int(k), dim=-1, largest=False).indices.transpose(1, 2) + 1
+
+    module.knn = knn
+    sys.modules["knn_modules"] = module
+
+
+def load_grasp_group(model_root: str):
+    """Load GraspGroup without importing graspnetAPI's evaluation-only stack."""
+    configured = os.environ.get("GRASPNET_API_ROOT", "").strip()
+    candidates = []
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.append(Path(model_root).resolve().parent / "graspnetAPI" / "graspnetAPI")
+    for api_root in candidates:
+        grasp_path = api_root / "grasp.py"
+        if not grasp_path.is_file():
+            continue
+        package = types.ModuleType("graspnetAPI")
+        package.__path__ = [str(api_root)]
+        package.__package__ = "graspnetAPI"
+        sys.modules["graspnetAPI"] = package
+        spec = importlib.util.spec_from_file_location("graspnetAPI.grasp", grasp_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load GraspNetAPI from {grasp_path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["graspnetAPI.grasp"] = module
+        spec.loader.exec_module(module)
+        return module.GraspGroup
+    from graspnetAPI import GraspGroup
+
+    return GraspGroup
 
 
 def add_windows_dll_directories() -> None:
@@ -228,8 +281,9 @@ class GraspNetBaselineInference:
             sys.path.insert(0, str(root))
 
         import torch
+        install_training_knn_fallback()
         from graspnet import GraspNet, pred_decode
-        from graspnetAPI import GraspGroup
+        GraspGroup = load_grasp_group(self.model_root)
 
         self._torch = torch
         self._pred_decode = pred_decode

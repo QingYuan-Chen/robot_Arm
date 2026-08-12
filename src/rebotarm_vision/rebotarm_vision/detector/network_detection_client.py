@@ -26,13 +26,13 @@ class NetworkDetectionClient:
                 payload = json.loads(response.read().decode("utf-8"))
             if not isinstance(payload, dict):
                 self._last_debug_message = "invalid_json_root"
-                return self._last_payload
+                return {"detections": [], "stale": True}
             self._last_payload = payload
             self._last_debug_message = f"ok detections={len(payload.get('detections', []))}"
             return payload
         except Exception as exc:
             self._last_debug_message = f"exception:{type(exc).__name__}:{exc}"
-            return self._last_payload
+            return {"detections": [], "stale": True}
 
     @property
     def last_debug_message(self) -> str:

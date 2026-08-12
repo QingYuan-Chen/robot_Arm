@@ -55,14 +55,17 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("ee_frame_id", "end_link")
         self.declare_parameter("service_timeout_sec", 5.0)
         self.declare_parameter("pose_policy", "hybrid_geometry_with_base_axis_fallback")
-        self.declare_parameter("fixed_grasp_orientation_xyzw", [0.0, 0.0, 0.0, 1.0])
-        self.declare_parameter("base_approach_axis_xyz", [1.0, 0.0, 0.0])
+        self.declare_parameter(
+            "fixed_grasp_orientation_xyzw",
+            [0.0, 0.0, -0.707106781, 0.707106781],
+        )
+        self.declare_parameter("base_approach_axis_xyz", [0.0, -1.0, 0.0])
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         self.declare_parameter("orientation_yaw_offsets_rad", [0.0])
         self.declare_parameter("candidate_grasp_z_offsets_m", [0.0])
         self.declare_parameter("max_candidates_per_frame", 20)
         self.declare_parameter("lift_z_m", 0.08)
-        self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
+        self.declare_parameter("tcp_offset_xyz", [-0.105, 0.0, 0.0])
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
         self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
         self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)
@@ -72,8 +75,8 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_min_grasp_z_m", 0.0)
         self.declare_parameter("candidate_safe_lift_min_z_m", 0.120)
         self.declare_parameter("candidate_workspace_gate_enabled", False)
-        self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])
-        self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])
+        self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])
+        self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])
         self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)
         self.declare_parameter("candidate_score_joint_distance_weight", 0.15)
         self.declare_parameter("candidate_score_joint6_weight", 0.35)
@@ -227,8 +230,8 @@ class CandidateIkFilterNode(Node):
         except Exception:
             workspace_enabled = False
         object_center_xyz = None
-        workspace_min_xyz = (0.18, -0.35, 0.0)
-        workspace_max_xyz = (0.64, 0.35, 0.45)
+        workspace_min_xyz = (-0.35, -0.64, 0.0)
+        workspace_max_xyz = (0.35, -0.18, 0.45)
         max_grasp_to_object_center_m = 0.15
         if workspace_enabled:
             object_center_xyz = self._candidate_object_center_in_target_frame(candidate)

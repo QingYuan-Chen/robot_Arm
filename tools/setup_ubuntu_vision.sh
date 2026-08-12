@@ -14,7 +14,10 @@ python3 -m venv --system-site-packages "${venv_dir}"
 
 set +u
 source /opt/ros/jazzy/setup.bash
+source "${venv_dir}/bin/activate"
 set -u
+# colcon invokes setup.py through python3 discovered on PATH. Activating the
+# venv here ensures generated ROS console scripts use the vision interpreter.
 "${python_bin}" -m colcon \
   --log-base "${repo_root}/log" \
   build \
