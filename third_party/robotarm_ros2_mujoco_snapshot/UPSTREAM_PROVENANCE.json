@@ -16,12 +16,13 @@
     "tests/test_urdf_to_mjcf.py",
     "src/rebotarm_simulation/README_mujoco.md"
   ],
-  "license_status": "PROVISIONAL",
+  "license_status": "AUTHORIZED_BY_UPSTREAM_OWNER",
   "license_evidence": {
     "package_xml": "Apache-2.0",
     "setup_py": "Apache-2.0",
     "root_license_file": false,
-    "root_license_note": "No LICENSE, COPYING or NOTICE file found in the pinned checkout"
+    "root_license_note": "No LICENSE, COPYING or NOTICE file found in the pinned checkout",
+    "redistribution_authorization": "Repository maintainer confirms upstream-owner authorization for public redistribution of this exact pinned snapshot on 2026-08-13; see THIRD_PARTY_NOTICES.md."
   },
   "sha256": {
     "src/rebotarm_simulation/package.xml": "a8b3c75523690c8b89f16fd0572d9b35a91b3ddbb6fb9acaec4919038bdb9ab3",
