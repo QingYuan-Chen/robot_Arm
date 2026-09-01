@@ -16,7 +16,7 @@ flat_graspnet:
   candidate_orientation_yaw_offsets_rad: [0.0]
   candidate_grasp_z_offsets_m: [0.0]
   candidate_min_jaw_width_m: 0.006
-  candidate_max_jaw_width_m: 0.082
+  candidate_max_jaw_width_m: 0.085
   candidate_min_grasp_z_m: 0.0
   candidate_pregrasp_min_z_m: 0.120
   candidate_score_joint_distance_weight: 0.15

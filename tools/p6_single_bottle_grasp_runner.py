@@ -36,6 +36,7 @@ from rebotarm_motion.real_failure_recovery import recover_real_failure
 
 REAL_CONFIRMATION = "REAL_SINGLE_BOTTLE_GRASP"
 ARM_JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
+MIN_CANDIDATE_CONFIDENCE = 0.4
 
 
 def _parse_args() -> argparse.Namespace:
@@ -90,7 +91,8 @@ def _valid_bottle_plan(message: GraspPlan) -> bool:
         message.valid
         and str(candidate.class_name) == "bottle"
         and str(message.header.frame_id) == "base_link"
-        and 0.0 < float(message.jaw_width) <= 0.082
+        and float(candidate.confidence) >= MIN_CANDIDATE_CONFIDENCE
+        and 0.0 < float(message.jaw_width) <= 0.085
     )
 
 

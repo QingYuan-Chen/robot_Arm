@@ -11,8 +11,13 @@ import numpy as np
 
 
 DEFAULT_NUM_POINT = 20000
+DEFAULT_SAMPLE_VOXEL_SIZE_M = 0.002
 DEFAULT_WORKSPACE_MIN_DEPTH_M = 0.05
 DEFAULT_WORKSPACE_MAX_DEPTH_M = 1.5
+DEFAULT_FOREGROUND_CENTER_FRACTION = 0.35
+DEFAULT_FOREGROUND_NEAR_MARGIN_M = 0.03
+DEFAULT_FOREGROUND_FAR_MARGIN_M = 0.08
+DEFAULT_FOREGROUND_MIN_SEED_POINTS = 32
 
 
 def install_training_knn_fallback() -> None:
@@ -80,11 +85,12 @@ def add_windows_dll_directories() -> None:
             os.add_dll_directory(str(path))
 
 
-def build_scene_cloud(
+def _build_cloud(
     *,
     color_bgr: np.ndarray,
     depth_mm: np.ndarray,
     camera_info: dict[str, Any],
+    pixel_mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     depth = np.asarray(depth_mm)
     color = np.asarray(color_bgr)
@@ -98,6 +104,11 @@ def build_scene_cloud(
     min_depth_m = float(camera_info.get("workspace_min_depth_m", DEFAULT_WORKSPACE_MIN_DEPTH_M))
     max_depth_m = float(camera_info.get("workspace_max_depth_m", DEFAULT_WORKSPACE_MAX_DEPTH_M))
     valid = np.isfinite(z) & (z >= min_depth_m) & (z <= max_depth_m)
+    if pixel_mask is not None:
+        selected = np.asarray(pixel_mask, dtype=bool)
+        if selected.shape != depth.shape:
+            raise ValueError("pixel_mask must match the depth image shape")
+        valid &= selected
     v, u = np.nonzero(valid)
     if len(u) == 0:
         return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.float32)
@@ -114,16 +125,209 @@ def build_scene_cloud(
     return points, colors.astype(np.float32)
 
 
-def sample_cloud(points: np.ndarray, colors: np.ndarray, *, num_point: int) -> tuple[np.ndarray, np.ndarray]:
-    if len(points) == 0:
-        return points, colors
+def build_scene_cloud(
+    *,
+    color_bgr: np.ndarray,
+    depth_mm: np.ndarray,
+    camera_info: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray]:
+    return _build_cloud(
+        color_bgr=color_bgr,
+        depth_mm=depth_mm,
+        camera_info=camera_info,
+    )
+
+
+def build_detection_cloud(
+    *,
+    color_bgr: np.ndarray,
+    depth_mm: np.ndarray,
+    camera_info: dict[str, Any],
+    detection: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build an object-centric cloud from the selected YOLO detection.
+
+    Pixel coordinates remain in the original image coordinate system, so the
+    original camera intrinsics stay valid. Bounding-box maxima follow normal
+    image-slice semantics and are exclusive. A polygon mask is preferred when
+    one is present in the detection payload.
+    """
+    depth = np.asarray(depth_mm)
+    if depth.ndim != 2:
+        raise ValueError("depth_mm must be a 2D image")
+    height, width = depth.shape
+    detection_mask = _detection_pixel_mask((height, width), detection)
+    pixel_mask = _foreground_depth_mask(
+        depth_mm=depth,
+        detection_mask=detection_mask,
+        detection=detection,
+        camera_info=camera_info,
+    )
+    return _build_cloud(
+        color_bgr=color_bgr,
+        depth_mm=depth_mm,
+        camera_info=camera_info,
+        pixel_mask=pixel_mask,
+    )
+
+
+def _detection_pixel_mask(
+    image_shape: tuple[int, int],
+    detection: dict[str, Any],
+) -> np.ndarray:
+    height, width = image_shape
+    polygon = _detection_polygon(detection)
+    if polygon is not None:
+        v, u = np.indices((height, width), dtype=np.float32)
+        return _points_in_polygon(u.reshape(-1), v.reshape(-1), polygon).reshape(
+            height,
+            width,
+        )
+    left, top, right, bottom = _clamped_detection_bbox(
+        image_shape,
+        detection,
+    )
+    pixel_mask = np.zeros((height, width), dtype=bool)
+    if right > left and bottom > top:
+        pixel_mask[top:bottom, left:right] = True
+    return pixel_mask
+
+
+def _foreground_depth_mask(
+    *,
+    depth_mm: np.ndarray,
+    detection_mask: np.ndarray,
+    detection: dict[str, Any],
+    camera_info: dict[str, Any],
+) -> np.ndarray:
+    depth = np.asarray(depth_mm)
+    selected = np.asarray(detection_mask, dtype=bool)
+    if selected.shape != depth.shape:
+        raise ValueError("detection_mask must match the depth image shape")
+
+    depth_scale_m = float(camera_info.get("depth_scale_m", 0.001))
+    z = depth.astype(np.float32) * depth_scale_m
+    min_depth_m = float(camera_info.get("workspace_min_depth_m", DEFAULT_WORKSPACE_MIN_DEPTH_M))
+    max_depth_m = float(camera_info.get("workspace_max_depth_m", DEFAULT_WORKSPACE_MAX_DEPTH_M))
+    valid = selected & np.isfinite(z) & (z >= min_depth_m) & (z <= max_depth_m)
+    if not np.any(valid):
+        return np.zeros(depth.shape, dtype=bool)
+
+    center_fraction = float(
+        camera_info.get("foreground_center_fraction", DEFAULT_FOREGROUND_CENTER_FRACTION)
+    )
+    near_margin_m = float(
+        camera_info.get("foreground_near_margin_m", DEFAULT_FOREGROUND_NEAR_MARGIN_M)
+    )
+    far_margin_m = float(
+        camera_info.get("foreground_far_margin_m", DEFAULT_FOREGROUND_FAR_MARGIN_M)
+    )
+    min_seed_points = int(
+        camera_info.get("foreground_min_seed_points", DEFAULT_FOREGROUND_MIN_SEED_POINTS)
+    )
+    if not 0.0 < center_fraction <= 1.0:
+        raise ValueError("foreground_center_fraction must be in (0, 1]")
+    if near_margin_m < 0.0 or far_margin_m <= 0.0:
+        raise ValueError("foreground depth margins must be non-negative with a positive far margin")
+    if min_seed_points <= 0:
+        raise ValueError("foreground_min_seed_points must be positive")
+
+    left, top, right, bottom = _clamped_detection_bbox(depth.shape, detection)
+    if right <= left or bottom <= top:
+        return np.zeros(depth.shape, dtype=bool)
+    center_width = max(1, int(round((right - left) * center_fraction)))
+    center_height = max(1, int(round((bottom - top) * center_fraction)))
+    center_u = (left + right) // 2
+    center_v = (top + bottom) // 2
+    center_left = max(left, center_u - center_width // 2)
+    center_top = max(top, center_v - center_height // 2)
+    center_right = min(right, center_left + center_width)
+    center_bottom = min(bottom, center_top + center_height)
+    seed_mask = np.zeros(depth.shape, dtype=bool)
+    seed_mask[center_top:center_bottom, center_left:center_right] = True
+    seed_values = z[valid & seed_mask]
+    if seed_values.size < min_seed_points:
+        return np.zeros(depth.shape, dtype=bool)
+
+    foreground_depth_m = float(np.median(seed_values))
+    return valid & (z >= foreground_depth_m - near_margin_m) & (
+        z <= foreground_depth_m + far_margin_m
+    )
+
+
+def _clamped_detection_bbox(
+    image_shape: tuple[int, int],
+    detection: dict[str, Any],
+) -> tuple[int, int, int, int]:
+    height, width = image_shape
+    x_min, y_min, x_max, y_max = _detection_bbox(detection)
+    left = max(0, min(width, int(np.floor(x_min))))
+    top = max(0, min(height, int(np.floor(y_min))))
+    right = max(0, min(width, int(np.ceil(x_max))))
+    bottom = max(0, min(height, int(np.ceil(y_max))))
+    return left, top, right, bottom
+
+
+def _splitmix64(values: np.ndarray) -> np.ndarray:
+    """Return a stable pseudo-random hash for unsigned integer values."""
+    with np.errstate(over="ignore"):
+        hashed = np.asarray(values, dtype=np.uint64) + np.uint64(0x9E3779B97F4A7C15)
+        hashed = (hashed ^ (hashed >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+        hashed = (hashed ^ (hashed >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+        return hashed ^ (hashed >> np.uint64(31))
+
+
+def sample_cloud(
+    points: np.ndarray,
+    colors: np.ndarray,
+    *,
+    num_point: int,
+    voxel_size_m: float = DEFAULT_SAMPLE_VOXEL_SIZE_M,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Select a deterministic, spatially covered GraspNet input cloud.
+
+    Points are grouped into metric voxels and selected one layer at a time so
+    sparse surface regions are represented before dense voxels contribute more
+    points.  The selected set is then placed in a stable hash order.  Keeping
+    that final order spatially decorrelated matters because GraspNet's internal
+    point sampling is sensitive to an axis-sorted input order.
+    """
+    point_array = np.asarray(points)
+    color_array = np.asarray(colors)
+    if len(point_array) == 0:
+        return point_array.astype(np.float32), color_array.astype(np.float32)
+    if len(color_array) != len(point_array):
+        raise ValueError("points and colors must contain the same number of rows")
+
     count = int(num_point)
-    if len(points) >= count:
-        indices = np.random.choice(len(points), count, replace=False)
-    else:
-        extra = np.random.choice(len(points), count - len(points), replace=True)
-        indices = np.concatenate([np.arange(len(points)), extra], axis=0)
-    return points[indices].astype(np.float32), colors[indices].astype(np.float32)
+    if count <= 0:
+        raise ValueError("num_point must be positive")
+    voxel_size = float(voxel_size_m)
+    if not np.isfinite(voxel_size) or voxel_size <= 0.0:
+        raise ValueError("voxel_size_m must be finite and positive")
+
+    voxel = np.floor(point_array.astype(np.float64) / voxel_size).astype(np.int64)
+    original_indices = np.arange(len(point_array), dtype=np.int64)
+    voxel_order = np.lexsort(
+        (original_indices, voxel[:, 2], voxel[:, 1], voxel[:, 0])
+    )
+    sorted_voxel = voxel[voxel_order]
+    group_start = np.empty(len(point_array), dtype=bool)
+    group_start[0] = True
+    group_start[1:] = np.any(sorted_voxel[1:] != sorted_voxel[:-1], axis=1)
+    group_starts = np.flatnonzero(group_start)
+    group_ids = np.cumsum(group_start, dtype=np.int64) - 1
+    ranks_within_group = (
+        np.arange(len(point_array), dtype=np.int64) - group_starts[group_ids]
+    )
+    layered_order = np.lexsort((group_ids, ranks_within_group))
+    selected = voxel_order[layered_order[: min(count, len(point_array))]]
+    if len(selected) < count:
+        selected = np.resize(selected, count)
+
+    stable_keys = _splitmix64(selected.astype(np.uint64))
+    selected = selected[np.argsort(stable_keys, kind="stable")]
+    return point_array[selected].astype(np.float32), color_array[selected].astype(np.float32)
 
 
 def graspnet_array_to_candidates(
@@ -131,14 +335,33 @@ def graspnet_array_to_candidates(
     *,
     class_name: str,
     max_grasps: int,
+    max_jaw_width_m: float | None = None,
     target_detection: dict[str, Any] | None = None,
     camera_info: dict[str, Any] | None = None,
+    stage_counts: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     array = np.asarray(grasp_array, dtype=np.float32)
     if array.ndim == 1:
         array = array.reshape(1, -1)
     if target_detection is not None and camera_info is not None:
         array = filter_grasp_array_by_detection_projection(array, target_detection=target_detection, camera_info=camera_info)
+    if stage_counts is not None:
+        stage_counts["after_projection"] = int(len(array))
+    if max_jaw_width_m is not None:
+        width_limit = float(max_jaw_width_m)
+        if not np.isfinite(width_limit) or width_limit <= 0.0:
+            raise ValueError("max_jaw_width_m must be finite and positive")
+        if array.ndim != 2 or array.shape[1] < 2:
+            array = array[:0]
+        else:
+            widths = array[:, 1]
+            array = array[
+                np.isfinite(widths)
+                & (widths > 0.0)
+                & (widths <= width_limit)
+            ]
+    if stage_counts is not None:
+        stage_counts["after_jaw_width"] = int(len(array))
     candidates: list[dict[str, Any]] = []
     for row in array[: max(0, int(max_grasps))]:
         if row.size < 16:
@@ -159,6 +382,8 @@ def graspnet_array_to_candidates(
                 "target_filter": "yolo_projection" if target_detection is not None and camera_info is not None else "",
             }
         )
+    if stage_counts is not None:
+        stage_counts["published"] = int(len(candidates))
     return candidates
 
 
@@ -268,7 +493,38 @@ class GraspNetBaselineInference:
         self._GraspGroup = None
         self._ModelFreeCollisionDetector = None
         self._pred_decode = None
+        self.last_stage_counts: dict[str, Any] = self._empty_stage_counts()
         self.net = self._load_network()
+
+    @staticmethod
+    def _empty_stage_counts() -> dict[str, Any]:
+        return {
+            "scene_points": 0,
+            "object_points": 0,
+            "raw": 0,
+            "after_collision": 0,
+            "after_nms": 0,
+            "after_score_sort": 0,
+            "after_projection": 0,
+            "after_jaw_width": 0,
+            "published": 0,
+            "empty_reason": "",
+        }
+
+    @staticmethod
+    def _empty_reason(stage_counts: dict[str, Any]) -> str:
+        ordered_stages = (
+            ("raw", "raw_candidates_empty"),
+            ("after_collision", "collision_filter_empty"),
+            ("after_nms", "nms_empty"),
+            ("after_projection", "projection_filter_empty"),
+            ("after_jaw_width", "jaw_width_filter_empty"),
+            ("published", "publish_conversion_empty"),
+        )
+        for key, reason in ordered_stages:
+            if int(stage_counts.get(key, 0)) == 0:
+                return reason
+        return ""
 
     def _load_network(self):
         add_windows_dll_directories()
@@ -320,26 +576,64 @@ class GraspNetBaselineInference:
         detections: list[dict[str, Any]],
         camera_info: dict[str, Any],
         max_grasps: int,
+        max_jaw_width_m: float | None = None,
     ) -> list[dict[str, Any]]:
+        self.last_stage_counts = self._empty_stage_counts()
+        stage_counts = self.last_stage_counts
         if not detections:
+            stage_counts["empty_reason"] = "no_detections"
             return []
         detection = max(detections, key=lambda item: float(item.get("confidence", 0.0)))
-        points, colors = build_scene_cloud(
+        scene_points, _scene_colors = build_scene_cloud(
             color_bgr=color_bgr,
             depth_mm=depth_mm,
             camera_info=camera_info,
         )
-        if len(points) == 0:
+        stage_counts["scene_points"] = int(len(scene_points))
+        if len(scene_points) == 0:
+            stage_counts["empty_reason"] = "empty_scene_cloud"
             return []
-        points_sampled, colors_sampled = sample_cloud(points, colors, num_point=self.num_point)
-        grasp_array = self._infer_grasp_array(points_sampled, colors_sampled, full_points=points)
-        return graspnet_array_to_candidates(
+        object_points, object_colors = build_detection_cloud(
+            color_bgr=color_bgr,
+            depth_mm=depth_mm,
+            camera_info=camera_info,
+            detection=detection,
+        )
+        stage_counts["object_points"] = int(len(object_points))
+        if len(object_points) == 0:
+            stage_counts["empty_reason"] = "empty_object_cloud"
+            return []
+        points_sampled, colors_sampled = sample_cloud(
+            object_points,
+            object_colors,
+            num_point=self.num_point,
+        )
+        grasp_array = self._infer_grasp_array(
+            points_sampled,
+            colors_sampled,
+            full_points=scene_points,
+        )
+        inferred_array = np.asarray(grasp_array)
+        inferred_count = int(
+            1 if inferred_array.ndim == 1 and inferred_array.size else len(inferred_array)
+        )
+        if int(stage_counts["after_score_sort"]) == 0 and inferred_count > 0:
+            stage_counts["raw"] = inferred_count
+            stage_counts["after_collision"] = inferred_count
+            stage_counts["after_nms"] = inferred_count
+            stage_counts["after_score_sort"] = inferred_count
+        candidates = graspnet_array_to_candidates(
             grasp_array,
             class_name=str(detection.get("class_name", "")),
             max_grasps=max_grasps,
+            max_jaw_width_m=max_jaw_width_m,
             target_detection=detection,
             camera_info=camera_info,
+            stage_counts=stage_counts,
         )
+        if not candidates:
+            stage_counts["empty_reason"] = self._empty_reason(stage_counts)
+        return candidates
 
     def _infer_grasp_array(self, points: np.ndarray, colors: np.ndarray, *, full_points: np.ndarray):
         torch = self._torch
@@ -352,13 +646,17 @@ class GraspNetBaselineInference:
             end_points = self.net(end_points)
             decoded = self._pred_decode(end_points)
         grasp_group = self._GraspGroup(decoded[0].detach().cpu().numpy())
+        self.last_stage_counts["raw"] = int(len(grasp_group))
         if self._ModelFreeCollisionDetector is not None and self.collision_thresh > 0:
             detector = self._ModelFreeCollisionDetector(full_points, voxel_size=self.voxel_size)
             collision_mask = detector.detect(grasp_group, approach_dist=0.05, collision_thresh=self.collision_thresh)
             grasp_group = grasp_group[~collision_mask]
+        self.last_stage_counts["after_collision"] = int(len(grasp_group))
         try:
             grasp_group = grasp_group.nms()
         except ModuleNotFoundError:
             pass
+        self.last_stage_counts["after_nms"] = int(len(grasp_group))
         grasp_group = grasp_group.sort_by_score()
+        self.last_stage_counts["after_score_sort"] = int(len(grasp_group))
         return getattr(grasp_group, "grasp_group_array", np.asarray(grasp_group))

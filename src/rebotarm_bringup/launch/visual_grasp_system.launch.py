@@ -92,6 +92,7 @@ def generate_launch_description():
     candidate_orientation_yaw_offsets_rad = LaunchConfiguration("candidate_orientation_yaw_offsets_rad")
     candidate_grasp_z_offsets_m = LaunchConfiguration("candidate_grasp_z_offsets_m")
     candidate_max_candidates_per_frame = LaunchConfiguration("candidate_max_candidates_per_frame")
+    candidate_min_confidence = LaunchConfiguration("candidate_min_confidence")
     candidate_min_jaw_width_m = LaunchConfiguration("candidate_min_jaw_width_m")
     candidate_max_jaw_width_m = LaunchConfiguration("candidate_max_jaw_width_m")
     candidate_min_grasp_z_m = LaunchConfiguration("candidate_min_grasp_z_m")
@@ -330,6 +331,7 @@ def generate_launch_description():
                     "device": graspnet_device,
                     "backend_module": graspnet_backend_module,
                     "max_grasps": graspnet_max_grasps,
+                    "max_jaw_width_m": candidate_max_jaw_width_m,
                     "max_points": graspnet_max_points,
                 }
             ],
@@ -366,6 +368,7 @@ def generate_launch_description():
                     "orientation_yaw_offsets_rad": candidate_orientation_yaw_offsets_rad,
                     "candidate_grasp_z_offsets_m": candidate_grasp_z_offsets_m,
                     "max_candidates_per_frame": candidate_max_candidates_per_frame,
+                    "candidate_min_confidence": candidate_min_confidence,
                     "lift_z_m": lift_z_m,
                     "candidate_min_jaw_width_m": candidate_min_jaw_width_m,
                     "candidate_max_jaw_width_m": candidate_max_jaw_width_m,
@@ -604,8 +607,9 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_orientation_yaw_offsets_rad", default_value="[0.0]"),
             DeclareLaunchArgument("candidate_grasp_z_offsets_m", default_value="[0.0]"),
             DeclareLaunchArgument("candidate_max_candidates_per_frame", default_value="20"),
+            DeclareLaunchArgument("candidate_min_confidence", default_value="0.4"),
             DeclareLaunchArgument("candidate_min_jaw_width_m", default_value="0.006"),
-            DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.082"),
+            DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.085"),
             DeclareLaunchArgument("candidate_min_grasp_z_m", default_value="0.0"),
             DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120"),
             DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),
@@ -628,7 +632,7 @@ def generate_launch_description():
             DeclareLaunchArgument("close_margin_m", default_value="0.012"),
             DeclareLaunchArgument("min_gripper_effort", default_value="0.22"),
             DeclareLaunchArgument("max_gripper_effort", default_value="0.60"),
-            DeclareLaunchArgument("max_allowed_grasp_width_m", default_value="0.082"),
+            DeclareLaunchArgument("max_allowed_grasp_width_m", default_value="0.085"),
             DeclareLaunchArgument("gripper_grasp_enabled", default_value="true"),
             DeclareLaunchArgument("gripper_grasp_close_force", default_value="0.4"),
             DeclareLaunchArgument("gripper_grasp_timeout_sec", default_value="8.0"),

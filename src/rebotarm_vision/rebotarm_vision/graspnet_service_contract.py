@@ -25,6 +25,7 @@ class GraspNetInferenceInput:
     camera_info: dict[str, float]
     detection: dict[str, Any]
     max_grasps: int
+    max_jaw_width_m: float | None
 
 
 def decode_inference_request(payload: Any) -> GraspNetInferenceInput:
@@ -75,10 +76,36 @@ def decode_inference_request(payload: Any) -> GraspNetInferenceInput:
         raise ContractError("bbox x range is outside image bounds")
     if not (0.0 <= detection["y_min"] < detection["y_max"] <= height):
         raise ContractError("bbox y range is outside image bounds")
+    mask = payload.get("mask")
+    if mask is not None:
+        if not isinstance(mask, dict):
+            raise ContractError("mask must be an object")
+        raw_polygon = mask.get("polygon_xy")
+        if not isinstance(raw_polygon, list) or len(raw_polygon) < 6 or len(raw_polygon) % 2:
+            raise ContractError("mask.polygon_xy must contain at least three xy points")
+        try:
+            polygon = np.asarray(raw_polygon, dtype=np.float32).reshape(-1, 2)
+        except (TypeError, ValueError) as exc:
+            raise ContractError("mask.polygon_xy must be numeric") from exc
+        if not np.isfinite(polygon).all():
+            raise ContractError("mask.polygon_xy must be finite")
+        if np.any(polygon[:, 0] < 0.0) or np.any(polygon[:, 0] > width):
+            raise ContractError("mask polygon x range is outside image bounds")
+        if np.any(polygon[:, 1] < 0.0) or np.any(polygon[:, 1] > height):
+            raise ContractError("mask polygon y range is outside image bounds")
+        detection["mask_polygon_xy"] = polygon.reshape(-1).astype(float).tolist()
 
     max_grasps = int(payload.get("max_grasps", 10))
     if not 1 <= max_grasps <= 100:
         raise ContractError("max_grasps must be in [1, 100]")
+    raw_max_jaw_width_m = payload.get("max_jaw_width_m")
+    max_jaw_width_m = (
+        None
+        if raw_max_jaw_width_m is None
+        else _finite_float(raw_max_jaw_width_m, "max_jaw_width_m")
+    )
+    if max_jaw_width_m is not None and max_jaw_width_m <= 0.0:
+        raise ContractError("max_jaw_width_m must be positive")
     return GraspNetInferenceInput(
         timestamp_ns=timestamp_ns,
         sent_at_unix_ns=sent_at_unix_ns,
@@ -88,6 +115,7 @@ def decode_inference_request(payload: Any) -> GraspNetInferenceInput:
         camera_info=camera_info,
         detection=detection,
         max_grasps=max_grasps,
+        max_jaw_width_m=max_jaw_width_m,
     )
 
 
@@ -112,6 +140,8 @@ def encode_inference_request(
     intrinsics: dict[str, float],
     bbox: dict[str, Any],
     max_grasps: int,
+    max_jaw_width_m: float | None = None,
+    mask_polygon_xy: list[float] | None = None,
     sent_at_unix_ns: int | None = None,
 ) -> dict[str, Any]:
     color = np.ascontiguousarray(color_bgr, dtype=np.uint8)
@@ -145,6 +175,10 @@ def encode_inference_request(
         "bbox": dict(bbox),
         "max_grasps": int(max_grasps),
     }
+    if max_jaw_width_m is not None:
+        payload["max_jaw_width_m"] = float(max_jaw_width_m)
+    if mask_polygon_xy:
+        payload["mask"] = {"polygon_xy": [float(value) for value in mask_polygon_xy]}
     decode_inference_request(payload)
     return payload
 

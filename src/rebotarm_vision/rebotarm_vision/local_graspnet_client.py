@@ -39,6 +39,8 @@ class LocalGraspNetClient:
         intrinsics: dict[str, float],
         bbox: dict[str, Any],
         max_grasps: int,
+        max_jaw_width_m: float | None = None,
+        mask_polygon_xy: list[float] | None = None,
     ) -> dict[str, Any]:
         payload = encode_inference_request(
             timestamp_ns=timestamp_ns,
@@ -48,6 +50,8 @@ class LocalGraspNetClient:
             intrinsics=intrinsics,
             bbox=bbox,
             max_grasps=max_grasps,
+            max_jaw_width_m=max_jaw_width_m,
+            mask_polygon_xy=mask_polygon_xy,
         )
         request = Request(
             self._config.infer_url,

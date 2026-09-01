@@ -12,3 +12,4 @@ rebotarm_graspnet_baseline_node:
     max_input_skew_ms: 100
     depth_scale_m_per_unit: 0.001
     max_grasps: 10
+    max_jaw_width_m: 0.085

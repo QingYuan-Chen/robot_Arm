@@ -8,7 +8,7 @@ from .candidate_workspace_gate import CandidateWorkspaceGateConfig, candidate_wo
 @dataclass(frozen=True)
 class CandidateGateConfig:
     min_jaw_width_m: float = 0.006
-    max_jaw_width_m: float = 0.082
+    max_jaw_width_m: float = 0.085
     min_grasp_z_m: float = 0.0
     workspace_gate_enabled: bool = False
     workspace_min_xyz: tuple[float, float, float] = (0.18, -0.35, 0.0)

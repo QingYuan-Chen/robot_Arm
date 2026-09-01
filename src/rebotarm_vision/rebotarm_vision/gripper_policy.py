@@ -18,7 +18,7 @@ class GripperPolicyConfig:
     max_close_width_m: float = 0.08
     min_effort: float = 0.22
     max_effort: float = 0.60
-    max_allowed_width_m: float = 0.082
+    max_allowed_width_m: float = 0.085
 
 
 @dataclass(frozen=True)

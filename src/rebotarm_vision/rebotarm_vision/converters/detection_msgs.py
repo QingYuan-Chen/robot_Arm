@@ -58,6 +58,20 @@ def _obb_metadata(result: Any, index: int):
     }
 
 
+def _mask_polygon(result: Any, index: int) -> list[float]:
+    masks = getattr(result, "masks", None)
+    polygons = getattr(masks, "xy", None) if masks is not None else None
+    if polygons is None:
+        return []
+    try:
+        polygon = np.asarray(_tensor_to_numpy(polygons[index]), dtype=np.float32).reshape(-1, 2)
+    except Exception:
+        return []
+    if polygon.shape[0] < 3 or not np.isfinite(polygon).all():
+        return []
+    return [float(value) for value in polygon.reshape(-1)]
+
+
 def result_to_detection_array_msg(results, stamp, frame_id: str) -> Detection2DArray:
     msg = Detection2DArray()
     msg.header.stamp = stamp
@@ -100,6 +114,10 @@ def result_to_detection_array_msg(results, stamp, frame_id: str) -> Detection2DA
             else:
                 det.has_obb = False
                 det.obb_points_xy = []
+
+            mask_polygon = _mask_polygon(result, index)
+            det.has_mask = len(mask_polygon) >= 6
+            det.mask_polygon_xy = mask_polygon
 
             msg.detections.append(det)
 

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 from typing import Any
 
@@ -40,6 +41,7 @@ class GraspNetService:
         self.backend_module = str(backend_module).strip()
         self.max_input_age_ms = max(0, int(max_input_age_ms))
         self.backend = None
+        self._infer_lock = threading.Lock()
         self.backend_error = "model_root_or_checkpoint_unset"
         if self.model_root and self.checkpoint_path:
             try:
@@ -82,14 +84,36 @@ class GraspNetService:
                 raise StaleInputError(request, f"input timestamp is {-age_ns / 1e6:.1f} ms in the future")
         if self.backend is None:
             raise RuntimeError("GraspNet backend is not configured")
-        candidates = self.backend.infer(
-            color_bgr=request.color_bgr,
-            depth_mm=request.depth_m,
-            detections=[request.detection],
-            camera_info=request.camera_info,
-            max_grasps=request.max_grasps,
-        )
+        with self._infer_lock:
+            candidates = self.backend.infer(
+                color_bgr=request.color_bgr,
+                depth_mm=request.depth_m,
+                detections=[request.detection],
+                camera_info=request.camera_info,
+                max_grasps=request.max_grasps,
+                max_jaw_width_m=request.max_jaw_width_m,
+            )
+            self._log_stage_counts(request, candidates)
         return build_inference_response(request, list(candidates))
+
+    def _log_stage_counts(self, request, candidates) -> None:
+        stage_counts = getattr(self.backend, "last_stage_counts", None)
+        if not isinstance(stage_counts, dict):
+            return
+        top_score = None
+        if candidates:
+            top_score = float(candidates[0].get("score", 0.0))
+        record = {
+            "event": "graspnet_stage_counts",
+            "timestamp_ns": int(request.timestamp_ns),
+            "frame_id": str(request.frame_id),
+            "class_name": str(request.detection.get("class_name", "")),
+            "max_grasps": int(request.max_grasps),
+            "max_jaw_width_m": request.max_jaw_width_m,
+            **stage_counts,
+            "published_top_score": top_score,
+        }
+        print(json.dumps(record, separators=(",", ":")), flush=True)
 
 
 def make_handler(service: GraspNetService):

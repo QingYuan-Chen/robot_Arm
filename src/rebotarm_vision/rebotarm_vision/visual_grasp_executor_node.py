@@ -103,7 +103,7 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("auto_gripper_effort", True)
         self.declare_parameter("min_gripper_effort", 0.22)
         self.declare_parameter("max_gripper_effort", 0.60)
-        self.declare_parameter("max_allowed_grasp_width_m", 0.082)
+        self.declare_parameter("max_allowed_grasp_width_m", 0.085)
         self.declare_parameter("close_contact_success_enabled", True)
         self.declare_parameter("close_contact_margin_m", 0.004)
         self.declare_parameter("close_contact_min_closure_delta_m", 0.015)

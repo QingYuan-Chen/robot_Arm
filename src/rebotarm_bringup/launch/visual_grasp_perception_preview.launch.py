@@ -53,6 +53,7 @@ def generate_launch_description():
     candidate_orientation_yaw_offsets_rad = LaunchConfiguration("candidate_orientation_yaw_offsets_rad")
     candidate_grasp_z_offsets_m = LaunchConfiguration("candidate_grasp_z_offsets_m")
     candidate_max_candidates_per_frame = LaunchConfiguration("candidate_max_candidates_per_frame")
+    candidate_min_confidence = LaunchConfiguration("candidate_min_confidence")
     candidate_min_jaw_width_m = LaunchConfiguration("candidate_min_jaw_width_m")
     candidate_max_jaw_width_m = LaunchConfiguration("candidate_max_jaw_width_m")
     candidate_min_grasp_z_m = LaunchConfiguration("candidate_min_grasp_z_m")
@@ -124,8 +125,9 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_orientation_yaw_offsets_rad", default_value="[0.0]"),
             DeclareLaunchArgument("candidate_grasp_z_offsets_m", default_value="[0.0]"),
             DeclareLaunchArgument("candidate_max_candidates_per_frame", default_value="20"),
+            DeclareLaunchArgument("candidate_min_confidence", default_value="0.4"),
             DeclareLaunchArgument("candidate_min_jaw_width_m", default_value="0.006"),
-            DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.088"),
+            DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.085"),
             DeclareLaunchArgument("candidate_min_grasp_z_m", default_value="0.0"),
             DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),
             DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true"),
@@ -182,6 +184,7 @@ def generate_launch_description():
                         "device": graspnet_device,
                         "backend_module": graspnet_backend_module,
                         "max_grasps": graspnet_max_grasps,
+                        "max_jaw_width_m": candidate_max_jaw_width_m,
                         "max_points": graspnet_max_points,
                     },
                 ],
@@ -215,6 +218,7 @@ def generate_launch_description():
                         "orientation_yaw_offsets_rad": candidate_orientation_yaw_offsets_rad,
                         "candidate_grasp_z_offsets_m": candidate_grasp_z_offsets_m,
                         "max_candidates_per_frame": candidate_max_candidates_per_frame,
+                        "candidate_min_confidence": candidate_min_confidence,
                         "lift_z_m": lift_z_m,
                         "candidate_min_jaw_width_m": candidate_min_jaw_width_m,
                         "candidate_max_jaw_width_m": candidate_max_jaw_width_m,

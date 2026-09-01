@@ -64,6 +64,7 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("device", "cuda:0")
         self.declare_parameter("backend_module", "graspnet_baseline_inference")
         self.declare_parameter("max_grasps", 20)
+        self.declare_parameter("max_jaw_width_m", 0.085)
         self.declare_parameter("max_points", 20000)
         self.declare_parameter("min_depth_m", 0.15)
         self.declare_parameter("max_depth_m", 1.20)
@@ -348,6 +349,13 @@ class GraspNetBaselineNode(Node):
                 "class_name": str(detection.class_name),
             },
             max_grasps=int(self.get_parameter("max_grasps").value),
+            max_jaw_width_m=float(self.get_parameter("max_jaw_width_m").value),
+            mask_polygon_xy=(
+                [float(value) for value in detection.mask_polygon_xy]
+                if bool(getattr(detection, "has_mask", False))
+                and len(getattr(detection, "mask_polygon_xy", [])) >= 6
+                else None
+            ),
         )
         candidates = payload_to_candidate_array(
             payload,

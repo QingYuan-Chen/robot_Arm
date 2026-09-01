@@ -155,11 +155,22 @@ def test_candidate_filter_tf_failure_publishes_no_ranked_candidates():
 
     msg = GraspCandidateArray()
     msg.header.frame_id = "camera_depth_frame"
-    msg.candidates.append(GraspCandidate())
+    candidate = GraspCandidate()
+    candidate.confidence = 0.8
+    candidate.jaw_width = 0.04
+    msg.candidates.append(candidate)
     published = []
     warnings = []
     node = object.__new__(CandidateIkFilterNode)
-    node.get_parameter = lambda _name: type("Parameter", (), {"value": 10})()
+    parameters = {
+        "max_candidates_per_frame": 10,
+        "candidate_min_confidence": 0.4,
+        "candidate_min_jaw_width_m": 0.006,
+        "candidate_max_jaw_width_m": 0.085,
+    }
+    node.get_parameter = lambda name: type(
+        "Parameter", (), {"value": parameters[name]}
+    )()
     node._candidate_target_variants = lambda _msg, _pose: (_ for _ in ()).throw(
         RuntimeError("TF lookup unavailable")
     )

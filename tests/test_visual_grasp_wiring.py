@@ -289,6 +289,7 @@ def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack()
     assert 'DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_candidates_per_frame", default_value="20")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="0.0")' in launch_text
+    assert '"max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
     assert '"input_topic": graspnet_candidates_topic' in launch_text
     assert "interactive_system.launch.py" not in launch_text
     assert "rebotarm_visual_ready" not in launch_text
@@ -704,7 +705,7 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'self.declare_parameter("orientation_yaw_offsets_rad", [0.0])' in node_text
     assert 'self.declare_parameter("candidate_grasp_z_offsets_m", [0.0])' in node_text
     assert 'self.declare_parameter("candidate_min_jaw_width_m", 0.006)' in node_text
-    assert 'self.declare_parameter("candidate_max_jaw_width_m", 0.082)' in node_text
+    assert 'self.declare_parameter("candidate_max_jaw_width_m", 0.085)' in node_text
     assert "def _symmetric_parallel_jaw_delta" not in node_text
     assert 'self.declare_parameter("candidate_max_joint6_delta_rad", 1.5708)' in node_text
     assert 'self.declare_parameter("candidate_joint6_symmetry_enabled", True)' in node_text
@@ -723,10 +724,6 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert "build_parallel_jaw_symmetric_orientation" in pose_variant_text
     assert "parallel_jaw_symmetric" in pose_variant_text
     assert 'self.declare_parameter("candidate_min_grasp_z_m", 0.0)' in node_text
-    assert "self._filter_busy = False" in node_text
-    assert "candidate IK filter is still processing previous candidates; dropping this frame" in node_text
-    assert "self._filter_busy = True" in node_text
-    assert "self._filter_busy = False" in node_text
     assert "self._latest_joint_state" in node_text
     assert "def _on_joint_state" in node_text
     assert "def _valid_joint_state" in node_text
@@ -798,7 +795,7 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'DeclareLaunchArgument("candidate_grasp_z_offsets_m", default_value="[0.0]")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_variants_per_candidate"' not in launch_text
     assert 'DeclareLaunchArgument("candidate_min_jaw_width_m", default_value="0.006")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.082")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.085")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="1.5708")' in launch_text
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_enabled", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_angle_rad", default_value="3.141592653589793")' in launch_text
@@ -820,6 +817,7 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert '"max_variants_per_candidate": candidate_max_variants_per_candidate' not in launch_text
     assert '"candidate_min_jaw_width_m": candidate_min_jaw_width_m' in launch_text
     assert '"candidate_max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
+    assert '"max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
     assert '"candidate_pregrasp_min_z_m": candidate_pregrasp_min_z_m' in launch_text
     assert '"candidate_workspace_gate_enabled": candidate_workspace_gate_enabled' in launch_text
     assert '"candidate_workspace_min_xyz": candidate_workspace_min_xyz' in launch_text

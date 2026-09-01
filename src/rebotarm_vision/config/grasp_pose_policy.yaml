@@ -8,9 +8,10 @@ rebotarm_grasp_candidate_ik_filter:
     orientation_yaw_offsets_rad: [0.0]
     candidate_grasp_z_offsets_m: [0.0]
     max_candidates_per_frame: 20
+    candidate_min_confidence: 0.4
     lift_z_m: 0.08
     candidate_min_jaw_width_m: 0.006
-    candidate_max_jaw_width_m: 0.082
+    candidate_max_jaw_width_m: 0.085
     candidate_min_grasp_z_m: 0.0
     candidate_pregrasp_min_z_m: 0.120
     candidate_safe_lift_min_z_m: 0.120

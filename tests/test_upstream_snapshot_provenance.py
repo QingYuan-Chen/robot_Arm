@@ -21,7 +21,7 @@ def test_upstream_snapshot_is_pinned_and_outside_default_src() -> None:
 def test_upstream_snapshot_manifest_records_license_and_file_hashes() -> None:
     manifest = json.loads((SNAPSHOT / "UPSTREAM_PROVENANCE.json").read_text(encoding="utf-8"))
 
-    assert manifest["license_status"] == "PROVISIONAL"
+    assert manifest["license_status"] == "AUTHORIZED_BY_UPSTREAM_OWNER"
     assert manifest["license_evidence"]["package_xml"] == "Apache-2.0"
     assert manifest["license_evidence"]["root_license_file"] is False
     assert manifest["sha256"]
