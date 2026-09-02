@@ -2,6 +2,8 @@ import base64
 import importlib.util
 import json
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 import time
 
 import numpy as np
@@ -42,6 +44,244 @@ def test_graspnet_run_script_uses_isolated_environment_and_localhost_service() -
     assert ".venv-graspnet/bin/python" in script
     assert "src/rebotarm_vision" in script
     assert "ubuntu_graspnet_service.py" in script
+
+
+def test_graspnet_full_scene_viewer_reuses_pre_sampling_cloud_builder() -> None:
+    viewer = _read("tools/view_graspnet_scene_cloud.py")
+
+    assert "from graspnet_baseline_inference import build_scene_cloud" in viewer
+    assert "sample_cloud" not in viewer
+    assert 'default="/camera/color/image_raw"' in viewer
+    assert 'default="/camera/depth/image_raw"' in viewer
+    assert 'default="/camera/depth/camera_info"' in viewer
+    assert "0.05-1.5 m full scene" in viewer
+
+
+def _scene_viewer_module():
+    path = ROOT / "tools/view_graspnet_scene_cloud.py"
+    spec = importlib.util.spec_from_file_location("view_graspnet_scene_cloud", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    tools_path = str(ROOT / "tools")
+    added_path = tools_path not in sys.path
+    if added_path:
+        sys.path.insert(0, tools_path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if added_path:
+            sys.path.remove(tools_path)
+    return module
+
+
+def _candidate(
+    *,
+    score: float,
+    xyz: tuple[float, float, float],
+    quaternion: tuple[float, float, float, float],
+):
+    return SimpleNamespace(
+        confidence=score,
+        jaw_width=0.073,
+        object_length=0.021,
+        pose=SimpleNamespace(
+            position=SimpleNamespace(x=xyz[0], y=xyz[1], z=xyz[2]),
+            orientation=SimpleNamespace(
+                x=quaternion[0],
+                y=quaternion[1],
+                z=quaternion[2],
+                w=quaternion[3],
+            ),
+        ),
+    )
+
+
+def test_graspnet_scene_viewer_converts_ros_candidates_for_open3d_in_top_n_order() -> None:
+    module = _scene_viewer_module()
+    half_sqrt = np.sqrt(0.5)
+    message = SimpleNamespace(
+        candidates=[
+            _candidate(
+                score=0.91,
+                xyz=(0.10, -0.02, 0.35),
+                quaternion=(0.0, 0.0, half_sqrt, half_sqrt),
+            ),
+            _candidate(
+                score=0.72,
+                xyz=(0.11, -0.01, 0.36),
+                quaternion=(0.0, 0.0, 0.0, 1.0),
+            ),
+        ]
+    )
+
+    converted = module.candidate_array_to_visualizer_candidates(message, top_n=1)
+
+    assert len(converted) == 1
+    assert converted[0]["score"] == pytest.approx(0.91)
+    assert converted[0]["width_m"] == pytest.approx(0.073)
+    assert converted[0]["height_m"] == pytest.approx(0.021)
+    assert converted[0]["translation_xyz"] == pytest.approx([0.10, -0.02, 0.35])
+    np.testing.assert_allclose(
+        converted[0]["rotation_matrix"],
+        np.asarray([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]),
+        atol=1e-6,
+    )
+
+
+def test_graspnet_scene_viewer_rejects_invalid_quaternion_without_losing_valid_candidate() -> None:
+    module = _scene_viewer_module()
+    message = SimpleNamespace(
+        candidates=[
+            _candidate(score=0.95, xyz=(0.0, 0.0, 0.3), quaternion=(0.0, 0.0, 0.0, 0.0)),
+            _candidate(score=0.80, xyz=(0.1, 0.0, 0.3), quaternion=(0.0, 0.0, 0.0, 1.0)),
+        ]
+    )
+
+    converted = module.candidate_array_to_visualizer_candidates(message, top_n=2)
+
+    assert len(converted) == 1
+    assert converted[0]["score"] == pytest.approx(0.80)
+    assert converted[0]["translation_xyz"] == pytest.approx([0.1, 0.0, 0.3])
+
+
+def test_graspnet_scene_viewer_matches_candidate_to_nearest_rgbd_frames_with_skew_gate() -> None:
+    module = _scene_viewer_module()
+    colors = [(100, "old_color"), (205, "matched_color"), (390, "future_color")]
+    depths = [(90, "old_depth"), (210, "matched_depth"), (410, "future_depth")]
+
+    matched = module.match_candidate_rgbd_frames(
+        candidate_stamp_ns=200,
+        color_frames=colors,
+        depth_frames=depths,
+        max_skew_ns=15,
+    )
+
+    assert matched == ((205, "matched_color"), (210, "matched_depth"))
+    assert module.match_candidate_rgbd_frames(
+        candidate_stamp_ns=300,
+        color_frames=colors,
+        depth_frames=depths,
+        max_skew_ns=15,
+    ) is None
+
+
+def test_graspnet_scene_viewer_matches_timestamped_camera_info_and_rejects_frame_mismatch() -> None:
+    module = _scene_viewer_module()
+    message = SimpleNamespace(header=SimpleNamespace(frame_id="camera_depth_frame"))
+    depth = SimpleNamespace(header=SimpleNamespace(frame_id="camera_depth_frame"))
+    info = SimpleNamespace(
+        header=SimpleNamespace(frame_id="camera_depth_frame"),
+        width=640,
+        height=480,
+        k=[500.0, 0.0, 320.0, 0.0, 500.0, 240.0, 0.0, 0.0, 1.0],
+    )
+
+    matched = module.match_candidate_sensor_frames(
+        candidate_stamp_ns=200,
+        color_frames=[(201, "color")],
+        depth_frames=[(202, depth)],
+        camera_info_frames=[(203, info)],
+        max_skew_ns=5,
+    )
+
+    assert matched == ((201, "color"), (202, depth), (203, info))
+    assert module.overlay_geometry_is_consistent(
+        candidate_message=message,
+        depth_message=depth,
+        camera_info_message=info,
+        depth_shape=(480, 640),
+    )
+    info.header.frame_id = "wrong_frame"
+    assert not module.overlay_geometry_is_consistent(
+        candidate_message=message,
+        depth_message=depth,
+        camera_info_message=info,
+        depth_shape=(480, 640),
+    )
+
+
+def test_graspnet_scene_viewer_decodes_row_padded_ros_images() -> None:
+    module = _scene_viewer_module()
+    color = SimpleNamespace(
+        encoding="bgr8",
+        height=2,
+        width=2,
+        step=8,
+        data=bytes([1, 2, 3, 4, 5, 6, 99, 99, 7, 8, 9, 10, 11, 12, 88, 88]),
+    )
+    depth = SimpleNamespace(
+        encoding="16UC1",
+        height=2,
+        width=2,
+        step=6,
+        is_bigendian=False,
+        data=bytes([1, 0, 2, 0, 99, 99, 3, 0, 4, 0, 88, 88]),
+    )
+
+    np.testing.assert_array_equal(
+        module._color_bgr(color),
+        np.asarray([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
+    )
+    np.testing.assert_array_equal(
+        module._depth_mm(depth),
+        np.asarray([[1, 2], [3, 4]], dtype=np.uint16),
+    )
+
+
+def test_graspnet_scene_viewer_only_shuts_down_live_rclpy_context() -> None:
+    module = _scene_viewer_module()
+
+    class FakeRclpy:
+        def __init__(self, live: bool) -> None:
+            self.live = live
+            self.shutdown_calls = 0
+
+        def ok(self) -> bool:
+            return self.live
+
+        def shutdown(self) -> None:
+            self.shutdown_calls += 1
+
+    already_stopped = FakeRclpy(live=False)
+    module.shutdown_rclpy_if_live(already_stopped)
+    assert already_stopped.shutdown_calls == 0
+
+    live = FakeRclpy(live=True)
+    module.shutdown_rclpy_if_live(live)
+    assert live.shutdown_calls == 1
+
+
+def test_graspnet_scene_viewer_cleanup_continues_when_window_close_fails() -> None:
+    module = _scene_viewer_module()
+    events = []
+
+    class FakeVisualizer:
+        def close(self) -> None:
+            events.append("close")
+            raise RuntimeError("window close failed")
+
+    class FakeNode:
+        def destroy_node(self) -> None:
+            events.append("destroy_node")
+
+    class FakeRclpy:
+        @staticmethod
+        def ok() -> bool:
+            return True
+
+        @staticmethod
+        def shutdown() -> None:
+            events.append("shutdown")
+
+    with pytest.raises(RuntimeError, match="window close failed"):
+        module.cleanup_viewer_runtime(
+            visualizer=FakeVisualizer(),
+            node=FakeNode(),
+            rclpy_module=FakeRclpy,
+        )
+
+    assert events == ["close", "destroy_node", "shutdown"]
 
 
 def test_ubuntu_graspnet_ros_profile_posts_rgbd_to_local_service() -> None:
