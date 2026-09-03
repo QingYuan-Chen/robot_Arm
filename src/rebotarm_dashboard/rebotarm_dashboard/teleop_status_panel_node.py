@@ -223,7 +223,7 @@ class TeleopStatusPanelNode(Node):
         self.declare_parameter("web_keyboard_default_speed_rad_s", 0.5)
         self.declare_parameter("gripper_lower_limit_m", DEFAULT_GRIPPER_LIMITS_M[0])
         self.declare_parameter("gripper_upper_limit_m", DEFAULT_GRIPPER_LIMITS_M[1])
-        self.declare_parameter("web_gripper_max_effort", 0.3)
+        self.declare_parameter("web_gripper_max_effort", 1.0)
         self.declare_parameter("web_gripper_max_effort_limit", 1.5)
         self._arm_namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         self._joint_names = tuple(str(v) for v in self.get_parameter("joint_names").value)

@@ -15,7 +15,11 @@ def generate_launch_description():
             DeclareLaunchArgument("yolo_device", default_value="0"),
             DeclareLaunchArgument(
                 "yolo_model_path",
-                default_value=str(vision_share / "models" / "yolo26s-seg.pt"),
+                default_value=str(
+                    vision_share
+                    / "models"
+                    / "yolo26m-seg-fp16-b1-640-linux.engine"
+                ),
             ),
             DeclareLaunchArgument(
                 "handeye_config",

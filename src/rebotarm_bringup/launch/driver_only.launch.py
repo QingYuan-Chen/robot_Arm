@@ -13,6 +13,11 @@ def generate_launch_description():
     gripper_config = LaunchConfiguration("gripper_config")
     channel = LaunchConfiguration("channel")
     joint_state_rate = LaunchConfiguration("joint_state_rate")
+    gripper_position_torque_cap_nm = LaunchConfiguration("gripper_position_torque_cap_nm")
+    gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s")
+    gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec")
+    gripper_feedback_stale_timeout_sec = LaunchConfiguration("gripper_feedback_stale_timeout_sec")
+    grasp_hold_timeout_sec = LaunchConfiguration("grasp_hold_timeout_sec")
     cmd_arbitration = LaunchConfiguration("cmd_arbitration")
     arm_namespace = LaunchConfiguration("arm_namespace")
 
@@ -28,6 +33,11 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("channel", default_value=""),
             DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
+            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="0.5"),
+            DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
+            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.25"),
+            DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             Node(
@@ -41,6 +51,11 @@ def generate_launch_description():
                         "gripper_config": gripper_config,
                         "channel": channel,
                         "joint_state_rate": joint_state_rate,
+                        "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
+                        "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
+                        "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
+                        "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
+                        "grasp_hold_timeout_sec": grasp_hold_timeout_sec,
                         "cmd_arbitration": cmd_arbitration,
                         "arm_namespace": arm_namespace,
                     }

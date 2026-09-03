@@ -71,7 +71,7 @@
                       <geom name="right_finger_link_right_finger_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="right_finger" class="visual" />
                       <geom name="right_finger_link_right_finger_collision" type="mesh" mesh="right_finger" class="collision" contype="1" conaffinity="1" group="3" friction="1.2 0.02 0.001" />
                     </body>
-                    <site name="ee_site" pos="-0.105 0 0" size="0.008" />
+                    <site name="ee_site" pos="-0.04 0 0" size="0.008" />
                     <site name="wrist_camera_mount" pos="-0.04 0 0.04" quat="1 0 0 0" size="0.005" />
                   </body>
                 </body>

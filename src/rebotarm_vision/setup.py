@@ -3,12 +3,15 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 package_name = "rebotarm_vision"
-repo_root = Path(__file__).resolve().parents[2]
-vision_model = repo_root / "tools" / "yolo26s-seg.pt"
-vision_model_source = Path("../../tools/yolo26s-seg.pt")
+vision_model_sources = [
+    Path("../../tools/yolo26m-seg-fp16-b1-640-linux.engine"),
+    Path("../../tools/yolo26s-seg.pt"),
+]
 
-if not vision_model.is_file():
-    raise FileNotFoundError(f"vision model not found: {vision_model}")
+for vision_model_source in vision_model_sources:
+    vision_model = (Path(__file__).resolve().parent / vision_model_source).resolve()
+    if not vision_model.is_file():
+        raise FileNotFoundError(f"vision model not found: {vision_model}")
 
 setup(
     name=package_name,
@@ -39,7 +42,14 @@ setup(
                 "config/visual_servo.yaml",
             ],
         ),
-        (f"share/{package_name}/models", [str(vision_model_source)]),
+        (
+            f"share/{package_name}/models",
+            [str(path) for path in vision_model_sources],
+        ),
+        (
+            f"share/{package_name}/graspnet_backend",
+            ["../../tools/graspnet_baseline_inference.py"],
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,

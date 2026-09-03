@@ -56,7 +56,6 @@ def generate_launch_description():
     sim_arm_namespace = LaunchConfiguration("sim_arm_namespace")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     use_sim_time = LaunchConfiguration("use_sim_time")
-    graspnet_local_infer_url = LaunchConfiguration("graspnet_local_infer_url")
     initial_joint_positions = LaunchConfiguration("initial_joint_positions")
     mujoco_python_executable = LaunchConfiguration("mujoco_python_executable")
     virtual_camera_width = LaunchConfiguration("virtual_camera_width")
@@ -108,10 +107,6 @@ def generate_launch_description():
             DeclareLaunchArgument("use_local_rviz", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
             DeclareLaunchArgument(
-                "graspnet_local_infer_url",
-                default_value="http://127.0.0.1:8081/infer",
-            ),
-            DeclareLaunchArgument(
                 "initial_joint_positions",
                 default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]",
             ),
@@ -133,9 +128,15 @@ def generate_launch_description():
             DeclareLaunchArgument("offline_yolo_enabled", default_value="true"),
             DeclareLaunchArgument(
                 "offline_yolo_model_path",
-                default_value=PathJoinSubstitution([vision_share, "models", "yolo26s-seg.pt"]),
+                default_value=PathJoinSubstitution(
+                    [
+                        vision_share,
+                        "models",
+                        "yolo26m-seg-fp16-b1-640-linux.engine",
+                    ]
+                ),
             ),
-            DeclareLaunchArgument("offline_yolo_device", default_value="cpu"),
+            DeclareLaunchArgument("offline_yolo_device", default_value="0"),
             DeclareLaunchArgument("offline_yolo_target_classes", default_value="['bottle']"),
             DeclareLaunchArgument("offline_yolo_use_world", default_value="false"),
             DeclareLaunchArgument(
@@ -226,11 +227,10 @@ def generate_launch_description():
                             "start_ordinary_grasp": "false",
                             "start_visual_ready": "false",
                             "start_graspnet_baseline": "true",
-                            "graspnet_source_mode": "local_service",
+                            "graspnet_source_mode": "in_process",
                             "graspnet_config": PathJoinSubstitution(
                                 [vision_share, "config", "graspnet_ubuntu.yaml"]
                             ),
-                            "graspnet_local_infer_url": graspnet_local_infer_url,
                             "graspnet_output_frame_id": virtual_camera_frame_id,
                             "candidate_ik_input_topic": "/grasp/graspnet_candidates",
                             "start_candidate_ik_filter": "true",
@@ -250,7 +250,7 @@ def generate_launch_description():
                             "base_approach_axis_xyz": "[0.0, 0.0, -1.0]",
                             "candidate_max_joint6_delta_rad": "0.0",
                             "candidate_collision_check_enabled": "true",
-                            "tcp_offset_xyz": "[-0.105, 0.0, 0.0]",
+                            "tcp_offset_xyz": "[-0.04, 0.0, 0.0]",
                             "start_grasp_preview": "false",
                             "start_visual_grasp_markers": "false",
                             "start_visual_grasp_executor": start_visual_grasp_executor,

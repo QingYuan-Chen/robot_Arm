@@ -56,7 +56,6 @@ def generate_launch_description():
     sim_arm_namespace = LaunchConfiguration("sim_arm_namespace")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     use_sim_time = LaunchConfiguration("use_sim_time")
-    graspnet_local_infer_url = LaunchConfiguration("graspnet_local_infer_url")
     initial_joint_positions = LaunchConfiguration("initial_joint_positions")
     mujoco_python_executable = LaunchConfiguration("mujoco_python_executable")
     mujoco_parameters = _mujoco_parameters()
@@ -74,10 +73,6 @@ def generate_launch_description():
             DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
-            DeclareLaunchArgument(
-                "graspnet_local_infer_url",
-                default_value="http://127.0.0.1:8081/infer",
-            ),
             DeclareLaunchArgument(
                 "initial_joint_positions",
                 default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]",
@@ -115,11 +110,10 @@ def generate_launch_description():
                             "start_visual_ready": "false",
                             "ordinary_depth_quality_enabled": "true",
                             "start_graspnet_baseline": "true",
-                            "graspnet_source_mode": "local_service",
+                            "graspnet_source_mode": "in_process",
                             "graspnet_config": PathJoinSubstitution(
                                 [vision_share, "config", "graspnet_ubuntu.yaml"]
                             ),
-                            "graspnet_local_infer_url": graspnet_local_infer_url,
                             "candidate_ik_input_topic": "/grasp/graspnet_candidates",
                             "start_candidate_ik_filter": "true",
                             "candidate_pose_policy": "preserve_candidate_pose",
@@ -131,7 +125,8 @@ def generate_launch_description():
                                 sim_arm_namespace,
                                 "/visual_joint_states",
                             ],
-                            # The active MuJoCo model already expresses ee_site=-0.105 m.
+                            # The active MuJoCo model already expresses the measured
+                            # ee_site=-0.04 m, so do not apply it a second time.
                             "tcp_offset_xyz": "[0.0, 0.0, 0.0]",
                             "executor_input_topic": "/grasp/filtered_plan",
                             "trajectory_precheck_enabled": "true",

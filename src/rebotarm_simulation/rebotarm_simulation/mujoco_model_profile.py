@@ -309,6 +309,15 @@ def _add_keyframes(root: ET.Element) -> None:
         key.set("name", "home")
         key.set("qpos", "0 -0.8 -1.2 0.6 0 0 0.04 -0.04")
         key.set("ctrl", "0 -0.8 -1.2 0.6 0 0 0.04")
+    # Matches the "safe_home" named state in the MoveIt SRDFs and
+    # HardwareManager._SAFE_HOME_JOINT_POSITIONS: the posture the driver rests at,
+    # facing the visual workcell along base -Y.  Kept in sync so a pose name means the
+    # same thing in simulation and on hardware.
+    if keyframe.find("./key[@name='safe_home']") is None:
+        key = ET.SubElement(keyframe, "key")
+        key.set("name", "safe_home")
+        key.set("qpos", "-1.5707963267948966 -0.1 -0.2 0.2 0 0 0.04 -0.04")
+        key.set("ctrl", "-1.5707963267948966 -0.1 -0.2 0.2 0 0 0.04")
 
 
 def _remove_keyframes(root: ET.Element) -> None:

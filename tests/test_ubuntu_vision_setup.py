@@ -37,6 +37,9 @@ def test_vision_node_publishes_camera_info_for_both_rgb_and_depth() -> None:
     assert '"/camera/depth/camera_info"' in node
     assert 'self._camera_info_payload("color"' in node
     assert 'self._camera_info_payload("depth"' in node
+    assert 'CameraInfo,\n            "/camera/color/camera_info",\n            image_qos,' in node
+    assert 'CameraInfo,\n            "/camera/depth/camera_info",\n            image_qos,' in node
+    assert "qos_profile_sensor_data" not in node
     assert "except KeyboardInterrupt:" in node
     assert "if rclpy.ok():" in node
 
@@ -46,20 +49,25 @@ def test_ubuntu_launch_uses_installed_config_and_model() -> None:
     setup = _read("src/rebotarm_vision/setup.py")
 
     assert '"config" / "camera_ubuntu.yaml"' in launch
-    assert '"models" / "yolo26s-seg.pt"' in launch
+    assert '"yolo26m-seg-fp16-b1-640-linux.engine"' in launch
     assert 'DeclareLaunchArgument(' in launch
     assert '"yolo_model_path"' in launch
     assert '"launch/vision_ubuntu.launch.py"' in setup
     assert '"config/camera_ubuntu.yaml"' in setup
+    assert 'Path("../../tools/yolo26m-seg-fp16-b1-640-linux.engine")' in setup
     assert 'Path("../../tools/yolo26s-seg.pt")' in setup
 
 
 def test_vision_dependencies_preserve_ros_numpy_abi() -> None:
     requirements = _read("requirements-vision.txt")
+    tensorrt_requirements = _read("requirements-tensorrt.txt")
 
     assert "numpy==1.26.4" in requirements
     assert "pyorbbecsdk2==2.0.18" in requirements
     assert "pyorbbecsdk2==2.1.1" not in requirements
+    assert "tensorrt-cu12==10.13.3.9.post1" in tensorrt_requirements
+    assert "tensorrt-cu12-bindings==10.13.3.9.post1" in tensorrt_requirements
+    assert "tensorrt-cu12-libs==10.13.3.9.post1" in tensorrt_requirements
 
 
 def test_ubuntu_vision_launcher_exports_venv_dependencies_for_ros_entrypoints() -> None:
@@ -80,3 +88,5 @@ def test_ubuntu_vision_setup_activates_venv_before_colcon_build() -> None:
     assert activate in setup
     assert build in setup
     assert setup.index(activate) < setup.index(build)
+    assert 'pip install --no-deps -r "${repo_root}/requirements-tensorrt.txt"' in setup
+    assert "import tensorrt" in setup

@@ -1,5 +1,7 @@
 # 机械臂交互控制系统当前状态说明
 
+> 文档状态：历史状态快照。本文描述的自定义 marker/PreviewNode/ExecutionNode 主链已经过时；当前架构见 `docs/architecture.md` 和 `docs/node_topology.mermaid`，实时执行状态见 `Agent/STATE.json`。
+
 ## 1. 当前目标
 
 当前系统的核心目标是：

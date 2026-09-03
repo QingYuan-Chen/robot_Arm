@@ -2,17 +2,24 @@ from __future__ import annotations
 
 from pathlib import Path
 import threading
+import time
 from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import numpy as np
 import pytest
 
+import rebotarmcontroller.hardware_manager as hardware_manager_module
 from rebotarmcontroller.hardware_manager import (
     HardwareManager,
     _JOINT_POSITION_LIMITS_RAD,
     _G_ANGLE_OPEN,
+    _G_GRASP_HOLD_TIMEOUT_MAX_SEC,
+    _G_LARGE_MOVE_MAX_TAU_CAP_NM,
+    _G_LARGE_MOVE_MAX_TAU_NM,
     _G_MAX_DIST_M,
+    _G_POSITION_MAX_SPEED_RAD_S,
+    _G_TAU_MAX,
     _G_VERIFIED_OPEN_LIMIT_M,
 )
 
@@ -105,8 +112,37 @@ class FakeArm:
         self.control_loop_active = False
 
 
-def make_manager(*, fail_enable_joint: str | None = None) -> HardwareManager:
+def make_manager(
+    *,
+    fail_enable_joint: str | None = None,
+    gripper_position_torque_cap_nm: float = _G_LARGE_MOVE_MAX_TAU_NM,
+    gripper_position_max_speed_rad_s: float = _G_POSITION_MAX_SPEED_RAD_S,
+    gripper_position_timeout_margin_sec: float = 1.5,
+    gripper_feedback_stale_timeout_sec: float = 0.25,
+) -> HardwareManager:
+    # Mirror the real constructor's validation without running hardware setup.
+    requested_cap = float(gripper_position_torque_cap_nm)
+    if not 0.05 <= requested_cap <= _G_LARGE_MOVE_MAX_TAU_CAP_NM:
+        raise ValueError(
+            "gripper_position_torque_cap_nm must be within "
+            f"[0.05, {_G_LARGE_MOVE_MAX_TAU_CAP_NM:g}] N.m"
+        )
     manager = HardwareManager.__new__(HardwareManager)
+    manager._gripper_position_torque_cap_nm = requested_cap
+    manager._gripper_position_max_speed_rad_s = float(gripper_position_max_speed_rad_s)
+    manager._gripper_position_timeout_margin_sec = float(gripper_position_timeout_margin_sec)
+    manager._gripper_feedback_stale_timeout_sec = float(gripper_feedback_stale_timeout_sec)
+    manager._grasp_hold_timeout_sec = 30.0
+    manager._gripper_hold_deadline = None
+    manager._gripper_hold_release_reason = None
+    manager._gripper_target_timeout_sec = 0.0
+    manager._gripper_target_deadline_monotonic = None
+    manager._gripper_last_tick_monotonic = None
+    manager._gripper_status_code = 255
+    manager._gripper_feedback_updated_monotonic = None
+    manager._gripper_feedback_error = "gripper feedback not received"
+    manager._gripper_command_error = None
+    manager._gripper_position_result = "idle"
     manager._arm = FakeArm(fail_enable_joint=fail_enable_joint)
     manager._endpos_ctrl = SimpleNamespace(
         _q_target=np.full(6, 99.0, dtype=np.float64),
@@ -126,7 +162,10 @@ def make_manager(*, fail_enable_joint: str | None = None) -> HardwareManager:
     manager._gripper_ctrl = None
     manager._gripper_active = False
     manager._gripper_mode = "idle"
-    manager._gripper_lock = threading.Lock()
+    manager._gripper_pos = 0.0
+    manager._gripper_vel = 0.0
+    manager._gripper_torque = 0.0
+    manager._gripper_lock = threading.RLock()
     manager._motor_lifecycle_lock = threading.RLock()
     manager._gravity_comp_active = False
     manager._gravity_comp_q_target = None
@@ -458,7 +497,12 @@ def test_gripper_feedback_refresh_retries_until_state_arrives() -> None:
     def poll_feedback_once() -> None:
         calls["poll"] += 1
         if calls["poll"] == 2:
-            state_holder["state"] = SimpleNamespace(status_code=0)
+            state_holder["state"] = SimpleNamespace(
+                pos=0.0,
+                vel=0.0,
+                torq=0.0,
+                status_code=0,
+            )
 
     manager._gripper_mot = SimpleNamespace(
         request_feedback=request_feedback,
@@ -520,9 +564,16 @@ def test_gripper_mode_is_set_before_explicit_gripper_enable() -> None:
     manager.disable()
 
 
-def _configure_arrived_gripper_position_move(manager: HardwareManager) -> list[tuple[float, ...]]:
+def _configure_gripper_position_move(
+    manager: HardwareManager,
+    *,
+    position: float = -4.72,
+    goal: float = -4.72,
+    mode: str = "position",
+    effort: float = _G_LARGE_MOVE_MAX_TAU_NM,
+) -> list[tuple[float, ...]]:
     commands: list[tuple[float, ...]] = []
-    state = SimpleNamespace(pos=-4.72, vel=0.0, torq=0.0, status_code=1)
+    state = SimpleNamespace(pos=position, vel=0.0, torq=0.0, status_code=1)
 
     def send_mit(pos: float, vel: float, kp: float, kd: float, tau: float) -> None:
         commands.append((pos, vel, kp, kd, tau))
@@ -536,38 +587,391 @@ def _configure_arrived_gripper_position_move(manager: HardwareManager) -> list[t
     manager._gripper_pos = state.pos
     manager._gripper_vel = state.vel
     manager._gripper_torque = state.torq
-    manager._gripper_target_angle = state.pos
-    manager._gripper_goal_angle = state.pos
-    manager._gripper_target_effort = 0.15
+    manager._gripper_target_angle = goal
+    manager._gripper_goal_angle = goal
+    manager._gripper_target_effort = float(effort)
     manager._gripper_close_force = 0.4
     manager._gripper_hold_force = 0.4
     manager._gripper_hold_angle = state.pos
-    manager._gripper_mode = "position"
+    manager._gripper_hold_deadline = None
+    manager._gripper_hold_release_reason = None
+    manager._gripper_mode = mode
     manager._gripper_active = True
+    manager._gripper_feedback_updated_monotonic = time.monotonic()
+    manager._gripper_feedback_error = None
+    manager._gripper_position_result = "active"
     return commands
 
 
-def test_completed_gripper_position_move_sends_neutral_and_becomes_idle() -> None:
+def _configure_arrived_gripper_position_move(manager: HardwareManager) -> list[tuple[float, ...]]:
+    return _configure_gripper_position_move(manager)
+
+
+def test_completed_gripper_position_move_neutralizes_and_goes_idle() -> None:
     manager = make_manager()
     commands = _configure_arrived_gripper_position_move(manager)
 
     assert manager.wait_gripper_target(timeout=0.01) is True
+
+    # Neutral MIT: zero stiffness, zero damping, zero feed-forward torque.
+    assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
     assert manager.gripper_active is False
     assert manager.gripper_mode == "idle"
+
+    # No further position command may be emitted once the move is released.
+    manager._gripper_tick()
     assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
 
 
-def test_gripper_tick_releases_completed_position_move_without_waiter() -> None:
+def test_gripper_tick_neutralizes_arrived_position_move_without_waiter() -> None:
     manager = make_manager()
     commands = _configure_arrived_gripper_position_move(manager)
 
     manager._gripper_tick()
 
+    assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
     assert manager.gripper_active is False
     assert manager.gripper_mode == "idle"
-    assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
+
     manager._gripper_tick()
     assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
+
+
+def test_timed_out_gripper_position_move_neutralizes_and_goes_idle() -> None:
+    manager = make_manager()
+    # Feedback stays far from the goal, so the arrival tolerance is never met.
+    commands = _configure_gripper_position_move(manager, position=-0.5, goal=-4.72)
+
+    assert manager.wait_gripper_target(timeout=0.05) is False
+
+    assert commands[-1] == (-0.5, 0.0, 0.0, 0.0, 0.0)
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+
+    before = len(commands)
+    manager._gripper_tick()
+    assert len(commands) == before
+
+
+def test_gripper_position_move_applies_configured_torque_cap() -> None:
+    # A configured cap below _G_TAU_MAX must still bound the move-phase torque.
+    manager = make_manager(gripper_position_torque_cap_nm=0.40)
+    commands = _configure_gripper_position_move(
+        manager, position=-0.5, goal=-4.72, effort=0.40
+    )
+
+    manager._gripper_tick()
+
+    assert len(commands) == 1
+    pos, vel, kp, kd, tau_safe = commands[0]
+    assert (pos, vel, kp, kd) == (-4.72, 0.0, 5.0, 1.0)
+    pos_term = kp * (pos - (-0.5)) + kd * 0.0
+    # _gripper_safe_mit sends tau_safe such that pos_term + tau_safe lands on
+    # the effective limit; assert that limit is the configured cap.
+    assert pos_term + tau_safe == pytest.approx(-0.40)
+
+
+def test_gripper_position_target_advances_by_configured_speed_ramp(monkeypatch) -> None:
+    manager = make_manager(gripper_position_torque_cap_nm=1.0)
+    manager._connected = True
+    manager._enabled = True
+    commands = _configure_gripper_position_move(
+        manager,
+        position=-1.0,
+        goal=-1.0,
+        effort=1.0,
+    )
+    manager._start_gripper_loop = lambda: None
+
+    now = [10.0]
+    monkeypatch.setattr(hardware_manager_module.time, "monotonic", lambda: now[0])
+    manager.set_gripper_target(0.08, max_effort=1.0)
+
+    # 0.5 rad/s is the approved teleop-aligned limit.  After 0.2 s the
+    # commanded target may advance by at most 0.1 rad, never jump to the final
+    # approximately -4.44 rad goal in one control tick.
+    now[0] = 10.2
+    manager._gripper_tick()
+
+    assert commands[0][0] == pytest.approx(-1.1)
+    assert manager._gripper_goal_angle == pytest.approx((0.08 / _G_MAX_DIST_M) * _G_ANGLE_OPEN)
+
+
+def test_gripper_position_timeout_scales_with_command_distance() -> None:
+    manager = make_manager(gripper_position_max_speed_rad_s=0.5)
+    manager._connected = True
+    manager._enabled = True
+    _configure_gripper_position_move(manager, position=-1.0, goal=-1.0)
+    manager._start_gripper_loop = lambda: None
+
+    manager.set_gripper_target(0.08, max_effort=1.0)
+
+    goal = (0.08 / _G_MAX_DIST_M) * _G_ANGLE_OPEN
+    assert manager.gripper_target_timeout_sec() == pytest.approx(
+        abs(goal - (-1.0)) / 0.5 + 1.5
+    )
+
+
+def test_gripper_position_command_logs_command_feedback_and_timing(monkeypatch) -> None:
+    manager = make_manager(gripper_position_torque_cap_nm=1.0)
+    manager._connected = True
+    manager._enabled = True
+    _configure_gripper_position_move(manager, position=-1.0, goal=-1.0)
+    manager._start_gripper_loop = lambda: None
+
+    messages: list[str] = []
+    monkeypatch.setattr(
+        hardware_manager_module._LOG,
+        "info",
+        lambda template, *args: messages.append(template % args),
+    )
+    manager.set_gripper_target(0.08, max_effort=1.0)
+
+    message = "\n".join(messages)
+    for field in (
+        "requested=0.080000m",
+        "clamped=0.080000m",
+        "start=-1.000000rad",
+        "goal=-4.444444rad",
+        "effort=1.000000Nm",
+        "speed=0.500000rad/s",
+        "timeout=",
+        "feedback_updated=",
+    ):
+        assert field in message
+
+
+def test_gripper_feedback_exception_stops_active_position_command() -> None:
+    manager = make_manager()
+    commands = _configure_gripper_position_move(
+        manager,
+        position=-0.5,
+        goal=-4.0,
+        effort=1.0,
+    )
+
+    def failing_state():
+        raise RuntimeError("feedback read failed")
+
+    manager._gripper_mot.get_state = failing_state
+    manager._gripper_tick()
+
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+    assert "feedback read failed" in manager.gripper_command_error
+    # The only allowable command after feedback loss is zero-gain/zero-torque
+    # neutral at the last trusted position; no Kp=5 target may be emitted.
+    assert commands == [(-0.5, 0.0, 0.0, 0.0, 0.0)]
+
+
+def test_stale_gripper_feedback_stops_ramp_before_next_target(monkeypatch) -> None:
+    manager = make_manager()
+    commands = _configure_gripper_position_move(
+        manager,
+        position=-0.5,
+        goal=-4.0,
+        effort=1.0,
+    )
+    manager._gripper_feedback_updated_monotonic = 10.0
+    manager._gripper_feedback_error = None
+    manager._gripper_last_tick_monotonic = 10.9
+    monkeypatch.setattr(hardware_manager_module.time, "monotonic", lambda: 11.0)
+
+    manager._gripper_tick()
+
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+    assert "stale" in manager.gripper_command_error
+    assert commands == [(-0.5, 0.0, 0.0, 0.0, 0.0)]
+
+
+def test_get_gripper_state_reports_unknown_status_on_feedback_exception() -> None:
+    manager = make_manager()
+
+    def failing_state():
+        raise RuntimeError("cached state read failed")
+
+    manager._gripper_mot = SimpleNamespace(get_state=failing_state)
+
+    position, velocity, torque, status = manager.get_gripper_state()
+
+    assert (position, velocity, torque) == (0.0, 0.0, 0.0)
+    assert status == 255
+    assert "cached state read failed" in manager.gripper_feedback_error
+
+
+def test_get_gripper_state_reports_unknown_status_when_feedback_is_stale(monkeypatch) -> None:
+    manager = make_manager()
+    manager._gripper_mot = FakeMotor(position=-1.0)
+    manager._gripper_mot.state.status_code = 1
+    manager._gripper_feedback_error = None
+    manager._gripper_feedback_updated_monotonic = 10.0
+    monkeypatch.setattr(hardware_manager_module.time, "monotonic", lambda: 11.0)
+
+    position, velocity, torque, status = manager.get_gripper_state()
+
+    assert (position, velocity, torque) == (-1.0, 0.0, 0.0)
+    assert status == 255
+    assert "stale" in manager.gripper_feedback_error
+
+
+def test_wait_gripper_target_rejects_stale_arrival(monkeypatch) -> None:
+    manager = make_manager()
+    commands = _configure_gripper_position_move(
+        manager,
+        position=-4.0,
+        goal=-4.0,
+    )
+    manager._gripper_target_deadline_monotonic = 12.0
+    manager._gripper_feedback_updated_monotonic = 10.0
+    monkeypatch.setattr(hardware_manager_module.time, "monotonic", lambda: 11.0)
+
+    assert manager.wait_gripper_target() is False
+    assert manager.gripper_reached_target() is False
+    assert "stale" in manager.gripper_command_error
+    assert commands == [(-4.0, 0.0, 0.0, 0.0, 0.0)]
+
+
+def test_gripper_arrival_is_not_success_when_neutral_feedback_fails() -> None:
+    manager = make_manager()
+    _configure_arrived_gripper_position_move(manager)
+
+    def failing_request() -> None:
+        raise RuntimeError("neutral feedback failed")
+
+    manager._gripper_mot.request_feedback = failing_request
+
+    with pytest.raises(RuntimeError, match="neutral feedback failed"):
+        manager.wait_gripper_target(timeout=0.01)
+
+    assert manager.gripper_reached_target() is False
+    assert "neutral feedback failed" in manager.gripper_command_error
+
+
+def test_gripper_position_move_default_cap_matches_web_teleop() -> None:
+    # Operator decision 2026-09-04: use the known-good Web teleop default for
+    # normal position moves while retaining 1.5 N.m as the configurable ceiling.
+    manager = make_manager()
+    commands = _configure_gripper_position_move(
+        manager, position=-0.5, goal=-4.72, effort=_G_LARGE_MOVE_MAX_TAU_NM
+    )
+
+    manager._gripper_tick()
+
+    assert len(commands) == 1
+    pos, vel, kp, kd, tau_safe = commands[0]
+    pos_term = kp * (pos - (-0.5)) + kd * 0.0
+    assert pos_term + tau_safe == pytest.approx(-1.0)
+
+
+@pytest.mark.parametrize("bad_cap", [0.04, _G_TAU_MAX + 0.01])
+def test_gripper_position_torque_cap_rejects_out_of_range(bad_cap: float) -> None:
+    # Exercise the real constructor validation, not the test helper's mirror.
+    # It runs before any hardware setup, so no serial channel is opened.
+    with pytest.raises(ValueError, match="gripper_position_torque_cap_nm"):
+        HardwareManager(gripper_position_torque_cap_nm=bad_cap)
+
+
+def test_gripper_position_torque_cap_accepts_hard_max() -> None:
+    assert _G_LARGE_MOVE_MAX_TAU_CAP_NM == _G_TAU_MAX
+    manager = make_manager(gripper_position_torque_cap_nm=_G_TAU_MAX)
+    assert manager._gripper_position_torque_cap_nm == pytest.approx(_G_TAU_MAX)
+
+
+def test_gripper_tick_emits_no_command_once_arrival_is_detected() -> None:
+    # Regression for the observed ~1.2-1.33 mm of extra closing travel after
+    # SetGripper returned: a tick that saw the arrival condition must not also
+    # emit a torque-carrying command.  Closing to zero is the exposed direction
+    # because abs(target) < 1e-6 turns effort into feed-forward torque.
+    manager = make_manager()
+    commands = _configure_gripper_position_move(manager, position=0.0, goal=0.0)
+
+    manager._gripper_tick()
+
+    # Only the neutral release, never a kp=5 command carrying tau_ff.
+    assert commands == [(0.0, 0.0, 0.0, 0.0, 0.0)]
+    assert manager.gripper_mode == "idle"
+
+
+def test_grasp_hold_is_released_after_timeout() -> None:
+    manager = make_manager()
+    commands = _configure_gripper_position_move(manager, mode="grasp_holding")
+    manager._gripper_hold_deadline = time.monotonic() + 60.0
+
+    manager._gripper_tick()
+    assert manager.gripper_mode == "grasp_holding"
+    assert commands[-1][:4] == (-4.72, 0.0, 5.0, 1.0)
+
+    # Deadline reached: neutralize and stop loading the motor.
+    manager._gripper_hold_deadline = time.monotonic() - 0.01
+    manager._gripper_tick()
+
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+    assert commands[-1] == (-4.72, 0.0, 0.0, 0.0, 0.0)
+    assert manager.grasp_hold_release_reason == "hold timeout"
+
+    before = len(commands)
+    manager._gripper_tick()
+    assert len(commands) == before
+
+
+def test_grasp_hold_without_deadline_is_not_released() -> None:
+    manager = make_manager()
+    _configure_gripper_position_move(manager, mode="grasp_holding")
+    manager._gripper_hold_deadline = None
+
+    manager._gripper_tick()
+
+    assert manager.gripper_mode == "grasp_holding"
+
+
+def test_release_grasp_hold_neutralizes_on_request() -> None:
+    manager = make_manager()
+    commands = _configure_gripper_position_move(manager, mode="grasp_holding")
+    manager._gripper_hold_deadline = time.monotonic() + 60.0
+
+    assert manager.release_grasp_hold("external release") is True
+
+    assert commands == [(-4.72, 0.0, 0.0, 0.0, 0.0)]
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+    assert manager.grasp_hold_release_reason == "external release"
+
+    # Idempotent: nothing active to release.
+    assert manager.release_grasp_hold() is False
+
+
+def test_release_grasp_hold_ignores_normal_position_move() -> None:
+    manager = make_manager()
+    _configure_gripper_position_move(manager, mode="position")
+
+    assert manager.release_grasp_hold() is False
+    assert manager.gripper_mode == "position"
+
+
+def test_grasp_hold_timeout_rejects_out_of_range() -> None:
+    for bad in (0.05, _G_GRASP_HOLD_TIMEOUT_MAX_SEC + 1.0):
+        with pytest.raises(ValueError, match="grasp_hold_timeout_sec"):
+            HardwareManager(grasp_hold_timeout_sec=bad)
+
+
+def test_grasp_modes_are_not_released_by_position_neutralization() -> None:
+    for mode, expected in (
+        ("grasp_closing", (0.0, 0.0, 0.0, 0.5)),
+        ("grasp_holding", (-4.72, 0.0, 5.0, 1.0)),
+    ):
+        manager = make_manager()
+        commands = _configure_gripper_position_move(manager, mode=mode)
+
+        manager._gripper_tick()
+        manager._gripper_tick()
+
+        assert manager.gripper_active is True
+        assert manager.gripper_mode == mode
+        assert len(commands) == 2
+        for command in commands:
+            assert command[:4] == expected
 
 
 def test_gripper_position_target_cannot_exceed_verified_85mm_limit() -> None:
@@ -576,8 +980,10 @@ def test_gripper_position_target_cannot_exceed_verified_85mm_limit() -> None:
     manager._enabled = True
     manager._gripper_pos = 0.0
     manager._gripper_mot = SimpleNamespace(
-        get_state=lambda: SimpleNamespace(pos=0.0),
+        get_state=lambda: SimpleNamespace(pos=0.0, vel=0.0, torq=0.0, status_code=1),
+        request_feedback=lambda: None,
     )
+    manager._gripper_ctrl = SimpleNamespace(poll_feedback_once=lambda: None)
     manager._start_gripper_loop = lambda: None
 
     manager.set_gripper_target(0.09, max_effort=0.15)
@@ -604,14 +1010,41 @@ def test_hardware_soft_limits_match_moveit_urdf() -> None:
     assert urdf_limits == _JOINT_POSITION_LIMITS_RAD
 
 
-def test_gripper_initialization_contains_no_enable_or_control_loop_start() -> None:
-    import inspect
+def test_gripper_initialization_defers_background_loop_until_first_command(
+    monkeypatch,
+) -> None:
+    HardwareManager._ensure_rebot_sdk_in_syspath()
+    from reBotArm_control_py.actuator import gripper as gripper_module
 
-    source = inspect.getsource(HardwareManager.init_gripper)
+    manager = make_manager()
+    del manager.init_gripper
+    gripper_motor = FakeMotor()
+    controller = SimpleNamespace(
+        add_damiao_motor=lambda _motor_id, _feedback_id, _model: gripper_motor,
+        poll_feedback_once=lambda: None,
+    )
+    manager.arm._ctrl_map["damiao"] = controller
+    monkeypatch.setattr(
+        gripper_module,
+        "load_cfg",
+        lambda _path: {
+            "gripper": SimpleNamespace(
+                vendor="damiao",
+                motor_id=0x07,
+                feedback_id=0x17,
+                model="4310",
+            )
+        },
+    )
+    manager._gripper_loop_running = False
+    manager._start_gripper_loop = lambda: setattr(
+        manager, "_gripper_loop_running", True
+    )
 
-    assert "enable_all" not in source
-    assert "ensure_mode" not in source
-    assert "_start_gripper_loop" not in source
+    manager.init_gripper("unused-gripper.yaml")
+
+    assert manager._gripper_mot is gripper_motor
+    assert manager._gripper_loop_running is False
 
 
 def test_set_zero_gripper_only_calibrates_disabled_gripper_motor() -> None:

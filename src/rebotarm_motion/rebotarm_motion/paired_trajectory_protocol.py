@@ -58,6 +58,112 @@ def build_quintic_command(
     return payload
 
 
+def build_retimed_path_command(
+    waypoints: Sequence[Sequence[float]],
+    *,
+    duration_sec: float,
+    cadence_sec: float = 0.05,
+    label: str,
+) -> dict[str, object]:
+    """Re-time an existing joint-space path onto a quintic time profile.
+
+    ``build_quintic_command`` interpolates straight from start to target and so
+    discards everything a planner found in between: obstacle avoidance, the
+    intermediate postures, and the IK branch the plan actually belongs to.
+    Executing that instead of the plan makes the end effector sweep a different
+    Cartesian path than the one that was validated.
+
+    This keeps the planner's geometric path exactly -- every source waypoint is
+    inserted into the outgoing command in order -- and only replaces the timing
+    with a smooth, zero-boundary-velocity profile.
+    Arc length is measured in joint space (max-norm), and the quintic profile is
+    applied to progress along that length, giving zero start/end velocity.
+    """
+    if len(waypoints) < 2:
+        raise ValueError("waypoints must contain at least two entries")
+    path = [_vector6(point, "waypoint") for point in waypoints]
+    duration = _positive_finite(duration_sec, "duration_sec")
+    cadence = _positive_finite(cadence_sec, "cadence_sec")
+    steps = max(2, int(round(duration / cadence)))
+    actual_cadence = duration / float(steps)
+    if not math.isclose(actual_cadence, cadence, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError("duration_sec must be an integer multiple of cadence_sec")
+
+    # Cumulative joint-space arc length; max-norm keeps the dominant joint's
+    # motion as the progress measure.
+    cumulative = [0.0]
+    for previous, current in zip(path, path[1:]):
+        step = max(abs(b - a) for a, b in zip(previous, current))
+        cumulative.append(cumulative[-1] + step)
+    total = cumulative[-1]
+    if total <= 0.0:
+        raise ValueError("waypoints must describe a non-zero path")
+
+    # A fixed-rate resample alone can straddle an intermediate waypoint and let
+    # the controller interpolate across the corner.  Add the exact time of every
+    # planner waypoint to the cadence grid so the commanded polyline cannot cut
+    # a planner corner.  Duplicate consecutive waypoints share one command point.
+    waypoint_times = [
+        duration * _inverse_quintic_blend(length / total)
+        for length in cumulative
+    ]
+    sample_times = [duration * index / float(steps) for index in range(steps + 1)]
+    event_times = sorted([*sample_times, *waypoint_times])
+    times: list[float] = []
+    for event_time in event_times:
+        if not times or not math.isclose(event_time, times[-1], rel_tol=0.0, abs_tol=1e-12):
+            times.append(event_time)
+
+    points = []
+    for elapsed in times:
+        ratio = elapsed / duration
+        travelled = total * quintic_blend(ratio)
+        segment = bisect_right(cumulative, travelled)
+        if segment >= len(cumulative):
+            positions = list(path[-1])
+        elif segment == 0:
+            positions = list(path[0])
+        else:
+            lower_length = cumulative[segment - 1]
+            upper_length = cumulative[segment]
+            span = upper_length - lower_length
+            blend = 0.0 if span <= 0.0 else (travelled - lower_length) / span
+            positions = [
+                float(start + (end - start) * blend)
+                for start, end in zip(path[segment - 1], path[segment])
+            ]
+        points.append({"elapsed_sec": elapsed, "positions": positions})
+
+    source_waypoint_indices: list[int] = []
+    for waypoint, waypoint_time in zip(path, waypoint_times):
+        command_index = min(
+            range(len(points)),
+            key=lambda index: abs(float(points[index]["elapsed_sec"]) - waypoint_time),
+        )
+        if not math.isclose(
+            float(points[command_index]["elapsed_sec"]),
+            waypoint_time,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("failed to place planner waypoint on command timeline")
+        points[command_index]["positions"] = list(waypoint)
+        source_waypoint_indices.append(command_index)
+
+    payload: dict[str, object] = {
+        "schema_version": SCHEMA_VERSION,
+        "label": str(label),
+        "joint_names": list(ARM_JOINT_NAMES),
+        "duration_sec": duration,
+        "cadence_sec": cadence,
+        "points": points,
+        "source_waypoints": [list(point) for point in path],
+        "source_waypoint_indices": source_waypoint_indices,
+    }
+    payload["command_sha256"] = command_sha256(payload)
+    return payload
+
+
 def command_sha256(command: Mapping[str, object]) -> str:
     canonical = {key: value for key, value in command.items() if key != "command_sha256"}
     encoded = json.dumps(
@@ -92,6 +198,25 @@ def validate_command(command: Mapping[str, object]) -> None:
         previous = elapsed
     if not math.isclose(previous, float(command["duration_sec"]), abs_tol=1e-9):
         raise ValueError("last point must equal duration_sec")
+    source_waypoints = command.get("source_waypoints")
+    source_indices = command.get("source_waypoint_indices")
+    if (source_waypoints is None) != (source_indices is None):
+        raise ValueError("source waypoint audit fields must be provided together")
+    if source_waypoints is not None and source_indices is not None:
+        if not isinstance(source_waypoints, list) or not isinstance(source_indices, list):
+            raise ValueError("source waypoint audit fields must be lists")
+        if len(source_waypoints) != len(source_indices) or len(source_waypoints) < 2:
+            raise ValueError("source waypoint audit fields have invalid lengths")
+        previous_index = -1
+        for waypoint, point_index in zip(source_waypoints, source_indices):
+            expected = _vector6(waypoint, "source waypoint")
+            index = int(point_index)
+            if index < previous_index or not 0 <= index < len(points):
+                raise ValueError("source waypoint indices must be ordered and in range")
+            actual = _vector6(points[index]["positions"], "point positions")
+            if actual != expected:
+                raise ValueError("source waypoint is not present exactly in command points")
+            previous_index = index
     if str(command.get("command_sha256", "")) != command_sha256(command):
         raise ValueError("command_sha256 mismatch")
 
@@ -135,3 +260,21 @@ def _positive_finite(value: float, label: str) -> float:
     if not math.isfinite(result) or result <= 0.0:
         raise ValueError(f"{label} must be finite and positive")
     return result
+
+
+def _inverse_quintic_blend(progress: float) -> float:
+    """Invert the monotonic quintic blend on [0, 1]."""
+    target = min(max(float(progress), 0.0), 1.0)
+    if target <= 0.0:
+        return 0.0
+    if target >= 1.0:
+        return 1.0
+    lower = 0.0
+    upper = 1.0
+    for _ in range(64):
+        middle = (lower + upper) * 0.5
+        if quintic_blend(middle) < target:
+            lower = middle
+        else:
+            upper = middle
+    return (lower + upper) * 0.5

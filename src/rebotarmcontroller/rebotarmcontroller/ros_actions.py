@@ -400,7 +400,8 @@ class ArmActions:
 
         try:
             self._hardware.set_gripper_target(goal.position, goal.max_effort)
-        except Exception:
+        except Exception as exc:
+            self._node.get_logger().error(f"gripper command rejected: {exc}")
             goal_handle.abort()
             result.position = 0.0
             result.effort = 0.0
@@ -409,10 +410,15 @@ class ArmActions:
             return result
 
         start = time.monotonic()
+        timeout_sec = self._hardware.gripper_target_timeout_sec()
         last_pos = self._hardware.gripper_position_m()
         stalled = False
-        while time.monotonic() - start < 5.0:
+        failure_reason = None
+        while time.monotonic() - start < timeout_sec:
             if goal_handle.is_cancel_requested:
+                self._hardware.cancel_gripper_position_command(
+                    "gripper action canceled by operator"
+                )
                 goal_handle.canceled()
                 result.position = self._hardware.gripper_position_m()
                 result.effort = self._hardware.get_gripper_state()[2]
@@ -423,12 +429,27 @@ class ArmActions:
             pos = self._hardware.gripper_position_m()
             effort = self._hardware.get_gripper_state()[2]
             reached = self._hardware.gripper_reached_target()
+            if reached:
+                try:
+                    reached = self._hardware.wait_gripper_target(timeout=0.05)
+                except Exception as exc:
+                    failure_reason = f"gripper completion release failed: {exc}"
+                    reached = False
             stalled = abs(pos - last_pos) < 1e-4 and abs(effort) >= float(goal.max_effort)
             feedback.position = pos
             feedback.effort = effort
             feedback.stalled = stalled
             feedback.reached_goal = reached
             goal_handle.publish_feedback(feedback)
+            failure_reason = failure_reason or self._hardware.gripper_command_error
+            if failure_reason is not None:
+                self._node.get_logger().error(
+                    "gripper action failed "
+                    f"target={float(goal.position):.6f}m "
+                    f"feedback={pos:.6f}m effort={effort:.6f}Nm "
+                    f"reason={failure_reason}"
+                )
+                break
             if reached:
                 break
             last_pos = pos
@@ -437,7 +458,13 @@ class ArmActions:
         result.position = self._hardware.gripper_position_m()
         result.effort = self._hardware.get_gripper_state()[2]
         result.stalled = stalled
-        result.reached_goal = self._hardware.gripper_reached_target()
+        result.reached_goal = (
+            failure_reason is None and self._hardware.gripper_reached_target()
+        )
+        if not result.reached_goal:
+            self._hardware.cancel_gripper_position_command(
+                failure_reason or "gripper action target timeout"
+            )
         if result.reached_goal:
             goal_handle.succeed()
         else:

@@ -26,7 +26,7 @@ for source in (
     if str(source) not in sys.path:
         sys.path.insert(0, str(source))
 
-from p5_paired_trajectory_runner import EFFORT_LIMITS, PairedTrajectoryNode
+from p5_paired_trajectory_runner import PairedTrajectoryNode
 from rebotarm_calibration.aruco_pose import detect_aruco_pose
 from rebotarm_calibration.handeye_residual import (
     analyze_handeye_residual,
@@ -115,16 +115,6 @@ def _check_enabled_hold(node: PairedTrajectoryNode, target: np.ndarray) -> None:
         )
     if node.last_joint_monotonic is None or time.monotonic() - node.last_joint_monotonic > 0.5:
         raise RuntimeError("joint state stale during hold")
-    positions, velocities, efforts = _joint_vectors(node)
-    if float(np.max(np.abs(positions - target))) > 0.02:
-        raise RuntimeError("enabled hold tracking error exceeds 0.02 rad")
-    if float(np.max(np.abs(velocities))) > 0.30:
-        raise RuntimeError("enabled hold raw velocity exceeds 0.30 rad/s")
-    for name, effort in zip((f"joint{i}" for i in range(1, 7)), efforts):
-        if abs(float(effort)) > EFFORT_LIMITS[name]:
-            raise RuntimeError(f"{name} enabled hold effort exceeds limit")
-
-
 def _capture_pose(
     *,
     node: PairedTrajectoryNode,

@@ -71,6 +71,6 @@ rebotarm_grasp_tcp_frame:
   ros__parameters:
     parent_frame: end_link
     child_frame: grasp_tcp
-    # Upstream explicit ee_site nominal value; physical TCP pivot calibration
-    # is intentionally canceled and this remains a CAD/model-derived value.
-    tcp_offset_xyz: [-0.105, 0.0, 0.0]
+    # Operator-measured end_link -> grasp_tcp translation.  Do not substitute
+    # the MuJoCo ee_site value here.
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]

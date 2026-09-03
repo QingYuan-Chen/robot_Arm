@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import sys
+import types
 
 
 def _detection():
@@ -147,6 +149,82 @@ def test_graspnet_unavailable_backend_is_explicitly_disabled():
     assert backend.available is False
     with pytest.raises(RuntimeError, match="GraspNet baseline backend is not configured"):
         backend.infer(points=np.zeros((1, 3)), colors=np.zeros((1, 3)), max_grasps=5)
+
+
+def test_inprocess_graspnet_calls_full_rgbd_backend_without_http(tmp_path):
+    from rebotarm_vision.graspnet_baseline_adapter import InProcessGraspNetBackend
+
+    model_root = tmp_path / "graspnet-baseline"
+    model_root.mkdir()
+    checkpoint = tmp_path / "checkpoint-rs.tar"
+    checkpoint.write_bytes(b"test")
+    calls = []
+
+    class FakeRunner:
+        def __init__(self, **kwargs):
+            calls.append(("init", kwargs))
+            self.last_stage_counts = {"raw": 4, "published": 1, "empty_reason": ""}
+
+        def infer(self, **kwargs):
+            calls.append(("infer", kwargs))
+            return [
+                {
+                    "class_name": "bottle",
+                    "score": 0.91,
+                    "translation_xyz": [0.1, -0.02, 0.32],
+                    "rotation_matrix": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                    "width_m": 0.073,
+                }
+            ]
+
+    module_name = "test_inprocess_graspnet_backend"
+    module = types.ModuleType(module_name)
+    module.GraspNetBaselineInference = FakeRunner
+    sys.modules[module_name] = module
+    try:
+        backend = InProcessGraspNetBackend(
+            model_root=str(model_root),
+            checkpoint_path=str(checkpoint),
+            device="cuda:0",
+            module_name=module_name,
+            num_point=20_000,
+        )
+        color = np.zeros((4, 5, 3), dtype=np.uint8)
+        depth_m = np.full((4, 5), 0.32, dtype=np.float32)
+        payload = backend.infer(
+            timestamp_ns=1_700_000_000_123_456_789,
+            frame_id="camera_depth_frame",
+            color_bgr=color,
+            depth_m=depth_m,
+            camera_info={"fx": 300.0, "fy": 301.0, "cx": 2.0, "cy": 1.5},
+            detection={
+                "x_min": 0,
+                "y_min": 0,
+                "x_max": 5,
+                "y_max": 4,
+                "confidence": 0.9,
+                "class_name": "bottle",
+                "mask_polygon_xy": [0, 0, 4, 0, 4, 3, 0, 3],
+            },
+            max_grasps=10,
+            max_jaw_width_m=0.085,
+        )
+    finally:
+        sys.modules.pop(module_name, None)
+
+    assert backend.available is True
+    assert payload["source"] == "ubuntu_inprocess_graspnet"
+    assert payload["timestamp_ns"] == 1_700_000_000_123_456_789
+    assert payload["frame_id"] == "camera_depth_frame"
+    assert payload["candidates"][0]["score"] == pytest.approx(0.91)
+    infer_call = dict(calls)["infer"]
+    assert np.array_equal(infer_call["color_bgr"], color)
+    assert np.array_equal(infer_call["depth_mm"], depth_m)
+    assert infer_call["camera_info"]["depth_scale_m"] == 1.0
+    assert infer_call["detections"][0]["mask_polygon_xy"] == [0, 0, 4, 0, 4, 3, 0, 3]
+    assert infer_call["max_grasps"] == 10
+    assert infer_call["max_jaw_width_m"] == pytest.approx(0.085)
+    assert backend.last_stage_counts["published"] == 1
 
 
 def test_candidate_filter_tf_failure_publishes_no_ranked_candidates():

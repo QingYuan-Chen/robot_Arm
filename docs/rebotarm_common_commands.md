@@ -1,5 +1,7 @@
 # reBotArm 遥操作使用文档
 
+> P0 安全门：`HardwareManager.connect()` 已改为只连接并保持失能，显式 enable、失败回滚和安全默认 launch 已有自动化测试；真机 joint states、enable/hold/disable 和故障回滚仍待验收。完成这些实机证据前，本文所有 `use_hardware:=true`、网页真机执行、示教真机回放及视觉真机命令仅作为操作参考，不应直接运行。无硬件仿真和只读检查不受此限制。
+
 这份文档只写当前真实可用的遥操作流程，目标是直接复制粘贴使用。  
 日常启动不需要选择 `mode`，网页是主入口。
 

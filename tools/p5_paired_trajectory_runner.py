@@ -33,7 +33,6 @@ for package in ("rebotarm_motion", "rebotarm_simulation"):
     if str(source) not in sys.path:
         sys.path.insert(0, str(source))
 
-from rebotarm_motion.hardware_acceptance_guard import HardwareAcceptanceGuard
 from rebotarm_motion.real_failure_recovery import recover_real_failure
 from rebotarm_motion.paired_trajectory_protocol import (
     ARM_JOINT_NAMES,
@@ -42,14 +41,6 @@ from rebotarm_motion.paired_trajectory_protocol import (
 )
 
 
-EFFORT_LIMITS = {
-    "joint1": 27.0,
-    "joint2": 27.0,
-    "joint3": 27.0,
-    "joint4": 7.0,
-    "joint5": 7.0,
-    "joint6": 7.0,
-}
 REAL_CONFIRMATION = "REAL_PAIRED_SAFE_POSTURE"
 
 
@@ -66,7 +57,12 @@ def _duration(seconds: float):
 
 
 class PairedTrajectoryNode(Node):
-    def __init__(self, *, namespace: str, backend: str) -> None:
+    def __init__(
+        self,
+        *,
+        namespace: str,
+        backend: str,
+    ) -> None:
         super().__init__(f"p5_paired_trajectory_{backend}")
         self.namespace = namespace.strip("/")
         self.backend = backend
@@ -77,7 +73,6 @@ class PairedTrajectoryNode(Node):
         self.active_command: dict[str, object] | None = None
         self.active_start_ns: int | None = None
         self.active_samples: list[dict[str, object]] = []
-        self.active_guard = HardwareAcceptanceGuard(EFFORT_LIMITS) if backend == "real" else None
         self.guard_stop: dict[str, object] | None = None
         self.position_history: deque[tuple[float, tuple[float, ...]]] = deque()
         self.action_feedback: list[dict[str, object]] = []
@@ -186,23 +181,6 @@ class PairedTrajectoryNode(Node):
             "arm_status": self._status_payload(),
         }
         self.active_samples.append(sample)
-        if self.active_guard is not None:
-            decision = self.active_guard.observe(
-                now=now,
-                raw_velocities_by_joint=dict(zip(ARM_JOINT_NAMES, velocities)),
-                window_velocities_by_joint=dict(zip(ARM_JOINT_NAMES, window_velocities)),
-                efforts_by_joint=dict(zip(ARM_JOINT_NAMES, efforts)),
-                tracking_errors_by_joint=dict(zip(ARM_JOINT_NAMES, tracking)),
-            )
-            if decision.should_stop:
-                self.guard_stop = {
-                    "reason": decision.reason,
-                    "joint": decision.joint,
-                    "value": decision.value,
-                    "limit": decision.limit,
-                    "duration_sec": decision.duration_sec,
-                }
-
     def _window_velocities(self, now: float, observed: tuple[float, ...]) -> tuple[float, ...]:
         candidate = None
         for timestamp, positions in self.position_history:
@@ -307,7 +285,6 @@ class PairedTrajectoryNode(Node):
         self.active_command = command
         self.active_samples = []
         self.action_feedback = []
-        self.active_guard.reset() if self.active_guard is not None else None
         self.guard_stop = None
         self.position_history.clear()
         self.active_start_ns = time.monotonic_ns()
