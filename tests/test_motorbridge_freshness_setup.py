@@ -254,3 +254,104 @@ def test_install_mode_does_not_install_after_failed_build(
 
     assert SETUP.main(["--install-user"]) == 1
     assert installed == []
+
+
+def test_build_patched_wheel_runs_all_gates_and_smoke_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    abi = tmp_path / "libmotor_abi.so"
+    gateway = tmp_path / "ws_gateway"
+    wheel = tmp_path / "motorbridge.whl"
+    events = []
+    monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: events.append("verify"))
+    monkeypatch.setattr(
+        SETUP,
+        "_prepare_source_checkout",
+        lambda: events.append("checkout"),
+    )
+
+    def build_rust() -> tuple[Path, Path]:
+        events.append("rust")
+        return abi, gateway
+
+    def build_wheel(received_abi: Path, received_gateway: Path) -> Path:
+        assert (received_abi, received_gateway) == (abi, gateway)
+        events.append("wheel")
+        return wheel
+
+    def smoke(received_wheel: Path) -> None:
+        assert received_wheel == wheel
+        events.append("smoke")
+
+    monkeypatch.setattr(SETUP, "_build_rust_artifacts", build_rust)
+    monkeypatch.setattr(SETUP, "_build_wheel", build_wheel)
+    monkeypatch.setattr(SETUP, "_smoke_test_wheel", smoke)
+
+    assert SETUP.build_patched_wheel() == wheel
+    assert events == ["verify", "checkout", "rust", "wheel", "smoke"]
+
+
+def test_build_patched_wheel_propagates_smoke_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wheel = tmp_path / "motorbridge.whl"
+    monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
+    monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)
+    monkeypatch.setattr(
+        SETUP,
+        "_build_rust_artifacts",
+        lambda: (tmp_path / "libmotor_abi.so", tmp_path / "ws_gateway"),
+    )
+    monkeypatch.setattr(SETUP, "_build_wheel", lambda abi, gateway: wheel)
+
+    def fail_smoke(received_wheel: Path) -> None:
+        assert received_wheel == wheel
+        raise RuntimeError("smoke failed")
+
+    monkeypatch.setattr(SETUP, "_smoke_test_wheel", fail_smoke)
+
+    with pytest.raises(RuntimeError, match="smoke failed"):
+        SETUP.build_patched_wheel()
+
+
+def test_install_mode_does_not_install_when_real_build_smoke_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wheel = tmp_path / "motorbridge.whl"
+    installed = []
+    monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
+    monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)
+    monkeypatch.setattr(
+        SETUP,
+        "_build_rust_artifacts",
+        lambda: (tmp_path / "libmotor_abi.so", tmp_path / "ws_gateway"),
+    )
+    monkeypatch.setattr(SETUP, "_build_wheel", lambda abi, gateway: wheel)
+
+    def fail_smoke(received_wheel: Path) -> None:
+        assert received_wheel == wheel
+        raise RuntimeError("smoke failed")
+
+    monkeypatch.setattr(SETUP, "_smoke_test_wheel", fail_smoke)
+    monkeypatch.setattr(SETUP, "_install_user", lambda path: installed.append(path))
+
+    assert SETUP.main(["--install-user"]) == 1
+    assert installed == []
+
+
+def test_build_only_mode_never_installs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wheel = tmp_path / "verified.whl"
+    monkeypatch.setattr(SETUP, "build_patched_wheel", lambda: wheel)
+    monkeypatch.setattr(
+        SETUP,
+        "_install_user",
+        lambda path: pytest.fail("build-only mode must not install"),
+    )
+
+    assert SETUP.main(["--build-only"]) == 0
