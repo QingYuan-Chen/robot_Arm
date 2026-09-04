@@ -71,16 +71,16 @@ index b83243e8cb6dadba2fd13329072b0cee2de6fe3c..56d6e801e85b16fabffcd64c68ed299a
 +        return state, int(sequence.value)
 diff --git a/bindings/python/tests/test_feedback_sequence.py b/bindings/python/tests/test_feedback_sequence.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..44529b85495b9d1d3430586fbf6fe0f9a8f8d870
+index 0000000000000000000000000000000000000000..f832faf0980c0006abb34ce046069a611de5536b
 --- /dev/null
 +++ b/bindings/python/tests/test_feedback_sequence.py
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,69 @@
 +from __future__ import annotations
 +
 +import ctypes
 +from types import SimpleNamespace
 +
-+from motorbridge.abi import CState
++from motorbridge.abi import Abi, CState
 +from motorbridge.core import Motor
 +
 +
@@ -107,6 +107,18 @@ index 0000000000000000000000000000000000000000..44529b85495b9d1d3430586fbf6fe0f9
 +        return 0
 +
 +
++class FakeBindingFunction:
++    argtypes: list[object] | None = None
++    restype: object | None = None
++
++
++class FakeBindingLibrary:
++    def __getattr__(self, name: str) -> FakeBindingFunction:
++        function = FakeBindingFunction()
++        setattr(self, name, function)
++        return function
++
++
 +def test_get_state_with_sequence_returns_state_and_receive_identity() -> None:
 +    motor = Motor.__new__(Motor)
 +    motor._abi = SimpleNamespace(lib=FakeAbiLibrary())
@@ -117,6 +129,21 @@ index 0000000000000000000000000000000000000000..44529b85495b9d1d3430586fbf6fe0f9
 +    assert state is not None
 +    assert state.pos == 1.25
 +    assert sequence == 7
++
++
++def test_abi_bind_types_feedback_sequence_symbol() -> None:
++    abi = Abi.__new__(Abi)
++    abi.lib = FakeBindingLibrary()
++
++    abi._bind()
++
++    symbol = abi.lib.motor_handle_get_state_with_sequence
++    assert symbol.argtypes == [
++        ctypes.c_void_p,
++        ctypes.POINTER(CState),
++        ctypes.POINTER(ctypes.c_uint64),
++    ]
++    assert symbol.restype is ctypes.c_int32
 diff --git a/motor_abi/include/motor_abi.h b/motor_abi/include/motor_abi.h
 index 5abe0f8e8310e307559ad23ebcf211e0589d8701..04f9313bbbc650f8055fee96293b3edd4fcb0017 100644
 --- a/motor_abi/include/motor_abi.h
@@ -142,10 +169,10 @@ index abca5f7623de079b36e27d599d21680f398b53d7..ffe74ce86809ab4029fb55df9e5e57a0
      "control_modes": ["mit", "pos-vel", "vel", "force-pos", "robstride-pos-vel-pp", "robstride-pos-vel-csp"],
      "damiao": ["dm-serial", "dm-device", "register_u32", "register_f32", "param_u32", "param_f32", "set_can_timeout_ms"],
 diff --git a/motor_abi/src/state_ffi.rs b/motor_abi/src/state_ffi.rs
-index 3565cdc9c4f7cf7f906dc2b639e9feacb7fb82de..a06f87adf5769890030ce62f8e86f6cd595d5c27 100644
+index 3565cdc9c4f7cf7f906dc2b639e9feacb7fb82de..77ffae785dcc8a615057eaab3d8ad824195483a1 100644
 --- a/motor_abi/src/state_ffi.rs
 +++ b/motor_abi/src/state_ffi.rs
-@@ -121,3 +121,46 @@ pub extern "C" fn motor_handle_get_state(
+@@ -121,3 +121,162 @@ pub extern "C" fn motor_handle_get_state(
      }
      0
  }
@@ -192,8 +219,124 @@ index 3565cdc9c4f7cf7f906dc2b639e9feacb7fb82de..a06f87adf5769890030ce62f8e86f6cd
 +    }
 +    0
 +}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use motor_core::bus::{CanBus, CanFrame};
++    use motor_core::error::Result as MotorResult;
++    use std::ptr;
++
++    struct NoopBus;
++
++    impl CanBus for NoopBus {
++        fn send(&self, _frame: CanFrame) -> MotorResult<()> {
++            Ok(())
++        }
++
++        fn recv(&self, _timeout: Duration) -> MotorResult<Option<CanFrame>> {
++            Ok(None)
++        }
++
++        fn shutdown(&self) -> MotorResult<()> {
++            Ok(())
++        }
++    }
++
++    fn bus() -> Arc<dyn CanBus> {
++        Arc::new(NoopBus)
++    }
++
++    fn damiao_handle_without_state() -> MotorHandle {
++        let motor = DamiaoMotor::new(0x01, 0x11, "4340P", bus()).expect("create Damiao motor");
++        MotorHandle {
++            inner: Mutex::new(MotorHandleInner::Damiao(Arc::new(motor))),
++        }
++    }
++
++    fn last_error_text() -> String {
++        crate::LAST_ERROR.with(|slot| slot.borrow().to_string_lossy().into_owned())
++    }
++
++    #[test]
++    fn get_state_with_sequence_rejects_each_null_pointer() {
++        let mut handle = damiao_handle_without_state();
++        let mut state = MotorState::default();
++        let mut sequence = 0;
++
++        assert_eq!(
++            motor_handle_get_state_with_sequence(ptr::null_mut(), &mut state, &mut sequence,),
++            -1,
++        );
++        assert!(last_error_text().contains("motor, out_state, or out_sequence is null"));
++
++        assert_eq!(
++            motor_handle_get_state_with_sequence(&mut handle, ptr::null_mut(), &mut sequence,),
++            -1,
++        );
++        assert!(last_error_text().contains("motor, out_state, or out_sequence is null"));
++
++        assert_eq!(
++            motor_handle_get_state_with_sequence(&mut handle, &mut state, ptr::null_mut()),
++            -1,
++        );
++        assert!(last_error_text().contains("motor, out_state, or out_sequence is null"));
++    }
++
++    #[test]
++    fn get_state_with_sequence_returns_empty_state_and_zero_before_first_frame() {
++        let mut handle = damiao_handle_without_state();
++        let mut state = MotorState {
++            has_value: 1,
++            can_id: 9,
++            arbitration_id: 9,
++            status_code: 9,
++            pos: 9.0,
++            vel: 9.0,
++            torq: 9.0,
++            t_mos: 9.0,
++            t_rotor: 9.0,
++        };
++        let mut sequence = 99;
++
++        assert_eq!(
++            motor_handle_get_state_with_sequence(&mut handle, &mut state, &mut sequence),
++            0,
++        );
++        assert_eq!(state.has_value, 0);
++        assert_eq!(state.can_id, 0);
++        assert_eq!(state.arbitration_id, 0);
++        assert_eq!(state.status_code, 0);
++        assert_eq!(state.pos, 0.0);
++        assert_eq!(state.vel, 0.0);
++        assert_eq!(state.torq, 0.0);
++        assert_eq!(state.t_mos, 0.0);
++        assert_eq!(state.t_rotor, 0.0);
++        assert_eq!(sequence, 0);
++    }
++
++    #[test]
++    fn get_state_with_sequence_rejects_non_damiao_handle() {
++        let motor = MyActuatorMotor::new(1, 0, "test-model", bus())
++            .expect("create no-hardware MyActuator motor");
++        let mut handle = MotorHandle {
++            inner: Mutex::new(MotorHandleInner::MyActuator(Arc::new(motor))),
++        };
++        let mut state = MotorState::default();
++        let mut sequence = 0;
++
++        assert_eq!(
++            motor_handle_get_state_with_sequence(&mut handle, &mut state, &mut sequence),
++            -1,
++        );
++        assert_eq!(
++            last_error_text(),
++            "motor_handle_get_state_with_sequence is only supported for Damiao motors",
++        );
++    }
++}
 diff --git a/motor_vendors/damiao/src/motor.rs b/motor_vendors/damiao/src/motor.rs
-index a0d956aacd1034b1e8f6fc68809a19e55aff002a..e8a8a10d88d3fa35fea8ecb6a45e1b0e6c864ff8 100644
+index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa115897d3d 100644
 --- a/motor_vendors/damiao/src/motor.rs
 +++ b/motor_vendors/damiao/src/motor.rs
 @@ -234,7 +234,7 @@ pub struct DamiaoMotor {
@@ -250,7 +393,7 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..e8a8a10d88d3fa35fea8ecb6a45e1b0e
          Ok(())
      }
  }
-@@ -812,4 +825,56 @@ mod tests {
+@@ -812,4 +825,91 @@ mod tests {
              "unexpected error: {u32_err}"
          );
      }
@@ -305,5 +448,40 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..e8a8a10d88d3fa35fea8ecb6a45e1b0e
 +                second.t_rotor.to_bits(),
 +            ),
 +        );
++    }
++
++    #[test]
++    fn register_reply_does_not_advance_feedback_sequence() {
++        let bus: Arc<dyn CanBus> = Arc::new(MockBus::new());
++        let motor = DamiaoMotor::new(0x01, 0x11, "4340P", bus).expect("create motor");
++
++        motor
++            .process_feedback_frame_impl(CanFrame {
++                arbitration_id: 0x11,
++                data: [0x11, 0x80, 0x00, 0x80, 0x00, 0x80, 55, 44],
++                dlc: 8,
++                is_extended: false,
++                is_rx: true,
++            })
++            .expect("process sensor frame");
++        let (_, first_sequence) = motor
++            .latest_state_with_sequence()
++            .expect("first state and sequence");
++        assert_eq!(first_sequence, 1);
++
++        motor
++            .process_feedback_frame_impl(CanFrame {
++                arbitration_id: 0x11,
++                data: [0x01, 0x01, 0x33, 10, 2, 0, 0, 0],
++                dlc: 8,
++                is_extended: false,
++                is_rx: true,
++            })
++            .expect("process register reply");
++
++        let (_, after_register_sequence) = motor
++            .latest_state_with_sequence()
++            .expect("state remains available");
++        assert_eq!(after_register_sequence, 1);
 +    }
  }
