@@ -38,13 +38,14 @@ class reBotArmController(Node):
         self.declare_parameter("gripper_config", "")
         self.declare_parameter("channel", "")
         self.declare_parameter("joint_state_rate", 100.0)
+        self.declare_parameter("hardware_feedback_rate_hz", 50.0)
         self.declare_parameter(
             "gripper_position_torque_cap_nm", 1.0,
             descriptor=None,
         )
         self.declare_parameter("gripper_position_max_speed_rad_s", 0.5)
         self.declare_parameter("gripper_position_timeout_margin_sec", 1.5)
-        self.declare_parameter("gripper_feedback_stale_timeout_sec", 0.25)
+        self.declare_parameter("gripper_feedback_stale_timeout_sec", 0.15)
         self.declare_parameter("grasp_hold_timeout_sec", 30.0)
         self.declare_parameter("arm_namespace", "rebotarm")
         self.declare_parameter("cmd_arbitration", "reject")
@@ -68,6 +69,9 @@ class reBotArmController(Node):
         channel = str(self.get_parameter("channel").value or "")
         self.arm_namespace = str(self.get_parameter("arm_namespace").value or "rebotarm").strip("/")
         joint_state_rate = float(self.get_parameter("joint_state_rate").value)
+        hardware_feedback_rate_hz = float(
+            self.get_parameter("hardware_feedback_rate_hz").value
+        )
         gripper_position_torque_cap_nm = float(
             self.get_parameter("gripper_position_torque_cap_nm").value
         )
@@ -105,6 +109,7 @@ class reBotArmController(Node):
             arm_cfg=arm_config,
             gripper_cfg=gripper_config,
             channel=channel,
+            hardware_feedback_rate_hz=hardware_feedback_rate_hz,
             gripper_position_torque_cap_nm=gripper_position_torque_cap_nm,
             gripper_position_max_speed_rad_s=gripper_position_max_speed_rad_s,
             gripper_position_timeout_margin_sec=gripper_position_timeout_margin_sec,

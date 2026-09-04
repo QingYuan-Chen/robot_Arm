@@ -90,7 +90,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("channel", default_value="auto"),
             DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument(

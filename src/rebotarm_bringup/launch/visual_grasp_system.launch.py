@@ -48,6 +48,7 @@ def generate_launch_description():
     gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s")
     gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec")
     gripper_feedback_stale_timeout_sec = LaunchConfiguration("gripper_feedback_stale_timeout_sec")
+    hardware_feedback_rate_hz = LaunchConfiguration("hardware_feedback_rate_hz")
     grasp_hold_timeout_sec = LaunchConfiguration("grasp_hold_timeout_sec")
     shutdown_safe_home = LaunchConfiguration("shutdown_safe_home")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
@@ -193,6 +194,7 @@ def generate_launch_description():
             "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
             "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
             "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
+            "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
             "grasp_hold_timeout_sec": grasp_hold_timeout_sec,
             "use_local_rviz": use_local_rviz,
             "start_passive_joint_state_publisher": "false",
@@ -550,7 +552,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="0.5"),
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
-            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.25"),
+            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
+            DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),
             DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),

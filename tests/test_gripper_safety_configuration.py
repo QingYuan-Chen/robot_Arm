@@ -6,10 +6,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SAFETY_DEFAULTS = {
+    "hardware_feedback_rate_hz": 50.0,
     "gripper_position_torque_cap_nm": 1.0,
     "gripper_position_max_speed_rad_s": 0.5,
     "gripper_position_timeout_margin_sec": 1.5,
-    "gripper_feedback_stale_timeout_sec": 0.25,
+    "gripper_feedback_stale_timeout_sec": 0.15,
 }
 
 
@@ -49,6 +50,8 @@ def test_real_hardware_launches_expose_and_forward_gripper_safety_defaults() -> 
     for relative_path in (
         "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
+        "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
+        "src/rebotarm_bringup/launch/rebotarm_app.launch.py",
         "src/rebotarm_bringup/launch/visual_grasp_system.launch.py",
     ):
         tree = _tree(relative_path)

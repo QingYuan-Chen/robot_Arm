@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-03T21:03:25+08:00",
+  "generated_at": "2026-09-04T09:14:16+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 96.7,
@@ -165,9 +165,9 @@
     "[待测试] 针对当前 active TCP 中心可能存在的小幅偏差设计受控残差测试；先固定 hand-eye、depth、目标姿态和测量基准，量化位置/方向误差后再决定是否修改当前 `[-0.04,0,0] m`。任何真机接触或运动须另行明确授权，P5 checkbox 暂不改变。"
   ],
   "git": {
-    "branch": "codex/mujoco-sim-landing",
-    "head": "5555946",
+    "branch": "codex/gripper-unified-bus-fix",
+    "head": "8fde452",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-03T21:03:25+08:00 | actor=codex | event=complete | note=网页遥操作初始化反馈争用修复完成并由外部会话两次真实启动确认；当前第二份网页栈由operator/并发线程保持运行，Codex未发送动作 | verification=controller twice reached CONNECTED_DISABLED in ~0.5s; TDD red-green; full 681 passed,15 skipped; build/compileall/diff-check passed"
+  "last_event": "- 2026-09-04T09:14:16+08:00 | actor=codex | event=complete | note=夹爪共享总线软件修复完成；实体复测继续等待operator明确授权 | verification=layering 18 passed; full pytest 697 passed, 15 skipped; required compileall and git diff --check passed; live audit found no ROS/project process, no 8081/8088 listener, and no /dev/ttyACM0 owner"
 }

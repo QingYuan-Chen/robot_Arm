@@ -53,9 +53,17 @@ class JointStatePublisher:
 
     def publish(self) -> None:
         try:
-            pos, vel, effort = self._hardware.get_joint_state()
+            # When enabled, the unified 500 Hz hardware loop owns the bus and
+            # this call is a no-op.  When disabled, it performs the same
+            # rate-limited 50 Hz batch because there is no command writer.
+            self._hardware.refresh_feedback_if_due()
+            pos, vel, effort = self._hardware.get_cached_joint_state()
         except Exception as exc:
             self._node.get_logger().warn(f"joint state read failed: {exc}")
+            # Do not restamp stale joint positions as current, but do refresh
+            # the latched status so the web UI reports the communication fault
+            # instead of appearing frozen on a healthy last sample.
+            self.publish_status()
             return
 
         msg = JointState()

@@ -34,6 +34,7 @@ def generate_launch_description():
     use_moveit_preview = LaunchConfiguration("use_moveit_preview")
     use_hardware = LaunchConfiguration("use_hardware")
     joint_state_rate = LaunchConfiguration("joint_state_rate")
+    hardware_feedback_rate_hz = LaunchConfiguration("hardware_feedback_rate_hz")
     gripper_position_torque_cap_nm = LaunchConfiguration("gripper_position_torque_cap_nm")
     gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s")
     gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec")
@@ -86,7 +87,8 @@ def generate_launch_description():
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("channel", default_value=""),
             DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
+            DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             # Gripper safety limits must be explicit here, not left to the node
             # default: this is the launch path real grasp runs actually use.
             DeclareLaunchArgument(
@@ -94,7 +96,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="0.5"),
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
-            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.25"),
+            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
             DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
@@ -146,6 +148,7 @@ def generate_launch_description():
                         "channel": channel,
                         "shutdown_safe_home": shutdown_safe_home,
                         "joint_state_rate": joint_state_rate,
+                        "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
                         "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
                         "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
                         "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,

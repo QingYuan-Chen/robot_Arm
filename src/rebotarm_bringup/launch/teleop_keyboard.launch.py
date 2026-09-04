@@ -33,7 +33,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_hardware", default_value="false"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("teach_record_path", default_value="teleop_records/teach_record.jsonl"),
             DeclareLaunchArgument("teach_record_rate_hz", default_value="150.0"),
             DeclareLaunchArgument(

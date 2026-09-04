@@ -32,8 +32,11 @@ _G_POSITION_MAX_SPEED_MIN_RAD_S = 0.05
 _G_POSITION_MAX_SPEED_MAX_RAD_S = 3.0
 _G_POSITION_TIMEOUT_MARGIN_SEC = 1.5
 _G_POSITION_TIMEOUT_MARGIN_MAX_SEC = 10.0
-_G_FEEDBACK_STALE_TIMEOUT_SEC = 0.25
+_G_FEEDBACK_STALE_TIMEOUT_SEC = 0.15
 _G_FEEDBACK_STALE_TIMEOUT_MAX_SEC = 2.0
+_HARDWARE_FEEDBACK_RATE_HZ = 50.0
+_HARDWARE_FEEDBACK_RATE_MIN_HZ = 20.0
+_HARDWARE_FEEDBACK_RATE_MAX_HZ = 100.0
 # These are motor-side torque limits for the MOVE phase only; what prevents
 # driving into a mechanical stop after arrival is the neutral+idle release in
 # _release_gripper_position_target.
@@ -146,12 +149,26 @@ class HardwareManager:
         arm_cfg: Optional[str] = None,
         gripper_cfg: Optional[str] = None,
         channel: str = "",
+        hardware_feedback_rate_hz: float = _HARDWARE_FEEDBACK_RATE_HZ,
         gripper_position_torque_cap_nm: float = _G_LARGE_MOVE_MAX_TAU_NM,
         gripper_position_max_speed_rad_s: float = _G_POSITION_MAX_SPEED_RAD_S,
         gripper_position_timeout_margin_sec: float = _G_POSITION_TIMEOUT_MARGIN_SEC,
         gripper_feedback_stale_timeout_sec: float = _G_FEEDBACK_STALE_TIMEOUT_SEC,
         grasp_hold_timeout_sec: float = _G_GRASP_HOLD_TIMEOUT_DEFAULT_SEC,
     ) -> None:
+        requested_feedback_rate = float(hardware_feedback_rate_hz)
+        if not (
+            _HARDWARE_FEEDBACK_RATE_MIN_HZ
+            <= requested_feedback_rate
+            <= _HARDWARE_FEEDBACK_RATE_MAX_HZ
+        ):
+            raise ValueError(
+                "hardware_feedback_rate_hz must be within "
+                f"[{_HARDWARE_FEEDBACK_RATE_MIN_HZ:g}, "
+                f"{_HARDWARE_FEEDBACK_RATE_MAX_HZ:g}] Hz"
+            )
+        self._hardware_feedback_rate_hz = requested_feedback_rate
+        self._hardware_feedback_period_sec = 1.0 / requested_feedback_rate
         requested_cap = float(gripper_position_torque_cap_nm)
         if not 0.05 <= requested_cap <= _G_LARGE_MOVE_MAX_TAU_CAP_NM:
             raise ValueError(
@@ -229,13 +246,20 @@ class HardwareManager:
         self._gripper_feedback_error: str | None = "gripper feedback not received"
         self._gripper_command_error: str | None = None
         self._gripper_position_result = "idle"
+        self._gripper_neutral_pending: tuple[float, str, bool] | None = None
         self._gripper_target_timeout_sec = 0.0
         self._gripper_target_deadline_monotonic: float | None = None
-        self._gripper_loop_stop = threading.Event()
-        self._gripper_loop_thread: threading.Thread | None = None
+        # Arm and gripper commands share the vendor's one hardware loop.  These
+        # compatibility fields remain observable for diagnostics, but no
+        # independent gripper thread is created.
+        self._gripper_loop_thread: None = None
         self._gripper_loop_running = False
         self._gripper_last_tick_monotonic: float | None = None
         self._gripper_lock = threading.RLock()
+        self._feedback_lock = threading.RLock()
+        self._feedback_next_refresh_monotonic: float | None = None
+        self._arm_feedback_updated_monotonic: float | None = None
+        self._arm_feedback_error: str | None = "arm feedback not received"
         self._motor_lifecycle_lock = threading.RLock()
 
         self._endpos_ctrl = ArmEndPos(self._arm)
@@ -364,7 +388,18 @@ class HardwareManager:
 
     @property
     def error_codes(self) -> list[str]:
-        return list(self._error_codes)
+        codes = list(self._error_codes)
+        arm_feedback_failure = self._arm_feedback_failure_reason()
+        if arm_feedback_failure is not None:
+            codes.append(f"ARM_FEEDBACK: {arm_feedback_failure}")
+        if self._gripper_mot is not None:
+            with self._gripper_lock:
+                gripper_feedback_failure = (
+                    self._gripper_feedback_failure_reason_locked()
+                )
+            if gripper_feedback_failure is not None:
+                codes.append(f"GRIPPER_FEEDBACK: {gripper_feedback_failure}")
+        return codes
 
     def set_state_machine(self, state: str) -> None:
         if state not in ("IDLE", "TRAJ_RUNNING", "LOWLEVEL_STREAMING", "GRAVITY_COMP"):
@@ -392,9 +427,156 @@ class HardwareManager:
             )
 
     def _refresh_all_feedback(self) -> None:
-        self._refresh_arm_feedback()
+        self.refresh_feedback_if_due(force=True)
 
-        self._refresh_gripper_feedback()
+    def _feedback_controller_groups(self):
+        groups: list[tuple[object, list[tuple[str, object]]]] = []
+
+        def add(ctrl, label: str, motor) -> None:
+            for existing_ctrl, entries in groups:
+                if existing_ctrl is ctrl:
+                    entries.append((label, motor))
+                    return
+            groups.append((ctrl, [(label, motor)]))
+
+        ctrl_map = getattr(self._arm, "_ctrl_map", {})
+        motor_map = getattr(self._arm, "_motor_map", {})
+        for joint in getattr(self._arm, "_joints", []):
+            ctrl = ctrl_map.get(getattr(joint, "vendor", None))
+            motor = motor_map.get(joint.name)
+            if ctrl is not None and motor is not None:
+                add(ctrl, joint.name, motor)
+        if self._gripper_ctrl is not None and self._gripper_mot is not None:
+            add(self._gripper_ctrl, "gripper", self._gripper_mot)
+        return groups
+
+    def _record_arm_feedback_success(self, observed_at: float) -> None:
+        recovered = self._arm_feedback_error is not None
+        self._arm_feedback_updated_monotonic = float(observed_at)
+        self._arm_feedback_error = None
+        if recovered:
+            _LOG.info("arm feedback recovered updated=%.6f", observed_at)
+
+    def _record_arm_feedback_error(self, reason: str) -> None:
+        message = str(reason)
+        changed = message != self._arm_feedback_error
+        self._arm_feedback_error = message
+        if changed:
+            _LOG.error("arm feedback error: %s", message)
+
+    def _arm_feedback_failure_reason(self, *, now: float | None = None) -> str | None:
+        if self._arm_feedback_error is not None:
+            return f"arm feedback unavailable: {self._arm_feedback_error}"
+        updated = self._arm_feedback_updated_monotonic
+        current = time.monotonic() if now is None else float(now)
+        age = float("inf") if updated is None else max(current - updated, 0.0)
+        if age > self._gripper_feedback_stale_timeout_sec:
+            return (
+                "arm feedback stale: "
+                f"age={age:.3f}s "
+                f"limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
+            )
+        return None
+
+    def _refresh_feedback_batch(self, *, observed_at: float) -> None:
+        groups = self._feedback_controller_groups()
+        try:
+            if groups:
+                for ctrl, entries in groups:
+                    lock = getattr(ctrl, "_bus_lock", None)
+
+                    def transaction() -> None:
+                        for _label, motor in entries:
+                            motor.request_feedback()
+                        ctrl.poll_feedback_once()
+                        for label, motor in entries:
+                            state = motor.get_state()
+                            if label == "gripper":
+                                self._validated_gripper_feedback_values(state)
+                            elif state is None:
+                                raise RuntimeError(f"{label} feedback unavailable")
+
+                    try:
+                        if lock is None:
+                            transaction()
+                        else:
+                            with lock:
+                                transaction()
+                    except Exception as exc:
+                        labels = ",".join(label for label, _motor in entries)
+                        raise RuntimeError(
+                            f"controller={type(ctrl).__name__} motors={labels}: {exc}"
+                        ) from exc
+            else:
+                # Test/legacy fallback for RobotArm implementations that do not
+                # expose controller ownership.  The real hardware path above
+                # performs one grouped transaction per controller.
+                request_and_poll = getattr(self._arm, "_request_and_poll", None)
+                if not callable(request_and_poll):
+                    raise RuntimeError("hardware feedback controller map unavailable")
+                request_and_poll()
+
+            # Validate the complete arm cache before advancing its timestamp.
+            self._validated_joint_feedback(refresh=False, check_freshness=False)
+            self._record_arm_feedback_success(observed_at)
+            if self._gripper_mot is not None:
+                self._record_gripper_feedback(
+                    self._gripper_mot.get_state(), observed_at=observed_at
+                )
+        except Exception as exc:
+            message = f"shared feedback batch failed: {exc}"
+            self._record_arm_feedback_error(message)
+            if self._gripper_mot is not None:
+                self._record_gripper_feedback_error(message)
+            raise RuntimeError(message) from exc
+
+    def refresh_feedback_if_due(
+        self,
+        *,
+        force: bool = False,
+        now: float | None = None,
+    ) -> bool:
+        """Run at most one shared-bus feedback batch at the configured rate.
+
+        While the vendor command loop is active, only that loop may transact on
+        the bus.  ROS timers call this method too, but are reduced to cache-only
+        readers until the command loop stops.
+        """
+        observed_at = time.monotonic() if now is None else float(now)
+        control_thread = getattr(self._arm, "_ctrl_thread", None)
+        if (
+            self.control_loop_active
+            and control_thread is not None
+            and threading.current_thread() is not control_thread
+        ):
+            if force:
+                raise RuntimeError(
+                    "synchronous feedback refresh rejected while hardware loop owns bus"
+                )
+            return False
+        with self._feedback_lock:
+            due = self._feedback_next_refresh_monotonic
+            if not force and due is not None and observed_at + 1e-12 < due:
+                return False
+            self._feedback_next_refresh_monotonic = (
+                observed_at + self._hardware_feedback_period_sec
+            )
+            attempts = _FEEDBACK_REFRESH_RETRIES if force else 1
+            last_error: Exception | None = None
+            for attempt in range(attempts):
+                try:
+                    batch_observed_at = (
+                        observed_at if now is not None else time.monotonic()
+                    )
+                    self._refresh_feedback_batch(observed_at=batch_observed_at)
+                    return True
+                except Exception as exc:
+                    last_error = exc
+                    if attempt + 1 < attempts:
+                        time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+            if force and last_error is not None:
+                raise last_error
+            return False
 
     @staticmethod
     def _validated_gripper_feedback_values(state) -> tuple[float, float, float, int]:
@@ -459,40 +641,22 @@ class HardwareManager:
     def _refresh_gripper_feedback(self):
         if self._gripper_mot is None or self._gripper_ctrl is None:
             raise RuntimeError("gripper feedback unavailable: motor/controller not initialized")
-
-        def refresh_transaction():
-            last_error: Exception | None = None
-            for attempt in range(_FEEDBACK_REFRESH_RETRIES):
-                try:
-                    self._gripper_mot.request_feedback()
-                    self._gripper_ctrl.poll_feedback_once()
-                    state = self._gripper_mot.get_state()
-                    self._record_gripper_feedback(state)
-                    return state
-                except Exception as exc:
-                    last_error = exc
-                if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
-                    time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
-            detail = f": {last_error}" if last_error is not None else ""
-            error = RuntimeError(
-                "gripper feedback unavailable after "
-                f"{_FEEDBACK_REFRESH_RETRIES} attempts{detail}"
-            )
-            self._record_gripper_feedback_error(str(error))
-            raise error
-
-        lock = getattr(self._gripper_ctrl, "_bus_lock", None)
-        if lock is None:
-            return refresh_transaction()
-        with lock:
-            return refresh_transaction()
+        self.refresh_feedback_if_due(force=True)
+        return self._gripper_mot.get_state()
 
     def _validated_joint_feedback(
         self,
         *,
         expected_status: int | None = None,
+        refresh: bool = True,
+        check_freshness: bool = True,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
-        self._refresh_arm_feedback()
+        if refresh:
+            self.refresh_feedback_if_due(force=True)
+        if check_freshness:
+            feedback_failure = self._arm_feedback_failure_reason()
+            if feedback_failure is not None:
+                raise RuntimeError(feedback_failure)
         joint_names = self.joint_names
         if len(joint_names) != len(set(joint_names)):
             raise RuntimeError("joint names contain duplicates")
@@ -646,6 +810,18 @@ class HardwareManager:
             expected_status = 1 if self._enabled else 0
             positions, velocities, torques, _statuses = self._validated_joint_feedback(
                 expected_status=expected_status,
+                refresh=not self.control_loop_active,
+            )
+            return positions, velocities, torques
+
+    def get_cached_joint_state(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        with self._motor_lifecycle_lock:
+            if not self._connected:
+                return self._arm.get_state()
+            expected_status = 1 if self._enabled else 0
+            positions, velocities, torques, _statuses = self._validated_joint_feedback(
+                expected_status=expected_status,
+                refresh=False,
             )
             return positions, velocities, torques
 
@@ -950,7 +1126,7 @@ class HardwareManager:
         self._gravity_comp_lock_counter = 0
         self._gravity_comp_active = True
         self._gravity_comp_tick(self._arm, 1.0 / float(self._arm._rate))
-        self._arm.start_control_loop(self._gravity_comp_tick, rate=self._arm._rate)
+        self._arm.start_control_loop(self._gravity_hardware_tick, rate=self._arm._rate)
         self.set_state_machine("GRAVITY_COMP")
 
     def stop_gravity_compensation(self) -> None:
@@ -981,58 +1157,7 @@ class HardwareManager:
         return self._gravity_comp_q_target.copy()
 
     def _refresh_arm_feedback(self) -> None:
-        ctrl_map = getattr(self._arm, "_ctrl_map", None)
-        motor_map = getattr(self._arm, "_motor_map", None)
-        joints = getattr(self._arm, "_joints", None)
-        if ctrl_map and motor_map and joints:
-            try:
-                for vendor, controller in ctrl_map.items():
-                    def refresh_vendor_transaction() -> None:
-                        for joint in joints:
-                            if joint.vendor != vendor:
-                                continue
-                            motor = motor_map[joint.name]
-                            last_error: Exception | None = None
-                            for attempt in range(_FEEDBACK_REFRESH_RETRIES):
-                                try:
-                                    motor.request_feedback()
-                                    controller.poll_feedback_once()
-                                    if motor.get_state() is not None:
-                                        break
-                                except Exception as exc:
-                                    last_error = exc
-                                if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
-                                    time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
-                            else:
-                                detail = (
-                                    f": {last_error}"
-                                    if last_error is not None
-                                    else ""
-                                )
-                                raise RuntimeError(
-                                    f"{joint.name} feedback unavailable after "
-                                    f"{_FEEDBACK_REFRESH_RETRIES} attempts{detail}"
-                                )
-
-                    lock = getattr(controller, "_bus_lock", None)
-                    if lock is None:
-                        refresh_vendor_transaction()
-                    else:
-                        with lock:
-                            refresh_vendor_transaction()
-            except Exception as exc:
-                raise RuntimeError(f"arm feedback refresh failed: {exc}") from exc
-            return
-
-        fresh = getattr(self._arm, "fresh", None)
-        if callable(fresh):
-            fresh()
-            return
-        request_and_poll = getattr(self._arm, "_request_and_poll", None)
-        if callable(request_and_poll):
-            request_and_poll()
-            return
-        self._arm.get_positions(request=True)
+        self.refresh_feedback_if_due(force=True)
 
     @staticmethod
     def _angles_near_reference(values: np.ndarray, reference: np.ndarray) -> np.ndarray:
@@ -1094,6 +1219,7 @@ class HardwareManager:
             kp=np.full(arm.num_joints, _GC_KP),
             kd=np.full(arm.num_joints, _GC_KD),
             tau=tau_g + self._gravity_comp_integral,
+            request_feedback=False,
         )
 
     def current_pose(self):
@@ -1104,13 +1230,15 @@ class HardwareManager:
         return fk_to_pose(position, rotation)
 
     def get_joint_status_codes(self) -> list[int]:
+        if self._arm_feedback_failure_reason() is not None:
+            return [255] * len(self.joint_names)
         codes: list[int] = []
         for name in self.joint_names:
             try:
                 st = self._arm._motor_map[name].get_state()
-                codes.append(int(st.status_code if st is not None else 0))
+                codes.append(int(st.status_code) if st is not None else 255)
             except Exception:
-                codes.append(0)
+                codes.append(255)
         return codes
 
     def init_gripper(self, cfg_path: str) -> None:
@@ -1146,10 +1274,18 @@ class HardwareManager:
 
     def set_gripper_target(self, position_m: float, max_effort: float = 0.0) -> None:
         self._require_enabled()
+        if not self.control_loop_active:
+            raise RuntimeError(
+                "gripper command requires the unified hardware control loop"
+            )
         if self._gripper_mot is None:
             raise RuntimeError("gripper is not initialized")
-        state = self._refresh_gripper_feedback()
+        state = self._gripper_mot.get_state()
         start_angle, _velocity, _torque, status = self._validated_gripper_feedback_values(state)
+        with self._gripper_lock:
+            feedback_failure = self._gripper_feedback_failure_reason_locked()
+        if feedback_failure is not None:
+            raise RuntimeError(feedback_failure)
         if status != 1:
             raise RuntimeError(f"gripper status_code={status}, expected 1 before position command")
         distance = float(np.clip(position_m, 0.0, _G_VERIFIED_OPEN_LIMIT_M))
@@ -1242,7 +1378,8 @@ class HardwareManager:
                 # MIT position command before acknowledging success so the motor
                 # cannot keep driving toward the target after this returns.
                 self._release_gripper_position_target(owned_goal)
-                return self.gripper_reached_target()
+                time.sleep(1.0 / _G_CTRL_RATE)
+                continue
             time.sleep(0.02)
         # A timeout also ends this command's ownership of the gripper: stop
         # driving instead of leaving a stale position hold running.
@@ -1268,8 +1405,16 @@ class HardwareManager:
         hold_timeout_sec: float | None = None,
     ) -> tuple[bool, bool, float, float, float, str]:
         self._require_enabled()
+        if not self.control_loop_active:
+            raise RuntimeError(
+                "gripper grasp requires the unified hardware control loop"
+            )
         if self._gripper_mot is None:
             raise RuntimeError("gripper is not initialized")
+        with self._gripper_lock:
+            feedback_failure = self._gripper_feedback_failure_reason_locked()
+        if feedback_failure is not None:
+            raise RuntimeError(feedback_failure)
 
         close_effort = float(np.clip(close_force, 0.05, _G_GRASP_CLOSE_FORCE_MAX))
         hold_effort = float(np.clip(hold_force, 0.05, _G_TAU_MAX))
@@ -1299,6 +1444,22 @@ class HardwareManager:
 
         while time.monotonic() - start < timeout:
             elapsed = time.monotonic() - start
+            with self._gripper_lock:
+                feedback_failure = self._gripper_feedback_failure_reason_locked()
+                command_failure = self._gripper_command_error
+                if feedback_failure is not None and self._gripper_active:
+                    self._fail_active_gripper_command_locked(feedback_failure)
+                    command_failure = self._gripper_command_error
+            if command_failure is not None:
+                reached_position_m = self.gripper_position_m()
+                return (
+                    False,
+                    False,
+                    0.0,
+                    reached_position_m,
+                    hold_effort,
+                    command_failure,
+                )
             reached_position_m = self.gripper_position_m()
             closure_m = max(start_position_m - reached_position_m, 0.0)
             if (
@@ -1350,14 +1511,18 @@ class HardwareManager:
                     self._gripper_vel = velocity
                     self._gripper_torque = torque
                     self._gripper_status_code = status
-                age = self._gripper_feedback_age_sec()
-                if age > self._gripper_feedback_stale_timeout_sec:
-                    self._record_gripper_feedback_error(
-                        "gripper feedback stale: "
-                        f"age={age:.3f}s "
-                        f"limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
-                    )
+                    feedback_error = self._gripper_feedback_error
+                if feedback_error is not None:
                     status = 255
+                else:
+                    age = self._gripper_feedback_age_sec()
+                    if age > self._gripper_feedback_stale_timeout_sec:
+                        self._record_gripper_feedback_error(
+                            "gripper feedback stale: "
+                            f"age={age:.3f}s "
+                            f"limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
+                        )
+                        status = 255
             except Exception as exc:
                 self._record_gripper_feedback_error(str(exc))
                 status = 255
@@ -1471,8 +1636,20 @@ class HardwareManager:
             self.hold_current_position()
         else:
             self._endpos_ctrl._q_target[:] = np.array(target, dtype=np.float64)
-        self._arm.start_control_loop(self._endpos_ctrl._loop_cb)
+        self._arm.start_control_loop(self._endpos_hardware_tick)
         self._endpos_ctrl._running = True
+
+    def _endpos_hardware_tick(self, arm, dt: float) -> None:
+        self._hardware_control_tick(arm, dt, self._endpos_ctrl._loop_cb)
+
+    def _gravity_hardware_tick(self, arm, dt: float) -> None:
+        self._hardware_control_tick(arm, dt, self._gravity_comp_tick)
+
+    def _hardware_control_tick(self, arm, dt: float, arm_callback) -> None:
+        """Single owner for arm command, feedback batch, and gripper command."""
+        arm_callback(arm, dt)
+        self.refresh_feedback_if_due()
+        self._gripper_tick()
 
     def _stop_control_loop(self) -> None:
         self._arm.stop_control_loop()
@@ -1498,18 +1675,10 @@ class HardwareManager:
             if lock:
                 with lock:
                     self._gripper_mot.send_mit(pos_cmd, vel, kp, kd, tau_safe)
-                    self._gripper_mot.request_feedback()
-                    self._gripper_ctrl.poll_feedback_once()
-                    state = self._gripper_mot.get_state()
             else:
                 self._gripper_mot.send_mit(pos_cmd, vel, kp, kd, tau_safe)
-                self._gripper_mot.request_feedback()
-                self._gripper_ctrl.poll_feedback_once()
-                state = self._gripper_mot.get_state()
-            self._record_gripper_feedback(state)
         except Exception as exc:
-            self._record_gripper_feedback_error(str(exc))
-            raise RuntimeError(f"gripper MIT command feedback failed: {exc}") from exc
+            raise RuntimeError(f"gripper MIT command failed: {exc}") from exc
 
     def _fail_active_gripper_command_locked(self, reason: str) -> None:
         message = str(reason)
@@ -1520,25 +1689,53 @@ class HardwareManager:
         self._gripper_target_deadline_monotonic = None
         _LOG.error(
             "gripper command failed reason=%s goal=%.6frad command=%.6frad "
-            "feedback=%.6frad updated=%s",
+            "feedback=%.6frad updated=%s age=%.6fs",
             message,
             self._gripper_goal_angle,
             self._gripper_target_angle,
             self._gripper_pos,
             self._gripper_feedback_updated_monotonic,
+            self._gripper_feedback_age_sec(),
         )
-        if self._gripper_mot is None:
-            return
+        self._queue_gripper_neutral_locked(message, marks_success=False)
+
+    def _queue_gripper_neutral_locked(
+        self,
+        reason: str,
+        *,
+        marks_success: bool,
+    ) -> None:
+        self._gripper_neutral_pending = (
+            float(self._gripper_pos),
+            str(reason),
+            bool(marks_success),
+        )
+
+    def _emit_pending_gripper_neutral_locked(self) -> bool:
+        pending = self._gripper_neutral_pending
+        if pending is None:
+            return False
+        angle, reason, marks_success = pending
+        self._gripper_neutral_pending = None
         try:
-            self._gripper_mot.send_mit(
-                float(self._gripper_pos),
+            self._gripper_safe_mit(
+                angle,
                 0.0,
                 0.0,
                 0.0,
-                0.0,
+                tau_limit=0.05,
             )
         except Exception as exc:
-            _LOG.error("gripper neutral command failed after %s: %s", message, exc)
+            self._gripper_position_result = "failed"
+            self._gripper_command_error = (
+                f"gripper neutral command failed after {reason}: {exc}"
+            )
+            _LOG.error("%s", self._gripper_command_error)
+            return False
+        if marks_success:
+            self._gripper_position_result = "succeeded"
+            self._gripper_command_error = None
+        return True
 
     def cancel_gripper_position_command(self, reason: str = "position command canceled") -> bool:
         with self._gripper_lock:
@@ -1558,8 +1755,9 @@ class HardwareManager:
         Upstream only returns success from ``wait_gripper_target`` and keeps
         ``_gripper_active``/``_gripper_mode`` unchanged, so the 500 Hz tick goes
         on sending MIT position commands after the service has already
-        answered.  This sends one neutral MIT command (zero stiffness, damping
-        and feed-forward torque) and then atomically switches to idle.
+        answered.  This atomically switches to idle and queues one neutral MIT
+        command (zero stiffness, damping and feed-forward torque) for the sole
+        hardware-loop writer before success is acknowledged.
 
         The gripper lock is held for the whole sequence so a newer target
         cannot be clobbered by a stale completion.  ``grasp_closing`` and
@@ -1590,9 +1788,9 @@ class HardwareManager:
         arrived_angle = float(self._gripper_pos)
         if require_arrived and abs(arrived_angle - expected_goal) >= _G_ARRIVE_TOL:
             return False
-        # Clear ownership BEFORE sending neutral.  The 500 Hz tick tests
+        # Clear ownership BEFORE queueing neutral.  The 500 Hz tick tests
         # _gripper_active first, so once this is false no further position
-        # command can be produced and the neutral below is the last word.
+        # command can be produced and the queued neutral is the last word.
         self._gripper_target_angle = arrived_angle
         self._gripper_goal_angle = arrived_angle
         self._gripper_active = False
@@ -1602,21 +1800,10 @@ class HardwareManager:
             self._gripper_position_result = "releasing"
         elif self._gripper_position_result != "failed":
             self._gripper_position_result = "failed"
-        try:
-            self._gripper_safe_mit(
-                arrived_angle,
-                0.0,
-                0.0,
-                0.0,
-                tau_limit=0.05,
-            )
-        except Exception as exc:
-            self._gripper_position_result = "failed"
-            self._gripper_command_error = f"gripper neutral release failed: {exc}"
-            raise
-        if require_arrived:
-            self._gripper_position_result = "succeeded"
-            self._gripper_command_error = None
+        self._queue_gripper_neutral_locked(
+            "position target reached" if require_arrived else "position target canceled",
+            marks_success=require_arrived,
+        )
         return True
 
     def _grasp_hold_expired_locked(self) -> bool:
@@ -1637,12 +1824,9 @@ class HardwareManager:
         self._gripper_hold_release_reason = reason
         self._gripper_active = False
         self._gripper_mode = "idle"
-        self._gripper_safe_mit(
-            float(self._gripper_pos),
-            0.0,
-            0.0,
-            0.0,
-            tau_limit=0.05,
+        self._queue_gripper_neutral_locked(
+            f"grasp release: {reason}",
+            marks_success=False,
         )
 
     def release_grasp_hold(self, reason: str = "external release") -> bool:
@@ -1661,6 +1845,12 @@ class HardwareManager:
             return self._gripper_hold_release_reason
 
     def _gripper_tick(self) -> None:
+        with self._gripper_lock:
+            if self._gripper_neutral_pending is not None:
+                self._emit_pending_gripper_neutral_locked()
+                return
+            if not self._gripper_active or self._gripper_mot is None:
+                return
         try:
             st = self._gripper_mot.get_state()
             position, velocity, torque, status = self._validated_gripper_feedback_values(st)
@@ -1668,6 +1858,12 @@ class HardwareManager:
             self._gripper_vel = velocity
             self._gripper_torque = torque
             self._gripper_status_code = status
+            if status != 1:
+                with self._gripper_lock:
+                    self._fail_active_gripper_command_locked(
+                        f"gripper status_code={status}, expected 1 during command"
+                    )
+                return
         except Exception as exc:
             self._record_gripper_feedback_error(str(exc))
             with self._gripper_lock:
@@ -1742,12 +1938,8 @@ class HardwareManager:
                 command = None
 
             if command is None:
-                try:
-                    self._gripper_mot.request_feedback()
-                    self._gripper_ctrl.poll_feedback_once()
-                    self._record_gripper_feedback(self._gripper_mot.get_state())
-                except Exception as exc:
-                    self._record_gripper_feedback_error(str(exc))
+                if self._gripper_neutral_pending is not None:
+                    self._emit_pending_gripper_neutral_locked()
                 return
 
             pos, vel, kp, kd, tau_ff, tau_limit = command
@@ -1756,34 +1948,11 @@ class HardwareManager:
             except Exception as exc:
                 self._fail_active_gripper_command_locked(str(exc))
 
-    def _gripper_loop(self) -> None:
-        dt = 1.0 / _G_CTRL_RATE
-        last = time.perf_counter()
-        while not self._gripper_loop_stop.is_set():
-            now = time.perf_counter()
-            if now - last >= dt:
-                last += dt
-                self._gripper_tick()
-            else:
-                time.sleep(1e-4)
-
     def _start_gripper_loop(self) -> None:
-        if self._gripper_loop_running:
-            return
-        self._gripper_loop_stop.clear()
-        self._gripper_loop_thread = threading.Thread(
-            target=self._gripper_loop,
-            name="rebotarm-gripper-loop",
-            daemon=True,
-        )
-        self._gripper_loop_thread.start()
-        self._gripper_loop_running = True
+        if not self.control_loop_active:
+            raise RuntimeError(
+                "gripper command requires the unified hardware control loop"
+            )
 
     def _stop_gripper_loop(self) -> None:
-        if not self._gripper_loop_running:
-            return
-        self._gripper_loop_stop.set()
-        if self._gripper_loop_thread is not None:
-            self._gripper_loop_thread.join(timeout=1.0)
-            self._gripper_loop_thread = None
         self._gripper_loop_running = False
