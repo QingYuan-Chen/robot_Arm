@@ -11,6 +11,28 @@ sudo apt install ros-jazzy-moveit ros-jazzy-pinocchio
 python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
 ```
 
+`requirements-runtime.txt` 中固定的 `motorbridge==0.4.6` 只用于 bootstrap /
+基础依赖，原始 PyPI 包没有本控制器所需的逐电机反馈 sequence，不能证明读到的是
+新反馈帧。先安装 Rust/Cargo、Git、Python venv 等构建工具，然后从仓库根目录执行：
+
+```bash
+# 只构建并在临时 venv 验证，不改用户 Python
+python3 tools/setup_motorbridge_fresh_feedback.py --build-only
+
+# 显式安装已验证的 0.4.6+rebotarm.1 用户包
+python3 tools/setup_motorbridge_fresh_feedback.py --install-user
+
+# 启动 controller 前的 fail-closed 检查；不联网、不构建、不访问硬件
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+脚本固定上游 commit
+`38b8a5681887514b301dbcab96e01a473cbd7173`，只接受仓库内已审查的 source patch，
+并同时构建 `motor_abi`、`ws_gateway` 和 wheel。`--check-installed` 必须报告
+`version=0.4.6+rebotarm.1 feedback_sequence=true`；否则不要启动真机 controller。
+如需回退用户包，可执行
+`python3 -m pip install --user --break-system-packages --force-reinstall motorbridge==0.4.6`。
+
 厂商 SDK 使用仓库根目录的 `rebotarm_dependencies.repos` 固定版本：
 
 ```bash
