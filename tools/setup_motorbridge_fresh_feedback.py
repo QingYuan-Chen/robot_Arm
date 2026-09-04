@@ -137,7 +137,6 @@ def _checkout_matches_patched_snapshot() -> bool:
         untracked = _git_output(
             "ls-files",
             "--others",
-            "--exclude-standard",
             env=env,
         )
         return worktree_diff.returncode == 0 and untracked == ""
