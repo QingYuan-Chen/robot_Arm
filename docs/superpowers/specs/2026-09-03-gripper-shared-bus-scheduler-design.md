@@ -58,9 +58,11 @@ a feedback batch only after its explicit request/poll transaction succeeds.
 - `joint_state_rate`: default 100.0 in real-hardware launch paths.  This is a
   cache publication rate, not a serial polling rate.
 - `gripper_feedback_stale_timeout_sec`: default 0.15 s.
-- Gripper position ramp remains configurable with the accepted 0.5 rad/s
-  default.  Feedback at 50 Hz does not limit this motion speed; command output
-  remains 500 Hz.
+- Gripper position ramp remains configurable.  Real-hardware launch paths use
+  the operator-accepted 1.5 rad/s default; the controller/HardwareManager
+  fallback remains 0.5 rad/s for direct use outside those launch paths.
+  Feedback at 50 Hz does not limit this motion speed; command output remains
+  500 Hz.
 - Existing position-command torque configuration remains unchanged.  This bus
   fix neither restores 0.15 N.m nor changes the current configured cap.
 - The 0--90 mm to 0..-5 rad mapping, verified 85 mm installed opening limit,

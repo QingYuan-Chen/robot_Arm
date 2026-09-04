@@ -36,7 +36,7 @@ def generate_launch_description():
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
-            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="0.5"),
+            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="1.5"),
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
             DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
             DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),

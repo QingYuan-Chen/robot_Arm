@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-04T09:14:16+08:00",
+  "generated_at": "2026-09-04T10:55:02+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 96.7,
@@ -166,8 +166,8 @@
   ],
   "git": {
     "branch": "codex/gripper-unified-bus-fix",
-    "head": "8fde452",
+    "head": "c3f94b7",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-04T09:14:16+08:00 | actor=codex | event=complete | note=夹爪共享总线软件修复完成；实体复测继续等待operator明确授权 | verification=layering 18 passed; full pytest 697 passed, 15 skipped; required compileall and git diff --check passed; live audit found no ROS/project process, no 8081/8088 listener, and no /dev/ttyACM0 owner"
+  "last_event": "- 2026-09-04T10:55:02+08:00 | actor=codex | event=complete | note=1.5rad/s夹爪ramp已固化到网页和视觉抓取真实硬件launch默认值 | verification=rebotarm_app and visual_grasp_system show 1.5; full pytest 697 passed, 15 skipped; no hardware restart or motion"
 }

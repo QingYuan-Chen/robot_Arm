@@ -15,7 +15,9 @@
 - Do not start, restart, enable, or command real hardware.
 - Keep all final hardware access in `rebotarmcontroller`.
 - Keep MotorBridge at 0.4.6; do not upgrade dependencies.
-- Preserve the gripper mapping, zero calibration, torque settings, and 0.5 rad/s command ramp.
+- Preserve the gripper mapping, zero calibration, and torque settings.  Use the
+  operator-approved 1.5 rad/s real-hardware launch ramp while retaining the
+  controller/HardwareManager 0.5 rad/s fallback.
 - Use a 50 Hz default shared feedback rate, 100 Hz cache publication rate, and 0.15 s default stale threshold.
 - Preserve unrelated dirty-tree work and never stage `Agent/evidence`, weights, engines, build/install/log, or untracked vendor repositories.
 

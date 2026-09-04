@@ -523,3 +523,6 @@
 - 2026-09-03T22:34:03+08:00 | actor=codex | event=start | note=移植官方统一控制循环并修复夹爪共享总线争用 | verification=-
 - 2026-09-04T09:13:56+08:00 | actor=codex | event=verified | note=完成统一500Hz控制循环、50Hz批量反馈与陈旧反馈fail-closed软件验证 | verification=layering 18 passed; full pytest 697 passed, 15 skipped; required compileall and git diff --check passed; no hardware motion commands sent
 - 2026-09-04T09:14:16+08:00 | actor=codex | event=complete | note=夹爪共享总线软件修复完成；实体复测继续等待operator明确授权 | verification=layering 18 passed; full pytest 697 passed, 15 skipped; required compileall and git diff --check passed; live audit found no ROS/project process, no 8081/8088 listener, and no /dev/ttyACM0 owner
+- 2026-09-04T10:51:03+08:00 | actor=codex | event=start | note=将1.5rad/s夹爪ramp同步到网页及视觉抓取launch默认配置 | verification=-
+- 2026-09-04T10:54:43+08:00 | actor=codex | event=verified | note=网页与视觉抓取真实硬件launch默认ramp统一为1.5rad/s | verification=web and visual --show-args both default 1.5; layering 18 passed; full pytest 697 passed, 15 skipped; compileall and diff-check passed; no restart or motion command
+- 2026-09-04T10:55:02+08:00 | actor=codex | event=complete | note=1.5rad/s夹爪ramp已固化到网页和视觉抓取真实硬件launch默认值 | verification=rebotarm_app and visual_grasp_system show 1.5; full pytest 697 passed, 15 skipped; no hardware restart or motion
