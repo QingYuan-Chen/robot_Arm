@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "leader_ids": [0, 1, 2, 3, 4, 5, 6],
+  "mapping": [
+    {"leader_id": 0, "follower_name": "joint1", "sign": -1, "scale": 1.0, "lower_rad": -2.8, "upper_rad": 2.8, "verified": false},
+    {"leader_id": 1, "follower_name": "joint2", "sign": -1, "scale": 1.0, "lower_rad": -3.14, "upper_rad": 0.02, "verified": false},
+    {"leader_id": 2, "follower_name": "joint3", "sign": 1, "scale": 1.0, "lower_rad": -3.14, "upper_rad": 0.0, "verified": false},
+    {"leader_id": 3, "follower_name": "joint4", "sign": 1, "scale": 1.0, "lower_rad": -1.87, "upper_rad": 1.57, "verified": false},
+    {"leader_id": 4, "follower_name": "joint5", "sign": 1, "scale": 1.0, "lower_rad": -1.57, "upper_rad": 1.57, "verified": false},
+    {"leader_id": 5, "follower_name": "joint6", "sign": -1, "scale": 1.0, "lower_rad": -3.14, "upper_rad": 3.14, "verified": false},
+    {"leader_id": 6, "follower_name": "gripper", "sign": null, "scale": null, "lower_rad": -5.0, "upper_rad": 0.1, "verified": false}
+  ],
+  "thresholds": {
+    "max_sample_age_s": 0.25,
+    "baseline_max_velocity_rad_s": 0.05,
+    "min_direction_delta_rad": 0.05,
+    "other_joint_max_delta_rad": 0.02,
+    "sign_window_size": 5
+  }
+}
