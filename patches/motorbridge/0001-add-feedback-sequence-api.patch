@@ -16,17 +16,17 @@ index 1a68f08a3ea020fc2e7fd02f50e46ee99ef5ba49..905dce178ec13a2d043406eff61bd19f
 -from ctypes import POINTER, Structure, c_char_p, c_float, c_int8, c_int32, c_uint8, c_uint16, c_uint32, c_void_p
 +from ctypes import POINTER, Structure, c_char_p, c_float, c_int8, c_int32, c_uint8, c_uint16, c_uint32, c_uint64, c_void_p
  from pathlib import Path
- 
+
  from .errors import AbiLoadError
 @@ -219,6 +219,10 @@ class Abi:
- 
+
          lib.motor_handle_get_state.argtypes = [c_void_p, POINTER(CState)]
          lib.motor_handle_get_state.restype = c_int32
 +        lib.motor_handle_get_state_with_sequence.argtypes = [
 +            c_void_p, POINTER(CState), POINTER(c_uint64)
 +        ]
 +        lib.motor_handle_get_state_with_sequence.restype = c_int32
- 
+
          lib.motor_handle_damiao_get_param_f32.argtypes = [c_void_p, c_uint16, c_uint32, POINTER(c_float)]
          lib.motor_handle_damiao_get_param_f32.restype = c_int32
 diff --git a/bindings/python/src/motorbridge/core.py b/bindings/python/src/motorbridge/core.py
@@ -35,11 +35,11 @@ index b83243e8cb6dadba2fd13329072b0cee2de6fe3c..56d6e801e85b16fabffcd64c68ed299a
 +++ b/bindings/python/src/motorbridge/core.py
 @@ -1,7 +1,7 @@
  from __future__ import annotations
- 
+
  import ctypes
 -from ctypes import c_float, c_int8, c_uint8, c_uint16, c_uint32
 +from ctypes import c_float, c_int8, c_uint8, c_uint16, c_uint32, c_uint64
- 
+
  from .abi import CState, get_abi
  from .dm_device_runtime import ensure_dm_device_runtime
 @@ -401,3 +401,26 @@ class Motor:
@@ -150,10 +150,10 @@ index 5abe0f8e8310e307559ad23ebcf211e0589d8701..04f9313bbbc650f8055fee96293b3edd
 +++ b/motor_abi/include/motor_abi.h
 @@ -115,6 +115,7 @@ int32_t motor_handle_robstride_get_param_u32(MotorHandle* motor, uint16_t param_
  int32_t motor_handle_robstride_get_param_f32(MotorHandle* motor, uint16_t param_id, uint32_t timeout_ms, float* out_value);
- 
+
  int32_t motor_handle_get_state(MotorHandle* motor, MotorState* out_state);
 +int32_t motor_handle_get_state_with_sequence(MotorHandle* motor, MotorState* out_state, uint64_t* out_sequence);
- 
+
  int32_t motor_handle_damiao_get_param_f32(MotorHandle* motor, uint16_t param_id, uint32_t timeout_ms, float* out_value);
  int32_t motor_handle_damiao_get_param_u32(MotorHandle* motor, uint16_t param_id, uint32_t timeout_ms, uint32_t* out_value);
 diff --git a/motor_abi/src/lib.rs b/motor_abi/src/lib.rs
@@ -362,7 +362,7 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
 +            .ok()
 +            .and_then(|s| s.map(|(state, _, sequence)| (state, sequence)))
      }
- 
+
      pub fn request_fresh_state(&self, timeout: Duration) -> Result<Option<MotorFeedbackState>> {
 @@ -546,7 +553,7 @@ impl DamiaoMotor {
          self.request_motor_feedback()?;

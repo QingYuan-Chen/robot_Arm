@@ -137,6 +137,29 @@ def test_patch_digest_mismatch_is_rejected(
         SETUP._verify_patch_file()
 
 
+def test_checked_in_patch_digest_matches_setup_contract() -> None:
+    assert SETUP._verify_patch_file() is None
+
+
+def test_patch_artifact_passes_git_diff_check(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    patch_copy = repo / "feedback.patch"
+    patch_copy.write_bytes(SETUP.PATCH_PATH.read_bytes())
+    _git(repo, "add", "feedback.patch")
+
+    result = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--check"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_checkout_rejects_wrong_head(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 import threading
 import time
@@ -92,6 +93,8 @@ _GC_KD = 0.8
 _GC_TAU_SCALE = np.ones(6, dtype=np.float64)
 _FEEDBACK_REFRESH_RETRIES = 3
 _FEEDBACK_RETRY_INTERVAL_SEC = 0.005
+_UINT64_MAX = (1 << 64) - 1
+_UINT64_HALF_RANGE = 1 << 63
 
 _JOINT_POSITION_LIMITS_RAD = {
     "joint1": (-2.8, 2.8),
@@ -132,6 +135,13 @@ _LIFECYCLE_STATES = {
     "TRAJECTORY_RUNNING",
     "DISABLING",
 }
+
+
+@dataclass(frozen=True)
+class _VerifiedFeedbackSample:
+    state: object
+    sequence: int
+    observed_at: float
 
 
 def apply_gravity_compensation_tau_scale(tau: np.ndarray) -> np.ndarray:
@@ -258,6 +268,10 @@ class HardwareManager:
         self._gripper_lock = threading.RLock()
         self._feedback_lock = threading.RLock()
         self._feedback_next_refresh_monotonic: float | None = None
+        self._verified_feedback_by_label: dict[str, _VerifiedFeedbackSample] = {}
+        self._feedback_request_baseline_by_label: dict[str, int] = {}
+        self._feedback_request_deadline_by_label: dict[str, float] = {}
+        self._feedback_error_by_label: dict[str, str] = {}
         self._arm_feedback_updated_monotonic: float | None = None
         self._arm_feedback_error: str | None = "arm feedback not received"
         self._motor_lifecycle_lock = threading.RLock()
@@ -444,11 +458,202 @@ class HardwareManager:
         for joint in getattr(self._arm, "_joints", []):
             ctrl = ctrl_map.get(getattr(joint, "vendor", None))
             motor = motor_map.get(joint.name)
-            if ctrl is not None and motor is not None:
-                add(ctrl, joint.name, motor)
-        if self._gripper_ctrl is not None and self._gripper_mot is not None:
+            if motor is None:
+                raise RuntimeError(f"{joint.name} feedback motor unavailable")
+            if ctrl is None:
+                raise RuntimeError(f"{joint.name} feedback controller unavailable")
+            add(ctrl, joint.name, motor)
+        if self._gripper_mot is not None and self._gripper_ctrl is None:
+            raise RuntimeError("gripper feedback controller unavailable")
+        if self._gripper_mot is not None:
             add(self._gripper_ctrl, "gripper", self._gripper_mot)
+        if not groups:
+            raise RuntimeError("hardware feedback controller map unavailable")
         return groups
+
+    @staticmethod
+    def _feedback_state_with_sequence(label: str, motor) -> tuple[object, int]:
+        getter = getattr(motor, "get_state_with_sequence", None)
+        if not callable(getter):
+            raise RuntimeError(
+                f"{label} feedback requires patched MotorBridge "
+                "get_state_with_sequence()"
+            )
+        state, sequence_value = getter()
+        sequence = int(sequence_value)
+        if not 0 <= sequence <= _UINT64_MAX:
+            raise RuntimeError(f"{label} feedback sequence outside uint64 range")
+        return state, sequence
+
+    @staticmethod
+    def _feedback_sequence_advanced(sequence: int, baseline: int) -> bool:
+        current = int(sequence)
+        previous = int(baseline)
+        if not 0 <= current <= _UINT64_MAX or not 0 <= previous <= _UINT64_MAX:
+            raise RuntimeError("feedback sequence outside uint64 range")
+        if current == 0 and previous != 0:
+            return False
+        delta = (current - previous) & _UINT64_MAX
+        return 0 < delta < _UINT64_HALF_RANGE
+
+    def _verified_feedback_sample(self, label: str) -> _VerifiedFeedbackSample:
+        """Return one immutable controller-owned feedback snapshot.
+
+        MotorBridge cache reads belong exclusively to the acquisition path.
+        Consumers take the already-verified sample under ``_feedback_lock``;
+        reading it must never alter its receive sequence or observation time.
+        """
+        with self._feedback_lock:
+            sample = self._verified_feedback_by_label.get(label)
+        if sample is None:
+            raise RuntimeError(f"{label} verified feedback unavailable")
+        return sample
+
+    def _verified_feedback_samples(
+        self,
+        labels: Sequence[str],
+    ) -> tuple[_VerifiedFeedbackSample, ...]:
+        with self._feedback_lock:
+            samples = tuple(
+                self._verified_feedback_by_label.get(label) for label in labels
+            )
+        for label, sample in zip(labels, samples):
+            if sample is None:
+                raise RuntimeError(f"{label} verified feedback unavailable")
+        return samples  # type: ignore[return-value]
+
+    def _feedback_response_window_sec(self) -> float:
+        return max(
+            self._hardware_feedback_period_sec * _FEEDBACK_REFRESH_RETRIES,
+            _FEEDBACK_RETRY_INTERVAL_SEC * _FEEDBACK_REFRESH_RETRIES,
+        )
+
+    def _validate_feedback_sample(self, label: str, state) -> None:
+        if label == "gripper":
+            self._validated_gripper_feedback_values(state)
+            return
+        if state is None:
+            raise RuntimeError(f"{label} feedback unavailable")
+        values = (float(state.pos), float(state.vel), float(state.torq))
+        if not all(np.isfinite(value) for value in values):
+            raise RuntimeError(f"{label} feedback contains non-finite values")
+        limits = _JOINT_POSITION_LIMITS_RAD.get(label)
+        if limits is None:
+            raise RuntimeError(f"no hardware soft limit configured for {label}")
+        lower, upper = limits
+        if values[0] < lower or values[0] > upper:
+            raise RuntimeError(
+                f"{label} position {values[0]:.6f} rad outside "
+                f"hardware soft limit [{lower:.6f}, {upper:.6f}]"
+            )
+
+    def _record_feedback_label_error(self, label: str, reason: str) -> None:
+        self._feedback_error_by_label[label] = str(reason)
+
+    def _record_verified_feedback(
+        self,
+        label: str,
+        state,
+        sequence: int,
+        observed_at: float,
+    ) -> None:
+        self._validate_feedback_sample(label, state)
+        sample = _VerifiedFeedbackSample(
+            state=state,
+            sequence=int(sequence),
+            observed_at=float(observed_at),
+        )
+        self._verified_feedback_by_label[label] = sample
+        self._feedback_error_by_label.pop(label, None)
+        if label == "gripper":
+            self._record_gripper_feedback(state, observed_at=observed_at)
+
+    def _sync_feedback_health(self) -> None:
+        arm_labels = list(self.joint_names)
+        arm_errors = [
+            self._feedback_error_by_label[label]
+            for label in arm_labels
+            if label in self._feedback_error_by_label
+        ]
+        missing_arm = [
+            label for label in arm_labels if label not in self._verified_feedback_by_label
+        ]
+        if arm_errors:
+            self._record_arm_feedback_error("; ".join(arm_errors))
+        elif missing_arm:
+            self._record_arm_feedback_error(
+                "verified feedback pending: " + ",".join(missing_arm)
+            )
+        else:
+            self._record_arm_feedback_success(
+                min(
+                    self._verified_feedback_by_label[label].observed_at
+                    for label in arm_labels
+                )
+            )
+
+        if self._gripper_mot is None:
+            return
+        gripper_error = self._feedback_error_by_label.get("gripper")
+        if gripper_error is not None:
+            self._record_gripper_feedback_error(gripper_error)
+        elif "gripper" not in self._verified_feedback_by_label:
+            self._record_gripper_feedback_error("gripper feedback not received")
+
+    def _inspect_pending_feedback(
+        self,
+        observations: dict[str, tuple[object, int]],
+        *,
+        observed_at: float,
+    ) -> None:
+        for label, baseline in list(
+            self._feedback_request_baseline_by_label.items()
+        ):
+            if label not in observations:
+                continue
+            state, sequence = observations[label]
+            if self._feedback_sequence_advanced(sequence, baseline):
+                try:
+                    self._record_verified_feedback(
+                        label,
+                        state,
+                        sequence,
+                        observed_at,
+                    )
+                except Exception as exc:
+                    self._record_feedback_label_error(label, f"{label} feedback invalid: {exc}")
+                self._feedback_request_baseline_by_label.pop(label, None)
+                self._feedback_request_deadline_by_label.pop(label, None)
+                continue
+            deadline = self._feedback_request_deadline_by_label[label]
+            if observed_at >= deadline:
+                self._record_feedback_label_error(
+                    label,
+                    f"{label} feedback deadline expired: sequence did not advance "
+                    f"beyond baseline={baseline}",
+                )
+                self._feedback_request_baseline_by_label.pop(label, None)
+                self._feedback_request_deadline_by_label.pop(label, None)
+
+    def _read_feedback_observations(
+        self,
+        groups,
+    ) -> dict[str, tuple[object, int]]:
+        observations: dict[str, tuple[object, int]] = {}
+        for _ctrl, entries in groups:
+            for label, motor in entries:
+                observations[label] = self._feedback_state_with_sequence(label, motor)
+        return observations
+
+    @staticmethod
+    def _require_feedback_sequence_api(groups) -> None:
+        for _ctrl, entries in groups:
+            for label, motor in entries:
+                if not callable(getattr(motor, "get_state_with_sequence", None)):
+                    raise RuntimeError(
+                        f"{label} feedback requires patched MotorBridge "
+                        "get_state_with_sequence()"
+                    )
 
     def _record_arm_feedback_success(self, observed_at: float) -> None:
         recovered = self._arm_feedback_error is not None
@@ -478,57 +683,172 @@ class HardwareManager:
             )
         return None
 
-    def _refresh_feedback_batch(self, *, observed_at: float) -> None:
+    def _refresh_feedback_batch(
+        self,
+        *,
+        observed_at: float,
+        inspect_after_poll: bool = False,
+    ) -> None:
         groups = self._feedback_controller_groups()
-        try:
-            if groups:
-                for ctrl, entries in groups:
-                    lock = getattr(ctrl, "_bus_lock", None)
+        self._require_feedback_sequence_api(groups)
+        observations: dict[str, tuple[object, int]] = {}
+        group_errors: list[str] = []
+        readable_groups = []
+        for ctrl, entries in groups:
+            try:
+                for label, motor in entries:
+                    observations[label] = self._feedback_state_with_sequence(label, motor)
+                readable_groups.append((ctrl, entries))
+            except Exception as exc:
+                labels = ",".join(label for label, _motor in entries)
+                message = f"controller={type(ctrl).__name__} motors={labels}: {exc}"
+                group_errors.append(message)
+                for label, _motor in entries:
+                    self._record_feedback_label_error(
+                        label, f"shared feedback batch failed before request: {message}"
+                    )
 
-                    def transaction() -> None:
-                        for _label, motor in entries:
-                            motor.request_feedback()
-                        ctrl.poll_feedback_once()
-                        for label, motor in entries:
-                            state = motor.get_state()
-                            if label == "gripper":
-                                self._validated_gripper_feedback_values(state)
-                            elif state is None:
-                                raise RuntimeError(f"{label} feedback unavailable")
+        self._inspect_pending_feedback(observations, observed_at=observed_at)
+        response_window = self._feedback_response_window_sec()
+        for _ctrl, entries in readable_groups:
+            for label, _motor in entries:
+                if label not in self._feedback_request_baseline_by_label:
+                    _state, sequence = observations[label]
+                    self._feedback_request_baseline_by_label[label] = sequence
+                    self._feedback_request_deadline_by_label[label] = (
+                        observed_at + response_window
+                    )
 
-                    try:
-                        if lock is None:
-                            transaction()
-                        else:
-                            with lock:
-                                transaction()
-                    except Exception as exc:
-                        labels = ",".join(label for label, _motor in entries)
-                        raise RuntimeError(
-                            f"controller={type(ctrl).__name__} motors={labels}: {exc}"
-                        ) from exc
-            else:
-                # Test/legacy fallback for RobotArm implementations that do not
-                # expose controller ownership.  The real hardware path above
-                # performs one grouped transaction per controller.
-                request_and_poll = getattr(self._arm, "_request_and_poll", None)
-                if not callable(request_and_poll):
-                    raise RuntimeError("hardware feedback controller map unavailable")
-                request_and_poll()
+        successful_groups = []
+        for ctrl, entries in readable_groups:
+            lock = getattr(ctrl, "_bus_lock", None)
 
-            # Validate the complete arm cache before advancing its timestamp.
-            self._validated_joint_feedback(refresh=False, check_freshness=False)
-            self._record_arm_feedback_success(observed_at)
-            if self._gripper_mot is not None:
-                self._record_gripper_feedback(
-                    self._gripper_mot.get_state(), observed_at=observed_at
+            def transaction() -> None:
+                for _label, motor in entries:
+                    motor.request_feedback()
+                ctrl.poll_feedback_once()
+
+            try:
+                if lock is None:
+                    transaction()
+                else:
+                    with lock:
+                        transaction()
+                successful_groups.append((ctrl, entries))
+            except Exception as exc:
+                labels = ",".join(label for label, _motor in entries)
+                message = (
+                    f"controller={type(ctrl).__name__} motors={labels}: {exc}"
                 )
-        except Exception as exc:
-            message = f"shared feedback batch failed: {exc}"
-            self._record_arm_feedback_error(message)
-            if self._gripper_mot is not None:
-                self._record_gripper_feedback_error(message)
-            raise RuntimeError(message) from exc
+                group_errors.append(message)
+                for label, _motor in entries:
+                    self._record_feedback_label_error(
+                        label,
+                        f"shared feedback batch failed: {message}",
+                    )
+                    self._feedback_request_baseline_by_label.pop(label, None)
+                    self._feedback_request_deadline_by_label.pop(label, None)
+
+        if inspect_after_poll:
+            completed_at = time.monotonic()
+            observations = {}
+            for ctrl, entries in successful_groups:
+                try:
+                    for label, motor in entries:
+                        observations[label] = self._feedback_state_with_sequence(label, motor)
+                except Exception as exc:
+                    labels = ",".join(label for label, _motor in entries)
+                    message = f"controller={type(ctrl).__name__} motors={labels}: {exc}"
+                    group_errors.append(message)
+                    for label, _motor in entries:
+                        self._record_feedback_label_error(label, message)
+            self._inspect_pending_feedback(
+                observations,
+                observed_at=completed_at,
+            )
+        self._sync_feedback_health()
+        if group_errors:
+            raise RuntimeError("shared feedback batch failed: " + "; ".join(group_errors))
+
+    def _force_feedback_refresh(self) -> None:
+        groups = self._feedback_controller_groups()
+        self._require_feedback_sequence_api(groups)
+        initial: dict[str, tuple[object, int]] = {}
+        initial_errors: list[str] = []
+        for ctrl, entries in groups:
+            try:
+                for label, motor in entries:
+                    initial[label] = self._feedback_state_with_sequence(label, motor)
+            except Exception as exc:
+                labels = ",".join(label for label, _motor in entries)
+                message = f"controller={type(ctrl).__name__} motors={labels}: {exc}"
+                initial_errors.append(message)
+                for label, _motor in entries:
+                    self._record_feedback_label_error(label, message)
+        if initial_errors:
+            self._sync_feedback_health()
+            raise RuntimeError(
+                "forced feedback baseline failed before request: "
+                + "; ".join(initial_errors)
+            )
+        required_baselines = {
+            label: sequence
+            for label, (_state, sequence) in initial.items()
+        }
+        prior_samples = {
+            label: self._verified_feedback_by_label.get(label)
+            for label in required_baselines
+        }
+
+        def forced_sample_satisfies(label: str, baseline: int) -> bool:
+            sample = self._verified_feedback_by_label.get(label)
+            return (
+                label not in self._feedback_error_by_label
+                and sample is not None
+                and sample is not prior_samples[label]
+                and self._feedback_sequence_advanced(sample.sequence, baseline)
+            )
+
+        for label in required_baselines:
+            self._feedback_request_baseline_by_label.pop(label, None)
+            self._feedback_request_deadline_by_label.pop(label, None)
+
+        last_error: Exception | None = None
+        for attempt in range(_FEEDBACK_REFRESH_RETRIES):
+            attempt_error: Exception | None = None
+            try:
+                self._refresh_feedback_batch(
+                    observed_at=time.monotonic(),
+                    inspect_after_poll=True,
+                )
+            except Exception as exc:
+                last_error = exc
+                attempt_error = exc
+            if attempt_error is None and all(
+                forced_sample_satisfies(label, baseline)
+                for label, baseline in required_baselines.items()
+            ):
+                return
+            if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
+                time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+
+        missing = []
+        for label, baseline in required_baselines.items():
+            if not forced_sample_satisfies(label, baseline):
+                reason = self._feedback_error_by_label.get(label)
+                if reason is None:
+                    reason = (
+                        f"{label} feedback timeout: sequence did not advance "
+                        f"beyond baseline={baseline}"
+                    )
+                self._record_feedback_label_error(label, reason)
+                missing.append(reason)
+            self._feedback_request_baseline_by_label.pop(label, None)
+            self._feedback_request_deadline_by_label.pop(label, None)
+        self._sync_feedback_health()
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("shared feedback batch failed: " + "; ".join(missing))
 
     def refresh_feedback_if_due(
         self,
@@ -561,22 +881,16 @@ class HardwareManager:
             self._feedback_next_refresh_monotonic = (
                 observed_at + self._hardware_feedback_period_sec
             )
-            attempts = _FEEDBACK_REFRESH_RETRIES if force else 1
-            last_error: Exception | None = None
-            for attempt in range(attempts):
-                try:
-                    batch_observed_at = (
-                        observed_at if now is not None else time.monotonic()
-                    )
-                    self._refresh_feedback_batch(observed_at=batch_observed_at)
-                    return True
-                except Exception as exc:
-                    last_error = exc
-                    if attempt + 1 < attempts:
-                        time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
-            if force and last_error is not None:
-                raise last_error
-            return False
+            try:
+                if force:
+                    self._force_feedback_refresh()
+                else:
+                    self._refresh_feedback_batch(observed_at=observed_at)
+                return True
+            except Exception:
+                if force:
+                    raise
+                return False
 
     @staticmethod
     def _validated_gripper_feedback_values(state) -> tuple[float, float, float, int]:
@@ -642,7 +956,7 @@ class HardwareManager:
         if self._gripper_mot is None or self._gripper_ctrl is None:
             raise RuntimeError("gripper feedback unavailable: motor/controller not initialized")
         self.refresh_feedback_if_due(force=True)
-        return self._gripper_mot.get_state()
+        return self._verified_feedback_sample("gripper").state
 
     def _validated_joint_feedback(
         self,
@@ -670,13 +984,11 @@ class HardwareManager:
         velocities: list[float] = []
         torques: list[float] = []
         statuses: list[int] = []
-        for name in joint_names:
+        samples = self._verified_feedback_samples(joint_names)
+        for name, sample in zip(joint_names, samples):
             if name not in _JOINT_POSITION_LIMITS_RAD:
                 raise RuntimeError(f"no hardware soft limit configured for {name}")
-            motor = self._arm._motor_map.get(name)
-            state = motor.get_state() if motor is not None else None
-            if state is None:
-                raise RuntimeError(f"{name} feedback unavailable")
+            state = sample.state
             values = (float(state.pos), float(state.vel), float(state.torq))
             if not all(np.isfinite(value) for value in values):
                 raise RuntimeError(f"{name} feedback contains non-finite values")
@@ -706,10 +1018,7 @@ class HardwareManager:
     def _validated_gripper_status(self, expected_status: int) -> None:
         if self._gripper_mot is None:
             return
-        self._refresh_gripper_feedback()
-        state = self._gripper_mot.get_state()
-        if state is None:
-            raise RuntimeError("gripper feedback unavailable")
+        state = self._refresh_gripper_feedback()
         status = int(state.status_code)
         if status != expected_status:
             raise RuntimeError(
@@ -742,10 +1051,7 @@ class HardwareManager:
             )
             gripper_status = None
             if self._gripper_mot is not None:
-                self._refresh_gripper_feedback()
-                gripper_state = self._gripper_mot.get_state()
-                if gripper_state is None:
-                    raise RuntimeError("gripper feedback unavailable")
+                gripper_state = self._refresh_gripper_feedback()
                 gripper_status = int(gripper_state.status_code)
             if any(status != 0 for status in statuses) or gripper_status not in (None, 0):
                 self._disable_all_motors()
@@ -1088,7 +1394,10 @@ class HardwareManager:
 
         mot = self._arm._motor_map[joint_name]
         jc = next(j for j in self._arm._joints if j.name == joint_name)
-        state = mot.get_state()
+        feedback_failure = self._arm_feedback_failure_reason()
+        if feedback_failure is not None:
+            raise RuntimeError(feedback_failure)
+        state = self._verified_feedback_sample(joint_name).state
 
         pos = float(cmd.pos) if cmd.use_pos else float(state.pos if state is not None else 0.0)
         vel = float(cmd.vel) if cmd.use_vel else float(state.vel if state is not None else 0.0)
@@ -1115,13 +1424,13 @@ class HardwareManager:
         self._stop_control_loop()
         self._endpos_ctrl._stop_send.set()
         self._endpos_ctrl._moving = False
-        self._gravity_comp_q_target = self._arm.get_positions(request=True).copy()
+        self._refresh_arm_feedback()
+        self._gravity_comp_q_target = self._read_gravity_comp_positions()
         self._gravity_comp_q_last = self._gravity_comp_q_target.copy()
         self._arm.mode_mit(
             kp=np.full(self._arm.num_joints, _GC_KP, dtype=np.float64),
             kd=np.full(self._arm.num_joints, _GC_KD, dtype=np.float64),
         )
-        self._refresh_arm_feedback()
         self._gravity_comp_integral = np.zeros_like(self._gravity_comp_q_target)
         self._gravity_comp_lock_counter = 0
         self._gravity_comp_active = True
@@ -1171,20 +1480,48 @@ class HardwareManager:
         request: bool = False,
         reference: np.ndarray | None = None,
     ) -> np.ndarray:
-        q = self._arm.get_positions(request=request)
+        del request
+        q, _qd = self._read_gravity_comp_feedback(reference=reference)
+        return q
+
+    def _read_gravity_comp_feedback(
+        self,
+        *,
+        reference: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        joint_names = self.joint_names
+        with self._feedback_lock:
+            feedback_failure = self._arm_feedback_failure_reason()
+            if feedback_failure is not None:
+                raise RuntimeError(feedback_failure)
+            samples = self._verified_feedback_samples(joint_names)
+
+        positions: list[float] = []
+        velocities: list[float] = []
+        for name, sample in zip(joint_names, samples):
+            self._validate_feedback_sample(name, sample.state)
+            status = int(sample.state.status_code)
+            if status != 1:
+                raise RuntimeError(
+                    f"{name} status_code={status}, expected 1 during gravity compensation"
+                )
+            positions.append(float(sample.state.pos))
+            velocities.append(float(sample.state.vel))
+
+        q = np.array(positions, dtype=np.float64)
+        qd = np.array(velocities, dtype=np.float64)
         ref = reference if reference is not None else self._gravity_comp_q_last
         if ref is not None:
             q = self._angles_near_reference(q, ref)
         self._gravity_comp_q_last = np.array(q, dtype=np.float64, copy=True)
-        return self._gravity_comp_q_last.copy()
+        return self._gravity_comp_q_last.copy(), qd
 
     def _gravity_comp_tick(self, arm, dt: float) -> None:
         del dt
         if not self._gravity_comp_active or self._gravity_comp_q_target is None:
             return
 
-        q = self._read_gravity_comp_positions()
-        qd = arm.get_velocities()
+        q, qd = self._read_gravity_comp_feedback()
         tau_g = self._gc_compute_generalized_gravity(q=q)
         tau_g = apply_gravity_compensation_tau_scale(tau_g)
 
@@ -1235,7 +1572,7 @@ class HardwareManager:
         codes: list[int] = []
         for name in self.joint_names:
             try:
-                st = self._arm._motor_map[name].get_state()
+                st = self._verified_feedback_sample(name).state
                 codes.append(int(st.status_code) if st is not None else 255)
             except Exception:
                 codes.append(255)
@@ -1280,12 +1617,12 @@ class HardwareManager:
             )
         if self._gripper_mot is None:
             raise RuntimeError("gripper is not initialized")
-        state = self._gripper_mot.get_state()
-        start_angle, _velocity, _torque, status = self._validated_gripper_feedback_values(state)
         with self._gripper_lock:
             feedback_failure = self._gripper_feedback_failure_reason_locked()
         if feedback_failure is not None:
             raise RuntimeError(feedback_failure)
+        state = self._verified_feedback_sample("gripper").state
+        start_angle, _velocity, _torque, status = self._validated_gripper_feedback_values(state)
         if status != 1:
             raise RuntimeError(f"gripper status_code={status}, expected 1 before position command")
         distance = float(np.clip(position_m, 0.0, _G_VERIFIED_OPEN_LIMIT_M))
@@ -1366,13 +1703,19 @@ class HardwareManager:
             with self._gripper_lock:
                 if self._gripper_goal_angle != owned_goal:
                     return False
+                if not self._gripper_active:
+                    if self._gripper_position_result == "succeeded":
+                        return True
+                    if self._gripper_position_result == "failed":
+                        return False
                 feedback_failure = self._gripper_feedback_failure_reason_locked()
                 if feedback_failure is not None:
                     self._fail_active_gripper_command_locked(feedback_failure)
                     return False
-                if not self._gripper_active:
-                    return self._gripper_position_result == "succeeded"
-                arrived = abs(self._gripper_pos - owned_goal) < _G_ARRIVE_TOL
+                arrived = bool(
+                    self._gripper_active
+                    and abs(self._gripper_pos - owned_goal) < _G_ARRIVE_TOL
+                )
             if arrived:
                 # A completed positioning move is not a grasp hold.  Release the
                 # MIT position command before acknowledging success so the motor
@@ -1501,16 +1844,16 @@ class HardwareManager:
         )
 
     def get_gripper_state(self) -> tuple[float, float, float, int]:
+        with self._gripper_lock:
+            position = self._gripper_pos
+            velocity = self._gripper_vel
+            torque = self._gripper_torque
         status = 255
         if self._gripper_mot is not None:
             try:
-                st = self._gripper_mot.get_state()
+                st = self._verified_feedback_sample("gripper").state
                 position, velocity, torque, status = self._validated_gripper_feedback_values(st)
                 with self._gripper_lock:
-                    self._gripper_pos = position
-                    self._gripper_vel = velocity
-                    self._gripper_torque = torque
-                    self._gripper_status_code = status
                     feedback_error = self._gripper_feedback_error
                 if feedback_error is not None:
                     status = 255
@@ -1526,7 +1869,7 @@ class HardwareManager:
             except Exception as exc:
                 self._record_gripper_feedback_error(str(exc))
                 status = 255
-        return self._gripper_pos, self._gripper_vel, self._gripper_torque, status
+        return position, velocity, torque, status
 
     def gripper_position_m(self) -> float:
         distance = (self._gripper_pos / _G_ANGLE_OPEN) * _G_MAX_DIST_M
@@ -1549,7 +1892,11 @@ class HardwareManager:
         self._require_enabled()
         if self._gripper_mot is None or self._gripper_cfg is None:
             raise RuntimeError("gripper is not initialized")
-        state = self._gripper_mot.get_state()
+        with self._gripper_lock:
+            feedback_failure = self._gripper_feedback_failure_reason_locked()
+        if feedback_failure is not None:
+            raise RuntimeError(feedback_failure)
+        state = self._verified_feedback_sample("gripper").state
         pos = float(cmd.pos) if cmd.use_pos else float(state.pos if state is not None else 0.0)
         vel = float(cmd.vel) if cmd.use_vel else float(state.vel if state is not None else 0.0)
         kp = float(cmd.kp) if cmd.use_kp else float(self._gripper_cfg.kp)
@@ -1645,10 +1992,81 @@ class HardwareManager:
     def _gravity_hardware_tick(self, arm, dt: float) -> None:
         self._hardware_control_tick(arm, dt, self._gravity_comp_tick)
 
+    def _protective_disable_from_hardware_loop(self, reason: str) -> None:
+        """Stop the sole writer and disable controllers without self-joining."""
+        message = str(reason)
+        with self._gripper_lock:
+            if self._gripper_active:
+                self._fail_active_gripper_command_locked(message)
+            if self._gripper_neutral_pending is not None:
+                if not self._emit_pending_gripper_neutral_locked():
+                    self._error_codes.append(
+                        "FEEDBACK_PROTECTIVE_NEUTRAL_FAILED"
+                    )
+
+        # RobotArm.disable()/stop_control_loop() join ``_ctrl_thread`` and must
+        # never be called by that same thread.  Returning from this callback
+        # releases ownership naturally after the vendor loop observes False.
+        self._arm._running = False
+        self._endpos_ctrl._running = False
+        self._endpos_ctrl._stop_send.set()
+        self._endpos_ctrl._moving = False
+        self._gravity_comp_active = False
+        self._gravity_comp_q_target = None
+        self._gravity_comp_integral = None
+        self._state_machine = "IDLE"
+        self._set_lifecycle_state("DISABLING")
+        if "FEEDBACK_PROTECTIVE_DISABLE" not in self._error_codes:
+            self._error_codes.append("FEEDBACK_PROTECTIVE_DISABLE")
+
+        controllers: list[object] = []
+        for controller in getattr(self._arm, "_ctrl_map", {}).values():
+            if all(controller is not existing for existing in controllers):
+                controllers.append(controller)
+        if self._gripper_ctrl is not None and all(
+            self._gripper_ctrl is not controller for controller in controllers
+        ):
+            controllers.append(self._gripper_ctrl)
+        disable_errors: list[str] = []
+        for controller in controllers:
+            disable_all = getattr(controller, "disable_all", None)
+            if not callable(disable_all):
+                continue
+            try:
+                disable_all()
+            except Exception as exc:
+                disable_errors.append(f"{type(controller).__name__}: {exc}")
+        if disable_errors:
+            self._error_codes.append(
+                "FEEDBACK_PROTECTIVE_DISABLE_FAILED: " + "; ".join(disable_errors)
+            )
+        _LOG.error(
+            "hardware writer stopped and controller protective disable requested: %s",
+            message,
+        )
+
     def _hardware_control_tick(self, arm, dt: float, arm_callback) -> None:
         """Single owner for arm command, feedback batch, and gripper command."""
-        arm_callback(arm, dt)
-        self.refresh_feedback_if_due()
+        try:
+            self.refresh_feedback_if_due()
+        except Exception:
+            feedback_failure = self._arm_feedback_failure_reason()
+            if feedback_failure is None:
+                raise
+            self._protective_disable_from_hardware_loop(feedback_failure)
+            return
+        feedback_failure = self._arm_feedback_failure_reason()
+        if feedback_failure is not None:
+            self._protective_disable_from_hardware_loop(feedback_failure)
+            return
+        try:
+            arm_callback(arm, dt)
+        except Exception:
+            feedback_failure = self._arm_feedback_failure_reason()
+            if feedback_failure is None:
+                raise
+            self._protective_disable_from_hardware_loop(feedback_failure)
+            return
         self._gripper_tick()
 
     def _stop_control_loop(self) -> None:
@@ -1792,7 +2210,6 @@ class HardwareManager:
         # _gripper_active first, so once this is false no further position
         # command can be produced and the queued neutral is the last word.
         self._gripper_target_angle = arrived_angle
-        self._gripper_goal_angle = arrived_angle
         self._gripper_active = False
         self._gripper_mode = "idle"
         self._gripper_target_deadline_monotonic = None
@@ -1852,18 +2269,7 @@ class HardwareManager:
             if not self._gripper_active or self._gripper_mot is None:
                 return
         try:
-            st = self._gripper_mot.get_state()
-            position, velocity, torque, status = self._validated_gripper_feedback_values(st)
-            self._gripper_pos = position
-            self._gripper_vel = velocity
-            self._gripper_torque = torque
-            self._gripper_status_code = status
-            if status != 1:
-                with self._gripper_lock:
-                    self._fail_active_gripper_command_locked(
-                        f"gripper status_code={status}, expected 1 during command"
-                    )
-                return
+            st = self._verified_feedback_sample("gripper").state
         except Exception as exc:
             self._record_gripper_feedback_error(str(exc))
             with self._gripper_lock:
@@ -1887,7 +2293,29 @@ class HardwareManager:
             elif (feedback_failure := self._gripper_feedback_failure_reason_locked()) is not None:
                 self._fail_active_gripper_command_locked(feedback_failure)
                 command = None
-            elif mode == "position":
+            else:
+                try:
+                    position, velocity, torque, status = (
+                        self._validated_gripper_feedback_values(st)
+                    )
+                except Exception as exc:
+                    self._record_gripper_feedback_error(str(exc))
+                    self._fail_active_gripper_command_locked(
+                        f"gripper feedback read failed: {exc}"
+                    )
+                    return
+                self._gripper_pos = position
+                self._gripper_vel = velocity
+                self._gripper_torque = torque
+                self._gripper_status_code = status
+                if status != 1:
+                    self._fail_active_gripper_command_locked(
+                        f"gripper status_code={status}, expected 1 during command"
+                    )
+                    return
+                command = None
+
+            if command is None and self._gripper_active and mode == "position":
                 goal = self._gripper_goal_angle
                 if abs(self._gripper_pos - goal) < _G_ARRIVE_TOL:
                     # Reached with no synchronous waiter, or after one returned.
@@ -1912,7 +2340,7 @@ class HardwareManager:
                     # fell back to _G_TAU_MAX.
                     tau_ff = effort if abs(target) < 1e-6 else 0.0
                     command = (target, 0.0, _G_KP_MOVE, _G_KD_MOVE, tau_ff, effort)
-            elif mode == "grasp_closing":
+            elif command is None and self._gripper_active and mode == "grasp_closing":
                 command = (
                     0.0,
                     0.0,
@@ -1921,7 +2349,7 @@ class HardwareManager:
                     self._gripper_close_force,
                     _G_TAU_MAX,
                 )
-            elif mode == "grasp_holding":
+            elif command is None and self._gripper_active and mode == "grasp_holding":
                 if self._grasp_hold_expired_locked():
                     self._release_grasp_hold_locked("hold timeout")
                     command = None
@@ -1934,9 +2362,6 @@ class HardwareManager:
                         self._gripper_hold_force,
                         _G_TAU_MAX,
                     )
-            else:
-                command = None
-
             if command is None:
                 if self._gripper_neutral_pending is not None:
                     self._emit_pending_gripper_neutral_locked()
