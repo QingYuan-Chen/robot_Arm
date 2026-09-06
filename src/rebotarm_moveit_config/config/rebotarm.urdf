@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This URDF mirrors rebotarm_bringup/description/urdf/reBot-DevArm_fixend.urdf
-     so MoveIt config tooling can consume a standard package-local URDF. -->
+<!-- Authoritative robot description shared by planning, visualization and simulation. -->
 <robot
   name="reBot-DevArm_fixend">
   <link
@@ -25,7 +24,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/base_link.STL" />
+          filename="package://rebotarm_moveit_config/meshes/base_link.STL" />
       </geometry>
       <material
         name="">
@@ -39,7 +38,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/base_link.STL" />
+          filename="package://rebotarm_moveit_config/meshes/base_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -65,7 +64,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link1.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link1.STL" />
       </geometry>
       <material
         name="">
@@ -79,7 +78,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link1.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link1.STL" />
       </geometry>
     </collision>
   </link>
@@ -123,7 +122,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link2.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link2.STL" />
       </geometry>
       <material
         name="">
@@ -137,7 +136,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link2.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link2.STL" />
       </geometry>
     </collision>
   </link>
@@ -155,7 +154,7 @@
       xyz="0 0 -1" />
     <limit
       lower="-3.14"
-      upper="0"
+      upper="0.02"
       effort="27"
       velocity="50" />
   </joint>
@@ -181,7 +180,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link3.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link3.STL" />
       </geometry>
       <material
         name="">
@@ -195,7 +194,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link3.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link3.STL" />
       </geometry>
     </collision>
   </link>
@@ -213,7 +212,7 @@
       xyz="0 0 1" />
     <limit
       lower="-3.14"
-      upper="0"
+      upper="0.02"
       effort="27"
       velocity="50" />
   </joint>
@@ -239,7 +238,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link4.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link4.STL" />
       </geometry>
       <material
         name="">
@@ -253,7 +252,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link4.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link4.STL" />
       </geometry>
     </collision>
   </link>
@@ -297,7 +296,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link5.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link5.STL" />
       </geometry>
       <material
         name="">
@@ -311,7 +310,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link5.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link5.STL" />
       </geometry>
     </collision>
   </link>
@@ -355,7 +354,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link6.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link6.STL" />
       </geometry>
       <material
         name="">
@@ -369,7 +368,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/link6.STL" />
+          filename="package://rebotarm_moveit_config/meshes/link6.STL" />
       </geometry>
     </collision>
   </link>
@@ -414,7 +413,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/gripper_base.stl" />
+          filename="package://rebotarm_moveit_config/meshes/gripper_base.stl" />
       </geometry>
       <material
         name="">
@@ -428,7 +427,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/gripper_base.stl" />
+          filename="package://rebotarm_moveit_config/meshes/gripper_base.stl" />
       </geometry>
     </collision>
   </link>
@@ -453,7 +452,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/left_finger.stl" />
+          filename="package://rebotarm_moveit_config/meshes/left_finger.stl" />
       </geometry>
       <material
         name="">
@@ -468,7 +467,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/left_finger.stl" />
+          filename="package://rebotarm_moveit_config/meshes/left_finger.stl" />
       </geometry>
     </collision>
   </link>
@@ -498,7 +497,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/right_finger.stl" />
+          filename="package://rebotarm_moveit_config/meshes/right_finger.stl" />
       </geometry>
       <material
         name="">
@@ -513,7 +512,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://rebotarm_bringup/description/meshes/right_finger.stl" />
+          filename="package://rebotarm_moveit_config/meshes/right_finger.stl" />
       </geometry>
     </collision>
   </link>

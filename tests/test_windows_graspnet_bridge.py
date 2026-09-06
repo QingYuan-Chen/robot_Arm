@@ -229,6 +229,237 @@ def test_windows_graspnet_visualizer_downsamples_points_and_limits_candidates(mo
     point_cloud = created["geometries"][0]
     assert len(point_cloud.points) == 2
     assert len(created["geometries"]) == 3
+    assert visualizer.gripper_renderer_mode == "wireframe_fallback"
+    assert "create_box" in visualizer.gripper_renderer_status
+
+
+def test_windows_graspnet_visualizer_renders_exact_precomputed_scene_cloud(monkeypatch):
+    module = _load_bridge()
+    created = {}
+
+    class FakeUtility:
+        @staticmethod
+        def Vector3dVector(values):
+            return np.asarray(values).copy()
+
+    class FakePointCloud:
+        def __init__(self):
+            self.points = None
+            self.colors = None
+
+    class FakeVisualizer:
+        def create_window(self, *args, **kwargs):
+            pass
+
+        def clear_geometries(self):
+            pass
+
+        def add_geometry(self, geometry):
+            created.setdefault("geometries", []).append(geometry)
+
+        def get_view_control(self):
+            return None
+
+        def poll_events(self):
+            pass
+
+        def update_renderer(self):
+            pass
+
+    class FakeOpen3D:
+        class geometry:
+            PointCloud = FakePointCloud
+
+        class utility(FakeUtility):
+            pass
+
+        class visualization:
+            Visualizer = FakeVisualizer
+
+    monkeypatch.setattr(module.importlib, "import_module", lambda name: FakeOpen3D)
+    points = np.asarray([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype=np.float32)
+    colors = np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+    visualizer = module.Open3DGraspVisualizer(top_n=0, max_points=10)
+
+    visualizer.update(
+        color_bgr=np.empty((0, 0, 3), dtype=np.uint8),
+        depth_mm=np.empty((0, 0), dtype=np.uint16),
+        camera_info={},
+        candidates=[],
+        scene_points=points,
+        scene_colors=colors,
+    )
+
+    cloud = created["geometries"][0]
+    np.testing.assert_array_equal(cloud.points, points)
+    np.testing.assert_array_equal(cloud.colors, colors)
+
+
+def test_windows_graspnet_visualizer_close_is_idempotent(monkeypatch):
+    module = _load_bridge()
+    monkeypatch.setattr(module.importlib, "import_module", lambda name: object())
+    visualizer = module.Open3DGraspVisualizer()
+    calls = []
+
+    class FakeWindow:
+        def destroy_window(self):
+            calls.append("destroy")
+
+    visualizer._vis = FakeWindow()
+    visualizer.close()
+    visualizer.close()
+
+    assert calls == ["destroy"]
+
+
+def test_windows_graspnet_visualizer_uses_solid_native_mesh_when_graspnetapi_is_unavailable(
+    monkeypatch,
+):
+    module = _load_bridge()
+    created = {"meshes": []}
+
+    class FakeMesh:
+        def __init__(self, dimensions):
+            self.dimensions = dimensions
+            self.local_translation = None
+            self.transform_matrix = None
+            self.color = None
+            self.normals_computed = False
+
+        def translate(self, translation):
+            self.local_translation = tuple(translation)
+            return self
+
+        def transform(self, matrix):
+            self.transform_matrix = np.asarray(matrix).copy()
+            return self
+
+        def paint_uniform_color(self, color):
+            self.color = tuple(color)
+            return self
+
+        def compute_vertex_normals(self):
+            self.normals_computed = True
+            return self
+
+    class FakeTriangleMesh:
+        @staticmethod
+        def create_box(*, width, height, depth):
+            mesh = FakeMesh((width, height, depth))
+            created["meshes"].append(mesh)
+            return mesh
+
+    class FakePointCloud:
+        def __init__(self):
+            self.points = None
+            self.colors = None
+
+    class FakeLineSet:
+        def __init__(self):
+            self.points = None
+            self.lines = None
+            self.colors = None
+
+    class FakeUtility:
+        @staticmethod
+        def Vector3dVector(values):
+            return np.asarray(values).copy()
+
+        @staticmethod
+        def Vector2iVector(values):
+            return np.asarray(values).copy()
+
+    class FakeVisualizer:
+        def create_window(self, *args, **kwargs):
+            pass
+
+        def clear_geometries(self):
+            created["added"] = []
+
+        def add_geometry(self, geometry):
+            created["added"].append(geometry)
+
+        def get_view_control(self):
+            return None
+
+        def poll_events(self):
+            pass
+
+        def update_renderer(self):
+            pass
+
+    class FakeOpen3D:
+        class geometry:
+            TriangleMesh = FakeTriangleMesh
+            PointCloud = FakePointCloud
+            LineSet = FakeLineSet
+
+        class utility(FakeUtility):
+            pass
+
+        class visualization:
+            Visualizer = FakeVisualizer
+
+    def fake_import(name):
+        if name == "open3d":
+            return FakeOpen3D
+        if name == "graspnetAPI":
+            raise ModuleNotFoundError("No module named 'trimesh'")
+        raise ModuleNotFoundError(name)
+
+    monkeypatch.setattr(module.importlib, "import_module", fake_import)
+    visualizer = module.Open3DGraspVisualizer(top_n=1)
+    candidate = {
+        "score": 0.9,
+        "translation_xyz": [0.1, -0.2, 0.4],
+        "rotation_matrix": [[0, -1, 0], [1, 0, 0], [0, 0, 1]],
+        "width_m": 0.06,
+        "height_m": 0.02,
+    }
+
+    geometries = visualizer._build_native_gripper_geometries(candidate, index=0)
+
+    assert visualizer.gripper_renderer_mode == "native_open3d_mesh"
+    assert "trimesh" in visualizer.graspnet_api_unavailable_reason
+    assert "trimesh" in visualizer.gripper_renderer_status
+    assert len(geometries) == 3
+    assert [mesh.dimensions for mesh in geometries] == [
+        (0.012, 0.072, 0.02),
+        (0.04, 0.006, 0.02),
+        (0.04, 0.006, 0.02),
+    ]
+    assert [mesh.local_translation for mesh in geometries] == [
+        (-0.012, -0.036, -0.01),
+        (0.0, -0.036, -0.01),
+        (0.0, 0.03, -0.01),
+    ]
+    for mesh in geometries:
+        np.testing.assert_allclose(
+            mesh.transform_matrix,
+            np.asarray(
+                [
+                    [0.0, -1.0, 0.0, 0.1],
+                    [1.0, 0.0, 0.0, -0.2],
+                    [0.0, 0.0, 1.0, 0.4],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+        )
+        assert mesh.normals_computed is True
+        assert mesh.color is not None
+
+    visualizer.update(
+        color_bgr=np.empty((0, 0, 3), dtype=np.uint8),
+        depth_mm=np.empty((0, 0), dtype=np.uint16),
+        camera_info={},
+        candidates=[candidate],
+        scene_points=np.asarray([[0.0, 0.0, 0.5]], dtype=np.float32),
+        scene_colors=np.asarray([[0.5, 0.5, 0.5]], dtype=np.float32),
+    )
+
+    assert visualizer.gripper_renderer_mode == "native_open3d_mesh"
+    assert sum(isinstance(item, FakeMesh) for item in created["added"]) == 3
+    assert sum(isinstance(item, FakeLineSet) for item in created["added"]) == 1
 
 
 def test_windows_graspnet_visualizer_refits_view_on_each_update(monkeypatch):
@@ -491,6 +722,7 @@ def test_windows_graspnet_visualizer_prefers_graspnetapi_geometry(monkeypatch):
     assert created["grasp_array_shape"] == (1, 17)
     assert created["object_id"] == -1
     assert {"kind": "official_gripper"} in created["geometries"]
+    assert sum(isinstance(item, FakeLineSet) for item in created["geometries"]) == 1
 
 
 def test_windows_graspnet_bridge_writes_backend_missing_payload(tmp_path):

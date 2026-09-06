@@ -7,6 +7,23 @@ build_*/
 install_*/
 log_*/
 
+# Reproducible patched MotorBridge checkout, toolchain, target, and wheel
+/build_motorbridge_fresh_feedback/
+
+# Local model downloads and machine-specific inference artifacts.
+# Already tracked baseline assets remain tracked.
+/weights/
+*.pt
+*.onnx
+*.engine
+*.whl
+/runs/
+/teleop_records/
+
+# Local experiment evidence is retained on disk, not added by routine staging.
+# Existing versioned reports remain available in the repository.
+/Agent/evidence/
+
 # Python caches and test artifacts
 __pycache__/
 *.py[cod]
@@ -17,12 +34,18 @@ htmlcov/
 # Local environments and editor settings
 .venv/
 .venv-vision/
+.venv-graspnet/
+.local-models/
 venv/
 .env
 .vscode/
 .idea/
-third_party/*
-!third_party/COLCON_IGNORE
+third_party/rebotarm_mujoco_venv/
+third_party/reBotArm_control_py/
+third_party/reBotArm_develop_hjx/
+third_party/robotarm_ros2_upstream/
+third_party/rebotarm_ros2_mujoco_snapshot/**/__pycache__/
+third_party/rebotarm_ros2_mujoco_snapshot/**/*.py[cod]
 
 # OS-generated files
 .DS_Store

@@ -244,6 +244,18 @@ def test_gripper_policy_rejects_objects_outside_gripper_range():
     assert "too wide" in command.reason
 
 
+def test_gripper_policy_default_accepts_85mm_and_rejects_anything_wider():
+    from rebotarm_vision.gripper_policy import resolve_gripper_command
+
+    accepted = resolve_gripper_command(jaw_width_m=0.085)
+    rejected = resolve_gripper_command(jaw_width_m=0.085001)
+
+    assert accepted.allowed
+    assert accepted.open_width_m == pytest.approx(0.085)
+    assert not rejected.allowed
+    assert "0.085m > 0.085m" in rejected.reason
+
+
 def test_sequence_adds_safe_retreat_after_lift_before_safe_home():
     from rebotarm_vision.gripper_policy import GripperCommand
     from rebotarm_vision.retreat_policy import RetreatPolicyConfig

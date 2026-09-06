@@ -21,7 +21,12 @@ class YoloDetector:
         self._iou_threshold = iou_threshold
         self._open_vocab_enabled = False
         self._class_prompt_error = None
-        if use_world and ("world" in model_path.lower() or "yoloe" in model_path.lower()):
+        # World/YOLOE checkpoints require text prompts.  Treat the checkpoint
+        # identity as an explicit opt-in as well, so launch parameter
+        # substitution cannot silently disable the positive open-vocabulary
+        # profile while stock COCO checkpoints remain unchanged.
+        world_checkpoint = "world" in model_path.lower() or "yoloe" in model_path.lower()
+        if (use_world or world_checkpoint) and custom_classes:
             try:
                 self._model.set_classes(list(custom_classes))
                 self._open_vocab_enabled = True

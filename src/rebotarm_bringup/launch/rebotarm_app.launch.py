@@ -88,6 +88,11 @@ def _launch_setup(context, *args, **kwargs):
     web_execute_enabled = _bool_text(LaunchConfiguration("web_execute_enabled").perform(context))
     execution_mode = LaunchConfiguration("execution_mode").perform(context).strip().lower()
     keyboard_prefix = LaunchConfiguration("keyboard_prefix").perform(context)
+    hardware_feedback_rate_hz = LaunchConfiguration("hardware_feedback_rate_hz").perform(context)
+    gripper_position_torque_cap_nm = LaunchConfiguration("gripper_position_torque_cap_nm").perform(context)
+    gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s").perform(context)
+    gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec").perform(context)
+    gripper_feedback_stale_timeout_sec = LaunchConfiguration("gripper_feedback_stale_timeout_sec").perform(context)
     teleop_config = LaunchConfiguration("teleop_config")
     bringup_share = FindPackageShare("rebotarm_bringup")
     moveit_launch = PathJoinSubstitution([bringup_share, "launch", "moveit_hardware.launch.py"])
@@ -108,6 +113,11 @@ def _launch_setup(context, *args, **kwargs):
                 "channel": resolved_channel,
                 "use_rviz": "false",
                 "teach_record_path": record_path,
+                "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
+                "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
+                "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
+                "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
+                "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
             }.items(),
         ),
         Node(
@@ -139,9 +149,9 @@ def _launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
     teleop_config = PathJoinSubstitution(
-        [interactive_share, "config", "teleop_control.yaml"]
+        [config_share, "config", "teleop_control.yaml"]
     )
 
     return LaunchDescription(
@@ -155,6 +165,11 @@ def generate_launch_description():
             DeclareLaunchArgument("panel", default_value="true"),
             DeclareLaunchArgument("web_execute_enabled", default_value="true"),
             DeclareLaunchArgument("execution_mode", default_value="execute"),
+            DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
+            DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
+            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="1.5"),
+            DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
+            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
             DeclareLaunchArgument(
                 "keyboard_prefix",
                 default_value="bash -lc 'exec \"$0\" \"$@\" < /dev/tty'",

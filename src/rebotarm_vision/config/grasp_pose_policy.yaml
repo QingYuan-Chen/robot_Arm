@@ -1,21 +1,23 @@
 rebotarm_grasp_candidate_ik_filter:
   ros__parameters:
     pose_policy: hybrid_geometry_with_base_axis_fallback
-    fixed_grasp_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
-    base_approach_axis_xyz: [1.0, 0.0, 0.0]
+    # Current installation rotates the upstream +X workcell by -90 deg to -Y.
+    fixed_grasp_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
+    base_approach_axis_xyz: [0.0, -1.0, 0.0]
     base_pregrasp_distance_m: 0.08
     orientation_yaw_offsets_rad: [0.0]
     candidate_grasp_z_offsets_m: [0.0]
     max_candidates_per_frame: 20
+    candidate_min_confidence: 0.4
     lift_z_m: 0.08
     candidate_min_jaw_width_m: 0.006
-    candidate_max_jaw_width_m: 0.082
+    candidate_max_jaw_width_m: 0.085
     candidate_min_grasp_z_m: 0.0
     candidate_pregrasp_min_z_m: 0.120
     candidate_safe_lift_min_z_m: 0.120
     candidate_workspace_gate_enabled: false
-    candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
-    candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
+    candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+    candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
     candidate_max_grasp_to_object_center_m: 0.15
     candidate_score_joint_distance_weight: 0.15
     candidate_score_joint6_weight: 0.35
@@ -30,8 +32,8 @@ rebotarm_grasp_candidate_ik_filter:
 rebotarm_visual_grasp_executor:
   ros__parameters:
     pose_policy: base_axis
-    fixed_grasp_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
-    base_approach_axis_xyz: [1.0, 0.0, 0.0]
+    fixed_grasp_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
+    base_approach_axis_xyz: [0.0, -1.0, 0.0]
     base_pregrasp_distance_m: 0.08
     min_grasp_z_m: 0.0
     lift_z_m: 0.08
@@ -60,4 +62,3 @@ rebotarm_visual_grasp_markers:
     show_tcp_markers: true
     show_approach_arrow: true
     show_gripper_open_axis: true
-

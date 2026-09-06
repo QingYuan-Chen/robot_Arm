@@ -54,6 +54,10 @@ def _install_ros_stubs_if_needed():
             rclpy.duration = types.SimpleNamespace(Duration=lambda seconds=0.0: seconds)
         if not hasattr(rclpy, "time"):
             rclpy.time = types.SimpleNamespace(Time=lambda: None)
+        if "rclpy.qos" not in sys.modules:
+            rclpy_qos = types.ModuleType("rclpy.qos")
+            rclpy_qos.qos_profile_sensor_data = object()
+            sys.modules["rclpy.qos"] = rclpy_qos
         return
 
     rclpy = types.ModuleType("rclpy")
@@ -68,6 +72,10 @@ def _install_ros_stubs_if_needed():
     rclpy_node = types.ModuleType("rclpy.node")
     rclpy_node.Node = object
     sys.modules["rclpy.node"] = rclpy_node
+
+    rclpy_qos = types.ModuleType("rclpy.qos")
+    rclpy_qos.qos_profile_sensor_data = object()
+    sys.modules["rclpy.qos"] = rclpy_qos
 
     tf2_ros = types.ModuleType("tf2_ros")
     tf2_ros.Buffer = object

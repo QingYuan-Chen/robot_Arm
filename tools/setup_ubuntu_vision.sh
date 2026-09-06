@@ -11,10 +11,14 @@ python3 -m venv --system-site-packages "${venv_dir}"
   torch torchvision \
   --index-url https://download.pytorch.org/whl/cu128
 "${python_bin}" -m pip install -r "${repo_root}/requirements-vision.txt"
+"${python_bin}" -m pip install --no-deps -r "${repo_root}/requirements-tensorrt.txt"
 
 set +u
 source /opt/ros/jazzy/setup.bash
+source "${venv_dir}/bin/activate"
 set -u
+# colcon invokes setup.py through python3 discovered on PATH. Activating the
+# venv here ensures generated ROS console scripts use the vision interpreter.
 "${python_bin}" -m colcon \
   --log-base "${repo_root}/log" \
   build \
@@ -28,6 +32,7 @@ set -u
 import cv2
 import numpy
 import pyorbbecsdk
+import tensorrt
 import torch
 from cv_bridge import CvBridge
 from ultralytics import YOLO
@@ -35,6 +40,7 @@ from ultralytics import YOLO
 print(f"NumPy: {numpy.__version__}")
 print(f"OpenCV: {cv2.__version__}")
 print(f"PyTorch: {torch.__version__}")
+print(f"TensorRT: {tensorrt.__version__}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"CUDA device: {torch.cuda.get_device_name(0)}")

@@ -9,10 +9,14 @@ Ubuntu 物理机现在优先使用原生视觉链路：
 ```text
 Gemini2 摄像头
 -> Ubuntu pyorbbecsdk
--> Ubuntu CUDA YOLO
+-> Ubuntu TensorRT YOLO26m-seg FP16
 -> rebotarm_vision_node
 -> ROS2 topic
 ```
+
+Ubuntu 默认模型为打包安装的
+`models/yolo26m-seg-fp16-b1-640-linux.engine`；`yolo26s-seg.pt` 继续随包保留，
+只作为兼容/CPU 回退。Linux engine 不能用于 Windows，也不能在 CPU 上运行。
 
 安装和启动请优先执行：
 
@@ -649,19 +653,19 @@ ordinary_grasp.cy: 361.8166198730469
 ordinary grasp -> /grasp/plan -> MoveIt2
 ```
 
-当前偏差收敛重点是 `end_link -> grasp_tcp`：
+当前运行采用用户实测的夹爪工具点 `end_link -> grasp_tcp=-0.04 m`；它取代了上游 MuJoCo 的旧 `ee_site=-0.105 m` 名义值：
 
 ```yaml
 rebotarm_grasp_tcp_frame:
   ros__parameters:
-    tcp_offset_xyz: [0.0, 0.0, 0.0]
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
 
 rebotarm_grasp_preview_sender:
   ros__parameters:
-    tcp_offset_xyz: [0.0, 0.0, 0.0]
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
 ```
 
-标定后两个位置的 `tcp_offset_xyz` 要保持一致。
+真实视觉配置与本地 MuJoCo `ee_site` 均为 `[-0.04, 0.0, 0.0]`；仿真执行 launch 不再重复加该偏移，因为本地 MuJoCo 模型内部已定义该 `ee_site`。
 
 ## 17. Eye-in-hand 外参配置
 

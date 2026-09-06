@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Generated from this repository's Apache-2.0 rebotarm.urdf with MuJoCo 3.3.0,
+  then reduced to a portable visual/kinematic baseline. No HJX source asset is used.
+-->
+<mujoco model="reBotArm">
+  <compiler angle="radian" inertiafromgeom="auto" inertiagrouprange="4 4"/>
+  <option timestep="0.0025" iterations="50" tolerance="1e-10" solver="Newton" jacobian="dense" cone="elliptic"/>
+  <asset>
+    <mesh name="base_link" file="base_link.STL"/>
+    <mesh name="link1" file="link1.STL"/>
+    <mesh name="link2" file="link2.STL"/>
+    <mesh name="link3" file="link3.STL"/>
+    <mesh name="link4" file="link4.STL"/>
+    <mesh name="link5" file="link5.STL"/>
+    <mesh name="link6" file="link6.STL"/>
+    <mesh name="gripper_base" file="gripper_base.stl"/>
+    <mesh name="left_finger" file="left_finger.stl"/>
+    <mesh name="right_finger" file="right_finger.stl"/>
+  </asset>
+  <worldbody>
+    <body name="base_link">
+      <geom type="mesh" mesh="base_link" rgba="0.62745 0.62745 0.62745 1"/>
+      <body name="link1" pos="-8.416e-05 0 0.08465">
+        <inertial pos="0.000113615 -0.00061632 0.0236476" quat="0.672066 0.672066 0.219836 -0.219836" mass="0.1613" diaginertia="0.000272817 0.000213413 0.00015464"/>
+        <joint name="joint1" axis="0 0 1" range="-2.8 2.8" damping="6" actuatorfrcrange="-27 27"/>
+        <geom type="mesh" mesh="link1" rgba="0.627451 0.627451 0.627451 1"/>
+        <body name="link2" pos="0.020084 0.031625 0.05555" quat="0.707105 -0.707108 0 0">
+          <inertial pos="-0.132256 -0.0030617 -0.0308307" quat="0.00176765 0.707354 0.00179466 0.706855" mass="1.3266" diaginertia="0.0128139 0.0125599 0.000733734"/>
+          <joint name="joint2" axis="0 0 -1" range="-3.14 0.02" damping="6" actuatorfrcrange="-27 27"/>
+          <geom type="mesh" mesh="link2" rgba="0.627451 0.627451 0.627451 1"/>
+          <body name="link3" pos="-0.264 0 0">
+            <inertial pos="0.12104 -0.0536211 -0.0310138" quat="-0.00138181 0.704593 0.00278372 0.709605" mass="0.8353" diaginertia="0.00648251 0.00632715 0.000467564"/>
+            <joint name="joint3" axis="0 0 1" range="-3.14 0" damping="6" actuatorfrcrange="-27 27"/>
+            <geom type="mesh" mesh="link3" rgba="0.627451 0.627451 0.627451 1"/>
+            <body name="link4" pos="0.2426 -0.054 -0.001625">
+              <inertial pos="0.0608201 -0.0511712 -0.0302995" quat="0.619751 0.601248 0.365808 0.347267" mass="0.52" diaginertia="0.000889485 0.000667165 0.000323211"/>
+              <joint name="joint4" axis="0 0 1" range="-1.87 1.57" damping="2" actuatorfrcrange="-7 7"/>
+              <geom type="mesh" mesh="link4" rgba="0.627451 0.627451 0.627451 1"/>
+              <body name="link5" pos="0.078308 -0.0375 -0.03" quat="0.707105 -0.707108 0 0">
+                <inertial pos="-0.00502802 1.73866e-06 0.0386233" quat="0.644154 0.196994 0.180566 0.716697" mass="0.383" diaginertia="0.000217429 0.000212237 0.000157335"/>
+                <joint name="joint5" axis="0 0 1" range="-1.57 1.57" damping="2" actuatorfrcrange="-7 7"/>
+                <geom type="mesh" mesh="link5" rgba="0.627451 0.627451 0.627451 1"/>
+                <body name="link6" pos="0.028008 0 0.04" quat="0.707105 0 0.707108 0">
+                  <inertial pos="5.50089e-06 -3.71802e-05 0.0578217" quat="0.999981 -0.00127532 -0.000304602 -0.00594064" mass="0.8663" diaginertia="0.00127909 0.000983777 0.000513199"/>
+                  <joint name="joint6" axis="0 0 1" range="-3.14 3.14" damping="2" actuatorfrcrange="-7 7"/>
+                  <geom type="mesh" mesh="link6" rgba="0.627451 0.627451 0.627451 1"/>
+                  <body name="end_link" pos="0 0 0.15539" quat="3.27579e-05 0.707108 -3.27581e-05 0.707105">
+                    <geom type="mesh" mesh="gripper_base" rgba="0.627451 0.627451 0.627451 1"/>
+                    <body name="left_finger_link">
+                      <joint name="left_finger" type="slide" axis="0 1 0" range="0 0.045" armature="0.243" damping="40"/>
+                      <geom type="mesh" mesh="left_finger" rgba="0.627451 0.627451 0.627451 1"/>
+                    </body>
+                    <body name="right_finger_link">
+                      <joint name="right_finger" type="slide" axis="0 1 0" range="-0.045 0" armature="0.243" damping="40"/>
+                      <geom type="mesh" mesh="right_finger" rgba="0.627451 0.627451 0.627451 1"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <equality>
+    <joint joint1="left_finger" joint2="right_finger" polycoef="0 -1 0 0 0"/>
+  </equality>
+  <actuator>
+    <position name="joint1" joint="joint1"/>
+    <position name="joint2" joint="joint2"/>
+    <position name="joint3" joint="joint3"/>
+    <position name="joint4" joint="joint4"/>
+    <position name="joint5" joint="joint5"/>
+    <position name="joint6" joint="joint6"/>
+    <position name="gripper" joint="left_finger"/>
+  </actuator>
+</mujoco>

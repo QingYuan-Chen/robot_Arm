@@ -121,9 +121,12 @@ class ArmServices:
         try:
             self._hardware.stop_gravity_compensation()
             self._hardware.ensure_pos_vel_control()
-            self._hardware.endpos_ctrl.safe_home()
+            reached = self._hardware.safe_home(self._node.safe_home_joint_positions())
             response.success = True
-            response.message = "safe_home complete"
+            response.message = (
+                "safe_home complete: "
+                + ", ".join(f"{value:.4f}" for value in reached)
+            )
         except Exception as exc:
             response.success = False
             response.message = str(exc)
@@ -217,16 +220,28 @@ class ArmServices:
             )
             response.success = bool(reached)
             response.reached_position = float(reached_position)
-            self._node.get_logger().info(
+            reason = self._hardware.gripper_command_error
+            log = (
+                self._node.get_logger().info
+                if response.success
+                else self._node.get_logger().error
+            )
+            log(
                 "gripper set "
                 f"target={float(request.position):.3f}m "
+                f"max_effort={float(request.max_effort):.3f}Nm "
                 f"reached={response.reached_position:.3f}m "
-                f"success={response.success}"
+                f"success={response.success} reason={reason or '-'}"
             )
         except Exception as exc:
             response.success = False
-            response.reached_position = 0.0
-            self._node.get_logger().error(f"gripper set failed: {exc}")
+            response.reached_position = float(self._hardware.gripper_position_m())
+            self._node.get_logger().error(
+                "gripper set failed "
+                f"target={float(request.position):.3f}m "
+                f"max_effort={float(request.max_effort):.3f}Nm "
+                f"reached={response.reached_position:.3f}m reason={exc}"
+            )
         self._node.publish_arm_status()
         return response
 

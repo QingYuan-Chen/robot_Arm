@@ -61,6 +61,17 @@ It is responsible for:
 - teach replay dry-run / execute gating
 - teach replay settings and replay status payloads
 
+`TeachReplayWorkflow` owns the dashboard-triggered replay lifecycle, including
+preparation, dry-run tokens, alignment, collision checks, action callbacks and
+tracking state. It receives explicit snapshot/status callbacks and ROS adapters;
+it neither imports dashboard modules nor controls HTTP command authorization.
+
+`TeachRecorderNode` is the only recording service/file owner. The controller
+publishes an atomic verified batch with a stable timestamp for its receive
+identity; publishing that batch again does not create a new recording sample.
+Recording checks source age and matching per-motor batch stamps. The configured
+recording rate is an upper bound, not a claim that feedback arrived at that rate.
+
 It may use `rebotarm_motion` for retiming, alignment, collision checks, and
 trajectory validation. It must not implement dashboard HTML or direct motor SDK
 logic.
@@ -102,6 +113,13 @@ the algorithms live in `rebotarm_motion` and `rebotarm_teach`.
 
 `rebotarm_moveit_config` owns only MoveIt model and planning configuration.
 
+The canonical URDF is `config/rebotarm.urdf`; its mesh URIs resolve to this
+package's `meshes/` directory. Bringup, dashboard and simulation consume these
+resources without a reverse dependency on bringup or the compatibility package.
+Cross-node launch parameter profiles live in `rebotarm_bringup/config`.
+Simulation owns its frozen firmware reference and torque calibration values;
+changing a hardware profile must not silently retune the simulation.
+
 It is responsible for:
 
 - URDF/SRDF used by MoveIt
@@ -128,6 +146,41 @@ It is responsible for:
 
 It must not bypass motion validation or controller safety. A visual grasp must
 go through planning, collision checking, and execution gates.
+
+Ready-pose motion (`visual_ready_node` and its parameter profile) lives in
+`rebotarm_motion`. The old vision Python/console entry remains a compatibility
+alias; bringup launches the motion owner directly.
+
+### Simulation ownership
+
+`rebotarm_simulation` owns offline robot physics and the simulated controller
+backend.
+
+It is responsible for:
+
+- MuJoCo model generation and validation
+- simulated `FollowJointTrajectory` execution
+- simulated joint and gripper state
+- headless physics checks and optional viewer integration
+- trajectory metrics, step-response benchmarks, and simulated contact feedback
+
+It must not import or call the real motor SDK. A simulation launch must not
+start `rebotarmcontroller`, open a hardware channel, or expose a second active
+`FollowJointTrajectory` server under the same name.
+
+### Bringup ownership
+
+`rebotarm_bringup` owns launch-time composition and backend selection.
+
+It is responsible for:
+
+- launch files and cross-package startup composition
+- selecting exactly one real or simulated execution backend
+- propagating `use_hardware`, `execution_mode`, and `use_sim_time`
+- safe launch defaults and mutually exclusive node conditions
+
+It must not implement motor control, motion planning, perception, or calibration
+algorithms inside launch files.
 
 ### Calibration ownership
 
@@ -172,7 +225,16 @@ rebotarm_dashboard
 rebotarm_teach -> rebotarm_motion
 rebotarm_teleop -> rebotarm_motion when using legacy interactive preview helpers
 rebotarm_vision -> rebotarm_motion / MoveIt interfaces for validation and execution
+rebotarm_bringup -> package launch entry points and configuration only
+rebotarm_simulation -> ROS messages / simulated execution libraries only
 ```
+
+The retired MuJoCo ROS adapter is no longer shipped in the active package;
+`rebotarm_simulation` must not import or declare a dependency on `rebotarm_motion`.
+Launch interpreters are selected explicitly per process by launch arguments or
+environment variables, never by probing workspace virtual-environment directories
+or injecting vision site-packages into a whole launch group. See
+[launch Python configuration](launch_python_configuration.md).
 
 Forbidden dependency direction:
 
@@ -190,6 +252,9 @@ rebotarm_teleop -> rebotarm_interactive_control
 
 rebotarm_dashboard -> motor SDK
 rebotarm_vision -> motor SDK
+rebotarm_simulation -> motor SDK
+rebotarm_simulation -> rebotarmcontroller implementation
+rebotarm_bringup -> package implementation internals
 ```
 
 ## Authority Matrix
@@ -203,6 +268,8 @@ rebotarm_vision -> motor SDK
 | `rebotarm_dashboard` | no | yes | no direct planning logic | dashboard assets only | via teleop adapters |
 | `rebotarm_moveit_config` | no | no | configuration only | model/config files only | no |
 | `rebotarm_vision` | no | only through planned execution interfaces | yes, for validation/execution gates | perception assets/models only | no |
+| `rebotarm_simulation` | simulated backend only | owns simulated equivalents | no direct planning policy | generated simulation artifacts only | no |
+| `rebotarm_bringup` | no | no business logic | no business logic | launch/config only | no |
 | `rebotarm_calibration` | no | no, except explicit validation tools | no, except validation tools | calibration outputs only | no |
 | `rebotarm_interactive_control` | no | no new logic | no new logic | compatibility only | no new logic |
 
@@ -277,6 +344,8 @@ Use this table before adding a file:
 | New web panel, route, SSE payload formatting | `rebotarm_dashboard` |
 | New URDF/SRDF/collision/planning group config | `rebotarm_moveit_config` |
 | New detection/depth/grasp candidate logic | `rebotarm_vision` |
+| New MuJoCo model, simulated controller, physics metric, or contact feedback | `rebotarm_simulation` |
+| New launch composition or mutually exclusive backend selection | `rebotarm_bringup` |
 | New hand-eye/TCP/TF check tool | `rebotarm_calibration` |
 | Old import path compatibility only | `rebotarm_interactive_control` |
 

@@ -4,8 +4,9 @@ rebotarm_grasp_candidate_ik_filter:
     candidate_pregrasp_min_z_m: 0.120
     candidate_safe_lift_min_z_m: 0.120
     candidate_workspace_gate_enabled: false
-    candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
-    candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
+    # Upstream +X workspace rotated -90 deg around base Z for this installation.
+    candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+    candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
     candidate_max_grasp_to_object_center_m: 0.15
 
 rebotarm_visual_grasp_executor:

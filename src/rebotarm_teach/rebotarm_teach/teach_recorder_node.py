@@ -18,7 +18,8 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from .parameter_helpers import sensor_qos_kwargs
-from .teach_recording import TeachSample, encode_teach_sample, is_quit_key
+from .teach_recording import encode_teach_sample, is_quit_key
+from .recording_feedback import feedback_teach_sample, stamp_nanoseconds
 
 
 class TeachRecorderNode(Node):
@@ -28,6 +29,8 @@ class TeachRecorderNode(Node):
         self.declare_parameter("record_path", "teleop_records/teach_record.jsonl")
         self.declare_parameter("sample_rate_hz", 50.0)
         self.declare_parameter("require_gravity_comp", True)
+        self.declare_parameter("require_motor_status", True)
+        self.declare_parameter("feedback_timeout_sec", 0.15)
         self.declare_parameter("auto_start_gravity_comp", False)
         self.declare_parameter("auto_start_gravity_comp_retry_sec", 1.0)
         self.declare_parameter("auto_start_gravity_comp_max_attempts", 30)
@@ -48,6 +51,9 @@ class TeachRecorderNode(Node):
         self._latest_joint_state: JointState | None = None
         self._arm_state = ""
         self._motor_status: dict[str, int] = {}
+        self._motor_stamps: dict[str, int] = {}
+        self._last_written_stamp_ns: int | None = None
+        self._recording_started_ns = 0
         self._samples_written = 0
         self._first_sample_stamp: float | None = None
         self._last_sample_stamp: float | None = None
@@ -136,6 +142,8 @@ class TeachRecorderNode(Node):
         mode = "w" if truncate else "a"
         self._handle = self._record_path.open(mode, encoding="utf-8")
         self._recording_active = True
+        self._recording_started_ns = self.get_clock().now().nanoseconds
+        self._last_written_stamp_ns = None
         self._samples_written = 0
         self._first_sample_stamp = None
         self._last_sample_stamp = None
@@ -291,6 +299,7 @@ class TeachRecorderNode(Node):
 
     def _on_motor_state(self, msg: JointMotorState) -> None:
         self._motor_status[str(msg.joint_name)] = int(msg.status_code)
+        self._motor_stamps[str(msg.joint_name)] = stamp_nanoseconds(msg.header.stamp)
 
     def _write_sample(self) -> None:
         if not self._recording_active:
@@ -306,16 +315,23 @@ class TeachRecorderNode(Node):
             self._writing_state = "waiting_gravity_comp"
             self._publish_status("waiting", "waiting for GRAVITY_COMP state")
             return
-        sample_stamp = self.get_clock().now().nanoseconds / 1_000_000_000.0
-        sample = TeachSample(
-            stamp=sample_stamp,
-            joint_names=tuple(str(v) for v in joint_state.name),
-            positions=tuple(float(v) for v in joint_state.position),
-            velocities=tuple(float(v) for v in joint_state.velocity),
-            efforts=tuple(float(v) for v in joint_state.effort),
-            motor_status=dict(self._motor_status),
-            arm_state=self._arm_state,
-        )
+        try:
+            sample = feedback_teach_sample(
+                joint_state, joint_names=self._joint_names,
+                motor_status=self._motor_status, motor_stamps=self._motor_stamps,
+                arm_state=self._arm_state, now_ns=self.get_clock().now().nanoseconds,
+                started_ns=self._recording_started_ns,
+                last_stamp_ns=self._last_written_stamp_ns,
+                timeout_sec=float(self.get_parameter("feedback_timeout_sec").value),
+                require_motor_status=bool(self.get_parameter("require_motor_status").value),
+            )
+        except ValueError as exc:
+            self._writing_state = "waiting_feedback"
+            self._publish_status("waiting", str(exc))
+            return
+        if sample is None:
+            return
+        sample_stamp = sample.stamp
         if self._first_sample_stamp is None:
             self._first_sample_stamp = sample_stamp
         self._last_sample_stamp = sample_stamp
@@ -331,6 +347,7 @@ class TeachRecorderNode(Node):
             return
         self._writing_state = "writing"
         self._last_write_error = ""
+        self._last_written_stamp_ns = stamp_nanoseconds(joint_state.header.stamp)
         self._samples_written += 1
         self._publish_status("recording", f"samples={self._samples_written}")
 

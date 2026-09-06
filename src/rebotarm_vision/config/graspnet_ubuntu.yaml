@@ -1,0 +1,13 @@
+rebotarm_graspnet_baseline_node:
+  ros__parameters:
+    input_color_topic: /camera/color/image_raw
+    input_depth_topic: /camera/depth/image_raw
+    input_camera_info_topic: /camera/depth/camera_info
+    input_detections_topic: /grasp/detections
+    output_candidates_topic: /grasp/graspnet_candidates
+    output_frame_id: camera_depth_frame
+    source_mode: in_process
+    max_input_skew_ms: 100
+    depth_scale_m_per_unit: 0.001
+    max_grasps: 10
+    max_jaw_width_m: 0.085

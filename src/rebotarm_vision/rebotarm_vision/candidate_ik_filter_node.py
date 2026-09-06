@@ -18,10 +18,12 @@ from rebotarm_msgs.msg import GraspCandidateArray, GraspPlan
 from .candidate_filter_policy import filter_candidate_array_by_reachability
 from .candidate_gate_policy import CandidateGateConfig, evaluate_candidate_gate
 from .candidate_motion_policy import JointMotionPolicyConfig, evaluate_joint_motion
+from .candidate_precheck_policy import CandidatePrecheckConfig, evaluate_candidate_precheck
 from .candidate_scoring_policy import CandidateScoringInput, score_candidate
 from .candidate_target_policy import CandidateTargetPolicyConfig, build_candidate_target_variants
 from .candidate_tf_adapter import transform_candidate_pose_to_target_frame
 from .motion_feasibility_policy import evaluate_motion_feasibility
+from .latest_only_work_queue import LatestOnlyWorkQueue
 from .pose_variant_policy import PoseVariantConfig
 from .visual_grasp_sequence import PoseTarget
 
@@ -55,12 +57,17 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("ee_frame_id", "end_link")
         self.declare_parameter("service_timeout_sec", 5.0)
         self.declare_parameter("pose_policy", "hybrid_geometry_with_base_axis_fallback")
-        self.declare_parameter("fixed_grasp_orientation_xyzw", [0.0, 0.0, 0.0, 1.0])
-        self.declare_parameter("base_approach_axis_xyz", [1.0, 0.0, 0.0])
+        self.declare_parameter(
+            "fixed_grasp_orientation_xyzw",
+            [0.0, 0.0, -0.707106781, 0.707106781],
+        )
+        self.declare_parameter("base_approach_axis_xyz", [0.0, -1.0, 0.0])
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         self.declare_parameter("orientation_yaw_offsets_rad", [0.0])
         self.declare_parameter("candidate_grasp_z_offsets_m", [0.0])
         self.declare_parameter("max_candidates_per_frame", 20)
+        self.declare_parameter("candidate_min_confidence", 0.0)
+        self.declare_parameter("filter_stats_log_interval_sec", 5.0)
         self.declare_parameter("lift_z_m", 0.08)
         self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
@@ -68,12 +75,12 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)
         self.declare_parameter("grasp_base_z_offset_m", 0.0)
         self.declare_parameter("candidate_min_jaw_width_m", 0.006)
-        self.declare_parameter("candidate_max_jaw_width_m", 0.082)
+        self.declare_parameter("candidate_max_jaw_width_m", 0.085)
         self.declare_parameter("candidate_min_grasp_z_m", 0.0)
         self.declare_parameter("candidate_safe_lift_min_z_m", 0.120)
         self.declare_parameter("candidate_workspace_gate_enabled", False)
-        self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])
-        self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])
+        self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])
+        self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])
         self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)
         self.declare_parameter("candidate_score_joint_distance_weight", 0.15)
         self.declare_parameter("candidate_score_joint6_weight", 0.35)
@@ -86,8 +93,8 @@ class CandidateIkFilterNode(Node):
         self._service_timeout_sec = float(self.get_parameter("service_timeout_sec").value)
         self._latest_joint_state: JointState | None = None
         self._warned_missing_joint_state = False
-        self._filter_busy = False
-        self._warned_filter_busy = False
+        self._work_queue: LatestOnlyWorkQueue[GraspCandidateArray] = LatestOnlyWorkQueue()
+        self._last_filter_stats_log_at = 0.0
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self._ik_client = self.create_client(
@@ -164,31 +171,73 @@ class CandidateIkFilterNode(Node):
         return all(math.isfinite(float(value)) for value in msg.position[: len(msg.name)])
 
     def _on_candidates(self, msg: GraspCandidateArray) -> None:
-        if self._filter_busy:
-            if not self._warned_filter_busy:
-                self.get_logger().warn(
-                    "candidate IK filter is still processing previous candidates; dropping this frame"
-                )
-                self._warned_filter_busy = True
-            return
-        self._filter_busy = True
-        try:
-            self._on_candidates_unlocked(msg)
-        finally:
-            self._filter_busy = False
-            self._warned_filter_busy = False
+        work = self._work_queue.submit(msg, received_at=time.monotonic())
+        while work is not None:
+            started_at = time.monotonic()
+            counts: dict[str, int] = {}
+            try:
+                counts = self._on_candidates_unlocked(work.item)
+            except Exception as exc:
+                self.get_logger().error(f"candidate IK filter frame failed: {exc}")
+            completed_at = time.monotonic()
+            processing_ms = (completed_at - started_at) * 1000.0
+            work = self._work_queue.complete(completed_at=completed_at)
+            self._log_filter_stats(
+                processing_ms=processing_ms,
+                pending_age_ms=0.0 if work is None else work.pending_age_ms,
+                counts=counts,
+            )
 
-    def _on_candidates_unlocked(self, msg: GraspCandidateArray) -> None:
+    def _log_filter_stats(
+        self,
+        *,
+        processing_ms: float,
+        pending_age_ms: float,
+        counts: dict[str, int],
+    ) -> None:
+        now = time.monotonic()
+        interval = max(0.0, float(self.get_parameter("filter_stats_log_interval_sec").value))
+        if interval > 0.0 and now - self._last_filter_stats_log_at < interval:
+            return
+        self._last_filter_stats_log_at = now
+        stats = self._work_queue.snapshot()
+        self.get_logger().info(
+            "candidate_filter_stats "
+            f"received={stats.received} started={stats.started} completed={stats.completed} "
+            f"coalesced={stats.coalesced} busy={str(stats.busy).lower()} "
+            f"pending={str(stats.pending).lower()} processing_ms={processing_ms:.1f} "
+            f"pending_age_ms={pending_age_ms:.1f} "
+            f"input_candidates={counts.get('input_candidates', 0)} "
+            f"precheck_passed={counts.get('precheck_passed', 0)} "
+            f"geometry_variants_passed={counts.get('geometry_variants_passed', 0)} "
+            f"ranked={counts.get('ranked', 0)}"
+        )
+
+    def _on_candidates_unlocked(self, msg: GraspCandidateArray) -> dict[str, int]:
         if not msg.candidates:
             self._publish_filtered(msg, [])
-            return
+            return {
+                "input_candidates": 0,
+                "precheck_passed": 0,
+                "geometry_variants_passed": 0,
+                "ranked": 0,
+            }
         ranked: list[tuple[float, int, object, tuple[PoseTarget, PoseTarget], str, str]] = []
         max_candidates = max(1, int(self.get_parameter("max_candidates_per_frame").value))
+        input_candidates = min(len(msg.candidates), max_candidates)
+        precheck_passed = 0
+        geometry_variants_passed = 0
         for original_index, candidate in enumerate(msg.candidates[:max_candidates]):
             try:
+                if not self._candidate_precheck_allows(candidate):
+                    continue
+                precheck_passed += 1
                 best: tuple[float, tuple[PoseTarget, PoseTarget], str, str] | None = None
                 variants = self._candidate_target_variants(msg, candidate.pose)
                 for pregrasp, grasp, variant_label in variants:
+                    if not self._candidate_gate_allows(candidate, grasp=grasp):
+                        continue
+                    geometry_variants_passed += 1
                     feasibility = evaluate_motion_feasibility(
                         pregrasp=pregrasp,
                         grasp=grasp,
@@ -197,8 +246,6 @@ class CandidateIkFilterNode(Node):
                         motion_penalty=self._joint_motion_penalty,
                     )
                     if not feasibility.accepted or feasibility.motion_penalty is None:
-                        continue
-                    if not self._candidate_gate_allows(candidate, grasp=grasp):
                         continue
                     scoring = score_candidate(
                         CandidateScoringInput(
@@ -220,6 +267,24 @@ class CandidateIkFilterNode(Node):
             except Exception as exc:
                 self.get_logger().warn(f"candidate IK filter rejected candidate: {exc}")
         self._publish_ranked(msg, ranked)
+        return {
+            "input_candidates": input_candidates,
+            "precheck_passed": precheck_passed,
+            "geometry_variants_passed": geometry_variants_passed,
+            "ranked": len(ranked),
+        }
+
+    def _candidate_precheck_allows(self, candidate) -> bool:
+        result = evaluate_candidate_precheck(
+            confidence=float(getattr(candidate, "confidence", 0.0)),
+            jaw_width_m=float(getattr(candidate, "jaw_width", 0.0)),
+            config=CandidatePrecheckConfig(
+                min_confidence=float(self.get_parameter("candidate_min_confidence").value),
+                min_jaw_width_m=float(self.get_parameter("candidate_min_jaw_width_m").value),
+                max_jaw_width_m=float(self.get_parameter("candidate_max_jaw_width_m").value),
+            ),
+        )
+        return result.accepted
 
     def _candidate_gate_allows(self, candidate, *, grasp: PoseTarget) -> bool:
         try:
@@ -227,8 +292,8 @@ class CandidateIkFilterNode(Node):
         except Exception:
             workspace_enabled = False
         object_center_xyz = None
-        workspace_min_xyz = (0.18, -0.35, 0.0)
-        workspace_max_xyz = (0.64, 0.35, 0.45)
+        workspace_min_xyz = (-0.35, -0.64, 0.0)
+        workspace_max_xyz = (0.35, -0.18, 0.45)
         max_grasp_to_object_center_m = 0.15
         if workspace_enabled:
             object_center_xyz = self._candidate_object_center_in_target_frame(candidate)

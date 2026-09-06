@@ -7,7 +7,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Jazzy-blue.svg" alt="ROS2 Jazzy">
   <img src="https://img.shields.io/badge/Python-3.12-blue.svg" alt="Python 3.12">
-  <img src="https://img.shields.io/badge/Version-v0.0.5-brightgreen.svg" alt="Version v0.0.5">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2024.04+-orange.svg" alt="Ubuntu 24.04+">
   <img src="https://img.shields.io/badge/Controller-reBotArmController-green.svg" alt="reBotArmController">
 </p>
@@ -16,19 +15,30 @@
 
 ## 项目介绍
 
-当前版本：`v0.0.5`
+当前源码版本以 Git 提交为准。项目总览见 [README.md](README.md)，
+最新操作入口见 [功能操作手册](docs/rebotarm_feature_commands.md)。
 
 `rebotarm_ros2` 是 reBotArm B601 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
 作为二次开发、上层规划、可视化和单电机调试的统一入口。
 
-当前工作空间包含三个 ROS2 包：
+当前工作空间包含13个 ROS2 包：
 
 | 包 | 作用 |
 |---|---|
 | `rebotarm_msgs` | 自定义 msg / srv / action 接口 |
 | `rebotarmcontroller` | 控制节点包，提供 `reBotArmController` 节点 |
-| `rebotarm_bringup` | launch、配置、URDF、RViz 等启动资源 |
+| `rebotarm_bringup` | launch 组合、配置与后端选择 |
+| `rebotarm_motion` | 轨迹、MoveIt 适配与运动校验 |
+| `rebotarm_teach` | 示教录制、文件与回放流程 |
+| `rebotarm_teleop` | 键盘、网页及 RViz 操作者输入适配 |
+| `rebotarm_dashboard` | Web UI、HTTP 与状态展示 |
+| `rebotarm_moveit_config` | URDF、网格、SRDF 与规划模型 |
+| `rebotarm_vision` | 相机、识别与抓取候选 |
+| `rebotarm_simulation` | MuJoCo 模型与仿真执行 |
+| `rebotarm_calibration` | 标定与 TF/TCP 验证 |
+| `rebotarm_voice_control` | 语音控制入口 |
+| `rebotarm_interactive_control` | 旧导入路径与脚本兼容层 |
 
 ---
 
@@ -75,17 +85,31 @@ source /opt/ros/jazzy/setup.bash
 
 ### Step 2. 安装 motorbridge
 
-`motorbridge` 从 PyPI 官方源安装：
+先安装固定的 PyPI bootstrap 包：
 
 ```bash
-python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
+python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
 ```
+
+原始 `motorbridge==0.4.6` 不包含控制器所需的逐电机反馈 sequence，因此单独安装
+PyPI 包不够。必须从仓库根目录构建并显式安装已审查的
+`0.4.6+rebotarm.2` source patch，再通过启动前检查：
+
+```bash
+python3 tools/setup_motorbridge_fresh_feedback.py --build-only
+python3 tools/setup_motorbridge_fresh_feedback.py --install-user
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+`--build-only` 只在临时 venv 验证 wheel，不修改用户 Python；
+`--check-installed` 不联网、不构建且不访问硬件。详细构建、检查和回退说明见
+[`docs/local_setup_zh.md`](docs/local_setup_zh.md)。
 
 ### Step 3. 获取底层 SDK
 
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd /home/a/project/rebot_Arm
 mkdir -p third_party
 git clone https://github.com/huangbinai/rebotarm_control.git third_party/reBotArm_control_py
 ```
@@ -107,7 +131,7 @@ python3 -c "from reBotArm_control_py.actuator import RobotArm; from reBotArm_con
 ```bash
 cd ~/seeed/rebotarm_ros2
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
+colcon build --base-paths src --executor sequential
 source install/setup.bash
 ```
 
@@ -132,30 +156,18 @@ rebotarmcontroller MoveToPose
 ## 目录结构
 
 ```text
-rebotarm_ros2/
+rebot_Arm/
+├── README.md
 ├── README_zh.md
-├── PLAN.md
-├── instruction.md
-└── src/
-    ├── rebotarm_msgs/
-    │   ├── msg/
-    │   ├── srv/
-    │   └── action/
-    ├── rebotarmcontroller/
-    │   ├── rebotarmcontroller/
-    │   │   ├── rebotarm_controller.py
-    │   │   ├── hardware_manager.py
-    │   │   ├── ros_publishers.py
-    │   │   ├── ros_services.py
-    │   │   ├── ros_actions.py
-    │   │   ├── motor_passthrough.py
-    │   │   ├── conversions.py
-    │   │   └── examples/
-    └── rebotarm_bringup/
-        ├── launch/
-        ├── config/
-        ├── description/
-        └── rviz/
+├── Agent/                 # 实时状态与验收依据
+├── docs/                  # 架构、环境与操作手册
+├── patches/               # MotorBridge 安全补丁
+├── requirements-*.txt     # 分环境依赖清单
+├── src/                   # 上表13个ROS包
+├── tests/
+├── tools/
+├── scripts/
+└── third_party/           # 上游参考快照与本地依赖
 ```
 
 ---

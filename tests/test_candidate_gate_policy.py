@@ -32,6 +32,25 @@ def test_candidate_gate_policy_rejects_jaw_width_outside_gripper_range():
     assert too_large.reason == "jaw_width too large (0.095m)"
 
 
+def test_candidate_gate_default_accepts_85mm_and_rejects_anything_wider():
+    from rebotarm_vision.candidate_gate_policy import evaluate_candidate_gate
+
+    accepted = evaluate_candidate_gate(
+        jaw_width_m=0.085,
+        grasp_position_xyz=(0.4, 0.0, 0.12),
+        object_center_xyz=None,
+    )
+    rejected = evaluate_candidate_gate(
+        jaw_width_m=0.085001,
+        grasp_position_xyz=(0.4, 0.0, 0.12),
+        object_center_xyz=None,
+    )
+
+    assert accepted.accepted
+    assert not rejected.accepted
+    assert rejected.reason == "jaw_width too large (0.085m)"
+
+
 def test_candidate_gate_policy_rejects_grasp_below_minimum_without_blocking_low_table_grasp_by_default():
     from rebotarm_vision.candidate_gate_policy import CandidateGateConfig, evaluate_candidate_gate
 

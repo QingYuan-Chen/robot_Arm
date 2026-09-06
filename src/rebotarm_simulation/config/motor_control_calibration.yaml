@@ -1,0 +1,64 @@
+# MuJoCo-only conversion from Damiao firmware PI output to physical torque.
+# These values are simulation calibration values, not firmware parameters.
+# Frozen reference from the driver profile at migration (2026-09-06).
+# Hardware tuning must not silently change an existing simulation calibration.
+firmware_reference:
+  rate_hz: 100
+  arm:
+    joint1: {pos_kp: 150.0, pos_ki: 0.5, vel_kp: 0.0125, vel_ki: 0.004, vlim: 5.0}
+    joint2: {pos_kp: 150.0, pos_ki: 0.5, vel_kp: 0.0125, vel_ki: 0.004, vlim: 5.0}
+    joint3: {pos_kp: 150.0, pos_ki: 0.5, vel_kp: 0.0125, vel_ki: 0.004, vlim: 5.0}
+    joint4: {pos_kp: 50.0, pos_ki: 1.0, vel_kp: 0.0008, vel_ki: 0.002, vlim: 3.0}
+    joint5: {pos_kp: 50.0, pos_ki: 1.0, vel_kp: 0.0008, vel_ki: 0.002, vlim: 3.0}
+    joint6: {pos_kp: 50.0, pos_ki: 1.0, vel_kp: 0.0008, vel_ki: 0.002, vlim: 3.0}
+  gripper: {kp: 8.0, kd: 1.0}
+
+motor_specs:
+  DM4340P:
+    rated_torque_nm: 9.0
+    peak_torque_nm: 27.0
+    reduction_ratio: 40.0
+  DM4310_V1_2:
+    rated_torque_nm: 3.5
+    peak_torque_nm: 12.5
+    reduction_ratio: 10.0
+
+arm:
+  joint1: {motor_model: DM4340P, firmware_to_torque_scale: 200.0, torque_rate_limit_nm_s: 180.0, torque_lowpass_alpha: 0.35}
+  joint2: {motor_model: DM4340P, firmware_to_torque_scale: 200.0, torque_rate_limit_nm_s: 180.0, torque_lowpass_alpha: 0.35}
+  joint3: {motor_model: DM4340P, firmware_to_torque_scale: 200.0, torque_rate_limit_nm_s: 180.0, torque_lowpass_alpha: 0.35}
+  joint4: {motor_model: DM4310_V1_2, firmware_to_torque_scale: 500.0, torque_rate_limit_nm_s: 90.0, torque_lowpass_alpha: 0.35}
+  joint5: {motor_model: DM4310_V1_2, firmware_to_torque_scale: 500.0, torque_rate_limit_nm_s: 90.0, torque_lowpass_alpha: 0.35}
+  joint6: {motor_model: DM4310_V1_2, firmware_to_torque_scale: 500.0, torque_rate_limit_nm_s: 90.0, torque_lowpass_alpha: 0.35}
+  position_integral_limit_rad_s: 5.0
+  velocity_integral_limit_rad: 5.0
+  gravity_compensation_scale: 1.0
+
+model_dynamics:
+  joint1: {damping: 10.0, armature: 0.02, frictionloss: 0.02}
+  joint2: {damping: 10.0, armature: 0.02, frictionloss: 0.02}
+  joint3: {damping: 10.0, armature: 0.02, frictionloss: 0.02}
+  joint4: {damping: 3.0, armature: 0.005, frictionloss: 0.01}
+  joint5: {damping: 3.0, armature: 0.005, frictionloss: 0.01}
+  joint6: {damping: 1.0, armature: 0.002, frictionloss: 0.005}
+  left_finger_joint: {damping: 20.0, armature: 0.001, frictionloss: 0.1}
+  right_finger_joint: {damping: 20.0, armature: 0.001, frictionloss: 0.1}
+
+gripper:
+  motor_model: DM4310_V1_2
+  motor_radians_per_opening_m: -55.55555555555556  # -5 rad / 0.09 m
+  transmission_efficiency: 0.80
+  motor_torque_limit_nm: 1.5
+  # 1.5 Nm * 55.56 rad/m * 0.8 is an ideal motor-side upper bound, not a
+  # measured fingertip force. Keep MuJoCo's prismatic finger force conservative
+  # until the real gripper can be calibrated with a scale/load cell.
+  finger_force_limit_n: 20.0
+  sim_force_kp_n_per_m: 250.0
+  sim_force_kd_n_s_per_m: 6.0
+  sim_force_deadband_m: 0.0005
+  sim_velocity_deadband_m_s: 0.002
+  displacement_range_m: [0.0, 0.09]
+  modes:
+    move: {kp: 5.0, kd: 1.0}
+    closing: {kp: 0.0, kd: 0.5}
+    hold: {kp: 5.0, kd: 1.0}

@@ -1172,7 +1172,7 @@ class StatusPanelStateTests(unittest.TestCase):
 
 class WebRobotAssetTests(unittest.TestCase):
     def test_rewrite_package_mesh_uris_points_to_local_route(self) -> None:
-        urdf = 'filename="package://rebotarm_bringup/description/meshes/link1.STL"'
+        urdf = 'filename="package://rebotarm_moveit_config/meshes/link1.STL"'
 
         rewritten = rewrite_package_mesh_uris(urdf)
 
@@ -1184,12 +1184,12 @@ class WebRobotAssetTests(unittest.TestCase):
         self.assertIsNone(safe_mesh_path(mesh_dir, "../link1.STL"))
 
     def test_load_urdf_joint_limits_reads_revolute_limits(self) -> None:
-        urdf_path = ROOT / "src" / "rebotarm_bringup" / "description" / "urdf" / "reBot-DevArm_fixend.urdf"
+        urdf_path = ROOT / "src" / "rebotarm_moveit_config" / "config" / "rebotarm.urdf"
 
         limits = load_urdf_joint_limits(urdf_path, ("joint1", "joint2", "missing_joint"))
 
         self.assertEqual(limits["joint1"], (-2.8, 2.8))
-        self.assertEqual(limits["joint2"], (-3.14, 0.0))
+        self.assertEqual(limits["joint2"], (-3.14, 0.02))
         self.assertNotIn("missing_joint", limits)
 
     def test_merge_joint_limits_prefers_urdf_and_falls_back_to_params(self) -> None:
@@ -1217,7 +1217,7 @@ class WebRobotAssetTests(unittest.TestCase):
 
     def test_gripper_finger_links_have_collision_meshes_for_moveit(self) -> None:
         for path in (
-            ROOT / "src" / "rebotarm_bringup" / "description" / "urdf" / "reBot-DevArm_fixend.urdf",
+            ROOT / "src" / "rebotarm_moveit_config" / "config" / "rebotarm.urdf",
             ROOT / "src" / "rebotarm_moveit_config" / "config" / "rebotarm.urdf",
         ):
             root = ET.fromstring(path.read_text(encoding="utf-8"))
@@ -1238,7 +1238,7 @@ class WebRobotAssetTests(unittest.TestCase):
 
     def test_end_link_collision_uses_new_gripper_base_mesh(self) -> None:
         for path in (
-            ROOT / "src" / "rebotarm_bringup" / "description" / "urdf" / "reBot-DevArm_fixend.urdf",
+            ROOT / "src" / "rebotarm_moveit_config" / "config" / "rebotarm.urdf",
             ROOT / "src" / "rebotarm_moveit_config" / "config" / "rebotarm.urdf",
         ):
             root = ET.fromstring(path.read_text(encoding="utf-8"))
@@ -1462,6 +1462,77 @@ class WebExecuteCoreTests(unittest.TestCase):
         self.assertTrue(decision.accepted)
         self.assertEqual(decision.position, 0.05)
         self.assertEqual(decision.max_effort, 1.5)
+
+
+def test_unknown_motor_position_survives_json_and_sse_without_becoming_zero():
+    store = TeleopStatusStore()
+    store.update_motor_state(
+        joint_name="gripper", position=float("nan"), velocity=0.0,
+        torque=0.0, status_code=255,
+    )
+    payload = store.snapshot_dict()
+    assert payload["joints"]["gripper"]["position"] is None
+    assert payload["joints"]["gripper"]["status_code"] == 255
+    # The exact payload used by HTTP and SSE must be strict JSON.
+    assert json.loads(json.dumps(payload, allow_nan=False)) == payload
+    event = encode_sse_event(payload)
+    data = event.split("data: ", 1)[1].strip()
+    assert json.loads(data)["joints"]["gripper"]["position"] is None
+    assert "NaN" not in event
+    store.update_motor_state(
+        joint_name="gripper", position=0.01, velocity=0.0,
+        torque=0.0, status_code=0,
+    )
+    assert store.snapshot_dict()["joints"]["gripper"]["position"] == 0.01
+
+
+def test_dashboard_unknown_gripper_feedback_does_not_render_or_command_zero():
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        raise unittest.SkipTest("Node.js required for dashboard behavior test")
+    html = (ROOT / "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html").read_text()
+
+    def section(start, end):
+        return html[html.index(start):html.index(end, html.index(start))]
+
+    helpers = section("    const motorPosition =", "    const deg =")
+    slider = section("    const updateSlider =", "    const syncPreviewFromLive =")
+    # The next handler follows setGripper; locate its declaration, not locals.
+    start = html.index("    const setGripper =")
+    end = html.index("\n    const ", start + len("    const setGripper ="))
+    command = html[start:end]
+    script = r'''
+const assert = require('node:assert/strict');
+const elements = new Map();
+const document = {getElementById(id) {
+  if (!elements.has(id)) elements.set(id, {textContent: '', value: 0.04});
+  return elements.get(id);
+}};
+const jointLimits = {gripper: [0, 0.085]};
+const clamp = (x, low, high) => Math.max(low, Math.min(high, x));
+const deg = (x) => String(x);
+const previewState = {latestJoints: {gripper: {position: null}}, targets: {gripper: 0.02}};
+let fetchCalls = 0;
+const fetch = () => {fetchCalls++; throw Error('Unexpected request');};
+'''+helpers+slider+command+r'''
+(async () => {
+  assert.ok(Number.isNaN(motorPosition({position: null})));
+  assert.equal(motorPosition({position: 0}), 0);
+  updateSlider('gripper', {position: null});
+  assert.equal(document.getElementById('slider-rad-gripper').textContent, '-');
+  assert.equal(document.getElementById('slider-gripper').value, 0.04);
+  const result = await setGripper({confirm: false});
+  assert.equal(result.accepted, false);
+  assert.equal(fetchCalls, 0);
+  updateSlider('gripper', {position: 0.01});
+  assert.equal(document.getElementById('slider-gripper').value, 0.01);
+})().catch(error => {console.error(error); process.exitCode = 1;});
+'''
+    result = subprocess.run([node, "-e", script], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
 
 
 if __name__ == "__main__":

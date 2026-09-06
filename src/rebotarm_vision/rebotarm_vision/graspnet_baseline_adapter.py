@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib
+import importlib.util
 import math
 import sys
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import Any, Iterable, Protocol
 
 import numpy as np
 
@@ -24,6 +25,13 @@ class CameraIntrinsics:
 class PointCloudCrop:
     points: np.ndarray
     colors: np.ndarray
+
+
+def closest_timestamped_frame(frames, target_timestamp_ns: int):
+    """Return the cached frame nearest to a non-zero target timestamp."""
+    if target_timestamp_ns <= 0 or not frames:
+        return None
+    return min(frames, key=lambda item: abs(int(item[0]) - target_timestamp_ns))
 
 
 @dataclass(frozen=True)
@@ -148,6 +156,13 @@ def payload_to_candidate_array(
     )
     for candidate, name in zip(candidates.candidates, class_names):
         candidate.class_name = name
+    timestamp_ns = int(payload.get("timestamp_ns", 0) or 0)
+    if timestamp_ns > 0:
+        candidates.header.stamp.sec = timestamp_ns // 1_000_000_000
+        candidates.header.stamp.nanosec = timestamp_ns % 1_000_000_000
+        for candidate in candidates.candidates:
+            candidate.header.stamp.sec = candidates.header.stamp.sec
+            candidate.header.stamp.nanosec = candidates.header.stamp.nanosec
     return candidates
 
 
@@ -194,6 +209,160 @@ class GraspNetBaselineBackend:
             raise RuntimeError("GraspNet baseline backend is not configured")
         raw_predictions = self._runner.infer(points=points, colors=colors, max_grasps=max_grasps)
         return [_prediction_from_raw(item) for item in raw_predictions]
+
+
+class InProcessGraspNetBackend:
+    """Load the full RGB-D GraspNet runner directly inside the ROS candidate node.
+
+    This is the Ubuntu production path.  It deliberately preserves the current
+    full-scene collision cloud, object mask/depth separation, deterministic
+    sampling, projection filter, and jaw-width filter implemented by the local
+    runner while removing the localhost JSON/HTTP transport.
+    """
+
+    def __init__(
+        self,
+        *,
+        model_root: str,
+        checkpoint_path: str,
+        device: str = "cuda:0",
+        module_name: str = "graspnet_baseline_inference",
+        module_path: str = "",
+        num_point: int = 20_000,
+    ) -> None:
+        self.model_root = str(model_root).strip()
+        self.checkpoint_path = str(checkpoint_path).strip()
+        self.device = str(device).strip()
+        self.module_name = str(module_name).strip()
+        self.module_path = str(module_path).strip()
+        self.num_point = int(num_point)
+        self._runner = None
+        self.backend_error = "model_root_or_checkpoint_unset"
+        if not self.model_root or not self.checkpoint_path:
+            return
+        try:
+            model_path = Path(self.model_root).expanduser()
+            checkpoint = Path(self.checkpoint_path).expanduser()
+            if not model_path.is_dir():
+                raise FileNotFoundError(f"model root not found: {model_path}")
+            if not checkpoint.is_file():
+                raise FileNotFoundError(f"checkpoint not found: {checkpoint}")
+            module = _load_inprocess_backend_module(
+                self.module_name,
+                module_path=self.module_path,
+            )
+            runner_cls = getattr(module, "GraspNetBaselineInference")
+            self._runner = runner_cls(
+                model_root=str(model_path),
+                checkpoint_path=str(checkpoint),
+                device=self.device,
+                num_point=self.num_point,
+            )
+            self.backend_error = ""
+        except Exception as exc:
+            self.backend_error = f"{type(exc).__name__}: {exc}"
+
+    @property
+    def available(self) -> bool:
+        return self._runner is not None
+
+    @property
+    def last_stage_counts(self) -> dict[str, Any]:
+        value = getattr(self._runner, "last_stage_counts", None)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def infer(
+        self,
+        *,
+        timestamp_ns: int,
+        frame_id: str,
+        color_bgr: np.ndarray,
+        depth_m: np.ndarray,
+        camera_info: dict[str, float],
+        detection: dict[str, Any],
+        max_grasps: int,
+        max_jaw_width_m: float | None,
+    ) -> dict[str, Any]:
+        if self._runner is None:
+            raise RuntimeError(
+                f"GraspNet in-process backend is not configured: {self.backend_error}"
+            )
+        color = np.ascontiguousarray(color_bgr, dtype=np.uint8)
+        depth = np.ascontiguousarray(depth_m, dtype=np.float32)
+        if color.ndim != 3 or color.shape[2] != 3:
+            raise ValueError("color_bgr must have shape HxWx3")
+        if depth.ndim != 2 or color.shape[:2] != depth.shape:
+            raise ValueError("depth_m must match color image dimensions")
+        if not np.isfinite(depth).all() or np.any(depth < 0.0):
+            raise ValueError("depth_m must contain finite non-negative values")
+        if int(timestamp_ns) <= 0:
+            raise ValueError("timestamp_ns must be positive")
+        if not str(frame_id).strip():
+            raise ValueError("frame_id must be non-empty")
+        intrinsics = {
+            key: float(camera_info[key]) for key in ("fx", "fy", "cx", "cy")
+        }
+        intrinsics["depth_scale_m"] = 1.0
+        candidates = self._runner.infer(
+            color_bgr=color,
+            # The canonical runner keeps this historical argument name, but
+            # depth_scale_m=1.0 makes the float32 array explicitly metric.
+            depth_mm=depth,
+            detections=[dict(detection)],
+            camera_info=intrinsics,
+            max_grasps=int(max_grasps),
+            max_jaw_width_m=max_jaw_width_m,
+        )
+        return {
+            "source": "ubuntu_inprocess_graspnet",
+            "backend_configured": True,
+            "stale": False,
+            "timestamp_ns": int(timestamp_ns),
+            "frame_id": str(frame_id),
+            "class_name": str(detection.get("class_name", "")),
+            "candidates": list(candidates),
+        }
+
+
+def _load_inprocess_backend_module(module_name: str, *, module_path: str = ""):
+    configured_path = Path(module_path).expanduser() if module_path else None
+    if configured_path is not None:
+        return _load_python_module_from_path(module_name, configured_path)
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name != module_name:
+            raise
+        candidates: list[Path] = []
+        try:
+            from ament_index_python.packages import get_package_share_directory
+
+            candidates.append(
+                Path(get_package_share_directory("rebotarm_vision"))
+                / "graspnet_backend"
+                / f"{module_name}.py"
+            )
+        except Exception:
+            pass
+        source = Path(__file__).resolve()
+        for parent in source.parents:
+            candidates.append(parent / "tools" / f"{module_name}.py")
+        for candidate in candidates:
+            if candidate.is_file():
+                return _load_python_module_from_path(module_name, candidate)
+        raise
+
+
+def _load_python_module_from_path(module_name: str, path: Path):
+    if not path.is_file():
+        raise FileNotFoundError(f"backend module not found: {path}")
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load backend module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _prediction_from_raw(item) -> GraspNetPrediction:

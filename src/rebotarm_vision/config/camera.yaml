@@ -74,8 +74,8 @@ rebotarm_grasp_tcp_frame:
   ros__parameters:
     parent_frame: end_link
     child_frame: grasp_tcp
-    # end_link -> grasp_tcp translation in end_link frame. Keep [0,0,0] until
-    # the real gripper center is measured in RViz/TF, then update this value.
+    # end_link -> grasp_tcp translation in end_link frame.  This is the
+    # operator-measured physical gripper TCP, not the MuJoCo ee_site value.
     tcp_offset_xyz: [-0.04, 0.0, 0.0]
 
 rebotarm_grasp_preview_sender:

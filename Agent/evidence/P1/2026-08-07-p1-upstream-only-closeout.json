@@ -1,0 +1,43 @@
+{
+  "date": "2026-08-07",
+  "phase": "P1",
+  "outcome": "COMPLETE",
+  "active_runtime": "upstream-only",
+  "upstream": {
+    "repository": "https://github.com/huangbinai/robotarm_ros2.git",
+    "commit": "fb28dcdd358b45de79eb47adfb333e2e94e9d5b4",
+    "license_status": "PROVISIONAL",
+    "distribution_allowed": false
+  },
+  "current_baseline": {
+    "runtime_active": false,
+    "archive": "third_party/rebotarm_simulation_current_baseline",
+    "calibration_claimed_complete": false
+  },
+  "verification": {
+    "focused_tests": "11 passed",
+    "full_tests": "516 passed, 13 skipped",
+    "mujoco_tests": "62 passed, 7 skipped",
+    "layering_tests": "18 passed",
+    "compileall": true,
+    "colcon_packages": 3,
+    "health_ok": true,
+    "joint_count": 8,
+    "actuator_count": 8,
+    "viewer_smoke": true,
+    "ros_domain_id": 104,
+    "ros_action_error_code": 0,
+    "ros_action_status": "SUCCEEDED",
+    "hardware_commands": false,
+    "cleanup": {
+      "runtime_processes_remaining": 0,
+      "serial_users_remaining": 0,
+      "pyc_remaining": 0,
+      "pycache_dirs_remaining": 0,
+      "pytest_cache_dirs_remaining": 0,
+      "temporary_logs_removed": 3,
+      "build_install_log_preserved": true
+    }
+  },
+  "next_phase": "P2 Gemini 2 SDK and real RGB-D acceptance"
+}

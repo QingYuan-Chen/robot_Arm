@@ -136,7 +136,12 @@ class Open3DGraspVisualizer:
         self._crop_radius_m = max(0.0, float(crop_radius_m))
         self._window_name = window_name
         self._vis = None
+        self._grasp_group_load_error = ""
+        self._native_gripper_error = ""
         self._GraspGroup = self._load_grasp_group()
+        self._active_gripper_renderer = (
+            "graspnet_api_mesh" if self._GraspGroup is not None else "native_open3d_mesh"
+        )
 
     def update(
         self,
@@ -145,6 +150,8 @@ class Open3DGraspVisualizer:
         depth_mm: np.ndarray,
         camera_info: dict[str, Any],
         candidates: list[dict[str, Any]],
+        scene_points: np.ndarray | None = None,
+        scene_colors: np.ndarray | None = None,
     ) -> None:
         if self._vis is None:
             self._vis = self._o3d.visualization.Visualizer()
@@ -154,21 +161,41 @@ class Open3DGraspVisualizer:
                 render_options.point_size = self._point_size
                 render_options.background_color = np.asarray([0.02, 0.02, 0.02], dtype=np.float64)
         focus = self._candidate_focus(candidates)
-        cloud = self._build_point_cloud(
-            color_bgr=color_bgr,
-            depth_mm=depth_mm,
-            camera_info=camera_info,
-            focus=focus,
-        )
+        if scene_points is None and scene_colors is None:
+            cloud = self._build_point_cloud(
+                color_bgr=color_bgr,
+                depth_mm=depth_mm,
+                camera_info=camera_info,
+                focus=focus,
+            )
+        elif scene_points is not None and scene_colors is not None:
+            cloud = self._build_precomputed_point_cloud(
+                points=scene_points,
+                colors=scene_colors,
+                focus=focus,
+            )
+        else:
+            raise ValueError("scene_points and scene_colors must be provided together")
         selected_candidates = list(candidates)[: self._top_n]
         geometries = [cloud]
         gripper_geometries = self._build_official_gripper_geometries(selected_candidates)
         if gripper_geometries:
+            self._active_gripper_renderer = "graspnet_api_mesh"
             geometries.extend(gripper_geometries)
         else:
             for index, candidate in enumerate(selected_candidates):
-                geometries.append(self._build_gripper_lines(candidate))
-                geometries.append(self._build_candidate_axes(candidate, index=index))
+                native_geometries = self._try_build_native_gripper_geometries(
+                    candidate,
+                    index=index,
+                )
+                if native_geometries:
+                    self._active_gripper_renderer = "native_open3d_mesh"
+                    geometries.extend(native_geometries)
+                else:
+                    self._active_gripper_renderer = "wireframe_fallback"
+                    geometries.append(self._build_gripper_lines(candidate))
+        for index, candidate in enumerate(selected_candidates):
+            geometries.append(self._build_candidate_axes(candidate, index=index))
         self._vis.clear_geometries()
         for geometry in geometries:
             self._vis.add_geometry(geometry)
@@ -182,10 +209,33 @@ class Open3DGraspVisualizer:
         self._vis.poll_events()
         self._vis.update_renderer()
 
+    def close(self) -> None:
+        visualizer, self._vis = self._vis, None
+        if visualizer is not None:
+            visualizer.destroy_window()
+
+    @property
+    def gripper_renderer_mode(self) -> str:
+        return self._active_gripper_renderer
+
+    @property
+    def graspnet_api_unavailable_reason(self) -> str:
+        return self._grasp_group_load_error
+
+    @property
+    def gripper_renderer_status(self) -> str:
+        status = f"gripper_renderer={self._active_gripper_renderer}"
+        if self._active_gripper_renderer != "graspnet_api_mesh" and self._grasp_group_load_error:
+            status += f" graspnet_api_unavailable={self._grasp_group_load_error}"
+        if self._active_gripper_renderer == "wireframe_fallback" and self._native_gripper_error:
+            status += f" native_mesh_unavailable={self._native_gripper_error}"
+        return status
+
     def _load_grasp_group(self):
         try:
             return importlib.import_module("graspnetAPI").GraspGroup
-        except Exception:
+        except Exception as exc:
+            self._grasp_group_load_error = f"{type(exc).__name__}: {exc}"
             return None
 
     def _build_official_gripper_geometries(self, candidates: list[dict[str, Any]]) -> list[Any]:
@@ -201,7 +251,8 @@ class Open3DGraspVisualizer:
         try:
             grasp_group = self._GraspGroup(np.asarray(rows, dtype=np.float64))
             return self._flatten_geometries(grasp_group.to_open3d_geometry_list())
-        except Exception:
+        except Exception as exc:
+            self._grasp_group_load_error = f"{type(exc).__name__}: {exc}"
             return []
 
     @staticmethod
@@ -278,6 +329,34 @@ class Open3DGraspVisualizer:
         cloud.colors = self._o3d.utility.Vector3dVector(colors)
         return cloud
 
+    def _build_precomputed_point_cloud(
+        self,
+        *,
+        points: np.ndarray,
+        colors: np.ndarray,
+        focus: np.ndarray | None,
+    ):
+        scene_points = np.asarray(points, dtype=np.float64)
+        scene_colors = np.asarray(colors, dtype=np.float64)
+        if scene_points.ndim != 2 or scene_points.shape[1:] != (3,):
+            raise ValueError("scene_points must have shape (N, 3)")
+        if scene_colors.shape != scene_points.shape:
+            raise ValueError("scene_colors must match scene_points shape")
+        if len(scene_points) > self._max_points:
+            indices = np.linspace(0, len(scene_points) - 1, self._max_points, dtype=np.int64)
+            scene_points = scene_points[indices]
+            scene_colors = scene_colors[indices]
+        if focus is not None and self._crop_radius_m > 0.0 and len(scene_points) > 0:
+            distances = np.linalg.norm(scene_points - focus.reshape(1, 3), axis=1)
+            keep = distances <= self._crop_radius_m
+            if int(np.count_nonzero(keep)) >= 50:
+                scene_points = scene_points[keep]
+                scene_colors = scene_colors[keep]
+        cloud = self._o3d.geometry.PointCloud()
+        cloud.points = self._o3d.utility.Vector3dVector(scene_points)
+        cloud.colors = self._o3d.utility.Vector3dVector(scene_colors)
+        return cloud
+
     @staticmethod
     def _candidate_focus(candidates: list[dict[str, Any]]) -> np.ndarray | None:
         translations = []
@@ -318,6 +397,91 @@ class Open3DGraspVisualizer:
         line_set.lines = self._o3d.utility.Vector2iVector(lines)
         line_set.colors = self._o3d.utility.Vector3dVector(color)
         return line_set
+
+    def _try_build_native_gripper_geometries(
+        self,
+        candidate: dict[str, Any],
+        *,
+        index: int,
+    ) -> list[Any]:
+        try:
+            return self._build_native_gripper_geometries(candidate, index=index)
+        except Exception as exc:
+            self._native_gripper_error = f"{type(exc).__name__}: {exc}"
+            return []
+
+    def _build_native_gripper_geometries(
+        self,
+        candidate: dict[str, Any],
+        *,
+        index: int,
+    ) -> list[Any]:
+        translation = np.asarray(
+            candidate.get("translation_xyz", candidate.get("translation")),
+            dtype=np.float64,
+        ).reshape(3)
+        rotation = np.asarray(
+            candidate.get("rotation_matrix", candidate.get("rotation")),
+            dtype=np.float64,
+        ).reshape(3, 3)
+        if not np.isfinite(translation).all() or not np.isfinite(rotation).all():
+            raise ValueError("native gripper pose must be finite")
+        width = max(
+            float(candidate.get("width_m", candidate.get("width", 0.04)) or 0.04),
+            0.01,
+        )
+        height = max(
+            float(candidate.get("height_m", candidate.get("height", 0.02)) or 0.02),
+            0.006,
+        )
+        finger_depth = max(
+            float(candidate.get("depth_m", candidate.get("depth", 0.04)) or 0.04),
+            0.015,
+        )
+        finger_thickness = min(max(width * 0.10, 0.004), 0.008)
+        palm_depth = min(max(finger_depth * 0.30, 0.008), 0.018)
+        half_height = height * 0.5
+        half_width = width * 0.5
+        palm_span = width + 2.0 * finger_thickness
+        score = float(candidate.get("score", candidate.get("confidence", 0.0)) or 0.0)
+        score_color = min(max(score, 0.0), 1.0)
+        color = np.asarray(
+            [1.0 - 0.80 * score_color, 0.20 + 0.75 * score_color, 0.10],
+            dtype=np.float64,
+        )
+        if index == 0:
+            color = np.maximum(color, np.asarray([0.20, 0.95, 0.15], dtype=np.float64))
+
+        transform = np.eye(4, dtype=np.float64)
+        transform[:3, :3] = rotation
+        transform[:3, 3] = translation
+        boxes = [
+            (
+                (palm_depth, palm_span, height),
+                (-palm_depth, -(half_width + finger_thickness), -half_height),
+            ),
+            (
+                (finger_depth, finger_thickness, height),
+                (0.0, -(half_width + finger_thickness), -half_height),
+            ),
+            (
+                (finger_depth, finger_thickness, height),
+                (0.0, half_width, -half_height),
+            ),
+        ]
+        geometries = []
+        for dimensions, local_translation in boxes:
+            mesh = self._o3d.geometry.TriangleMesh.create_box(
+                width=dimensions[0],
+                height=dimensions[1],
+                depth=dimensions[2],
+            )
+            mesh.translate(local_translation)
+            mesh.transform(transform)
+            mesh.paint_uniform_color(color)
+            mesh.compute_vertex_normals()
+            geometries.append(mesh)
+        return geometries
 
     def _build_candidate_axes(self, candidate: dict[str, Any], *, index: int):
         translation = np.asarray(candidate.get("translation_xyz", candidate.get("translation")), dtype=np.float64).reshape(3)
