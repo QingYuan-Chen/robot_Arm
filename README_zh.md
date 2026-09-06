@@ -7,7 +7,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/ROS2-Jazzy-blue.svg" alt="ROS2 Jazzy">
   <img src="https://img.shields.io/badge/Python-3.12-blue.svg" alt="Python 3.12">
-  <img src="https://img.shields.io/badge/Version-v0.0.5-brightgreen.svg" alt="Version v0.0.5">
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2024.04+-orange.svg" alt="Ubuntu 24.04+">
   <img src="https://img.shields.io/badge/Controller-reBotArmController-green.svg" alt="reBotArmController">
 </p>
@@ -16,19 +15,30 @@
 
 ## 项目介绍
 
-当前版本：`v0.0.5`
+当前源码版本以 Git 提交为准。项目总览见 [README.md](README.md)，
+最新操作入口见 [功能操作手册](docs/rebotarm_feature_commands.md)。
 
 `rebotarm_ros2` 是 reBotArm B601 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
 作为二次开发、上层规划、可视化和单电机调试的统一入口。
 
-当前工作空间包含三个 ROS2 包：
+当前工作空间包含13个 ROS2 包：
 
 | 包 | 作用 |
 |---|---|
 | `rebotarm_msgs` | 自定义 msg / srv / action 接口 |
 | `rebotarmcontroller` | 控制节点包，提供 `reBotArmController` 节点 |
-| `rebotarm_bringup` | launch、配置、URDF、RViz 等启动资源 |
+| `rebotarm_bringup` | launch 组合、配置与后端选择 |
+| `rebotarm_motion` | 轨迹、MoveIt 适配与运动校验 |
+| `rebotarm_teach` | 示教录制、文件与回放流程 |
+| `rebotarm_teleop` | 键盘、网页及 RViz 操作者输入适配 |
+| `rebotarm_dashboard` | Web UI、HTTP 与状态展示 |
+| `rebotarm_moveit_config` | URDF、网格、SRDF 与规划模型 |
+| `rebotarm_vision` | 相机、识别与抓取候选 |
+| `rebotarm_simulation` | MuJoCo 模型与仿真执行 |
+| `rebotarm_calibration` | 标定与 TF/TCP 验证 |
+| `rebotarm_voice_control` | 语音控制入口 |
+| `rebotarm_interactive_control` | 旧导入路径与脚本兼容层 |
 
 ---
 
@@ -99,7 +109,7 @@ python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+cd /home/a/project/rebot_Arm
 mkdir -p third_party
 git clone https://github.com/huangbinai/rebotarm_control.git third_party/reBotArm_control_py
 ```
@@ -121,7 +131,7 @@ python3 -c "from reBotArm_control_py.actuator import RobotArm; from reBotArm_con
 ```bash
 cd ~/seeed/rebotarm_ros2
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
+colcon build --base-paths src --executor sequential
 source install/setup.bash
 ```
 
@@ -146,30 +156,18 @@ rebotarmcontroller MoveToPose
 ## 目录结构
 
 ```text
-rebotarm_ros2/
+rebot_Arm/
+├── README.md
 ├── README_zh.md
-├── PLAN.md
-├── instruction.md
-└── src/
-    ├── rebotarm_msgs/
-    │   ├── msg/
-    │   ├── srv/
-    │   └── action/
-    ├── rebotarmcontroller/
-    │   ├── rebotarmcontroller/
-    │   │   ├── rebotarm_controller.py
-    │   │   ├── hardware_manager.py
-    │   │   ├── ros_publishers.py
-    │   │   ├── ros_services.py
-    │   │   ├── ros_actions.py
-    │   │   ├── motor_passthrough.py
-    │   │   ├── conversions.py
-    │   │   └── examples/
-    └── rebotarm_bringup/
-        ├── launch/
-        ├── config/
-        ├── description/
-        └── rviz/
+├── Agent/                 # 实时状态与验收依据
+├── docs/                  # 架构、环境与操作手册
+├── patches/               # MotorBridge 安全补丁
+├── requirements-*.txt     # 分环境依赖清单
+├── src/                   # 上表13个ROS包
+├── tests/
+├── tools/
+├── scripts/
+└── third_party/           # 上游参考快照与本地依赖
 ```
 
 ---

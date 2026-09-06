@@ -143,7 +143,7 @@ def build_state() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "plan_source": "新项目规划.md",
+        "plan_source": str(PROJECT_STATUS.relative_to(ROOT)),
         "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
         "overall_completion_percent": round(100.0 * weighted / total_weight, 1) if total_weight else 0.0,
         "active_phase": parse_active_phase(),

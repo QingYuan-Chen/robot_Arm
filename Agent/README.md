@@ -13,14 +13,14 @@
 | `STATE.json` | 机器可读的实时快照和加权完成度 | 只由 `update_state.py` 生成 |
 | `update_state.py` | 重新计算完成度、Git 状态和最新事件 | 任务开始、检查点和结束时运行 |
 
-根目录 `codex_memory.md`、`项目规划.md` 和 `INTERACTIVE_SYSTEM_STATUS_ZH.md` 是历史资料，不再作为实时状态来源。
+过时的根目录工程记忆、状态快照、使用说明及两份旧规划已清理，历史内容保留在 Git 中。当前操作手册见 `docs/README_zh.md`，不再从旧文档推断实时状态。
 
 ## 状态来源优先级
 
 1. 当前代码、测试和硬件验收证据；
 2. `AGENTS.md` 与 `docs/architecture.md` 的安全和包边界；
-3. `新项目规划.md` 的项目优先级；
-4. `Agent/PROJECT_STATUS.md`、`Agent/MEMORY.md` 和 `Agent/STATE.json` 的当前执行状态；
+3. 用户最新明确的任务和范围决策；
+4. `Agent/PROJECT_STATUS.md` 的验收清单、`Agent/MEMORY.md` 和 `Agent/STATE.json` 的当前执行状态；
 5. 历史文档只用于追溯。
 
 ## “实时更新”的含义

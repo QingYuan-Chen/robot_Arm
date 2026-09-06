@@ -34,8 +34,7 @@ export GRASPNET_PYTHON=/home/a/project/rebot_Arm/.venv-graspnet/bin/python
 cd /home/a/project/rebot_Arm
 unset PYTHONPATH AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH
 source /opt/ros/jazzy/setup.bash
-colcon --log-base log_integration_20260906 build --base-paths src \
-  --build-base build_integration_20260906 --install-base install --executor sequential
+colcon build --base-paths src --executor sequential
 ```
 
 工作树缺失的 `tools/yolo26m-seg-fp16-b1-640-linux.engine` 已通过本地符号链接

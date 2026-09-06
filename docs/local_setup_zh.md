@@ -6,6 +6,21 @@
 
 ## 1. 系统依赖
 
+根目录五份 `requirements-*.txt` 按运行环境和安装方式拆分，不应全部安装到
+同一个 Python 环境，也不是五份重复清单：
+
+| 清单 | 用途 | 环境 / 安装入口 |
+| --- | --- | --- |
+| `requirements-runtime.txt` | 控制器 MotorBridge 基础依赖，随后必须安装本地审查补丁 | 系统 Python；本节命令 |
+| `requirements-vision.txt` | 相机、YOLO、OpenCV，固定 NumPy 1.x 兼容 ROS cv_bridge | `.venv-vision`；`tools/setup_ubuntu_vision.sh` |
+| `requirements-graspnet.txt` | GraspNet 抓取候选、点云及固定 PyTorch/CUDA 依赖 | `.venv-graspnet`；`tools/setup_ubuntu_graspnet.sh` |
+| `requirements-mujoco.txt` | MuJoCo 仿真与模型工具 | `third_party/rebotarm_mujoco_venv`；见 `mujoco_sim.md` |
+| `requirements-tensorrt.txt` | TensorRT 推理扩展，单独以 `--no-deps` 安装以避免拉取额外 CUDA 工具链 | 与 vision 共用环境；由视觉安装脚本调用 |
+
+GraspNet 与 MuJoCo 的 PyYAML 固定版本分别为6.0.1和6.0.3；直接合并会产生
+版本冲突。TensorRT 是视觉环境的独立安装步骤，不是第五个虚拟环境。
+这些文件保留当前安装契约，本次文档清理不改变依赖版本或已安装环境。
+
 ```bash
 sudo apt install ros-jazzy-moveit ros-jazzy-pinocchio
 python3 -m pip install --user --break-system-packages -r requirements-runtime.txt

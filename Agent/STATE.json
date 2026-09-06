@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T21:17:37+08:00",
-  "plan_source": "新项目规划.md",
+  "generated_at": "2026-09-06T21:56:18+08:00",
+  "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
   "active_phase": "P0-P6 已按当前工程范围关闭，等待 operator 提供下一份规划；不得自行创建 P7",
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "cea5528",
+    "head": "e24cc52",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-06T21:17:37+08:00 | actor=Codex | event=complete | note=按用户要求先分别提交两个目录，再正式整合反馈与解耦成果；主目录独立install重建及软件验证完成，未推送或操作硬件 | verification=layering20; full822 passed/8 skipped; compileall; 13 packages built; 10 installed modules match; 20 mesh references; 11 launch show-args; MotorBridge .2 sequence contract; diff check"
+  "last_event": "- 2026-09-06T21:56:18+08:00 | actor=Codex | event=verified | note=GitHub发布内容准备完成；827项软件测试通过，J3已独立提交，下一步正常合并远端main并推送 | verification=827 passed/8 skipped; compileall/diff; no newly tracked models, engines, logs or evidence payloads"
 }

@@ -568,3 +568,12 @@
 - 2026-09-06T21:12:33+08:00 | actor=Codex | event=start | note=用户确认工作树遥操作测试正常，要求先提交工作树反馈与解耦成果，再整合到主目录；不推送、不操作硬件 | verification=-
 - 2026-09-06T21:14:44+08:00 | actor=Codex | event=checkpoint | note=两个目录已分别提交cea5528和6fc58e8，正式合并已解决代码及项目记录冲突；开始验证主目录整合结果 | verification=-
 - 2026-09-06T21:17:37+08:00 | actor=Codex | event=complete | note=按用户要求先分别提交两个目录，再正式整合反馈与解耦成果；主目录独立install重建及软件验证完成，未推送或操作硬件 | verification=layering20; full822 passed/8 skipped; compileall; 13 packages built; 10 installed modules match; 20 mesh references; 11 launch show-args; MotorBridge .2 sequence contract; diff check
+- 2026-09-06T21:27:27+08:00 | actor=Codex | event=start | note=统一主目录标准build/install/log，移除两份根目录旧规划并修正Agent状态来源；仅软件整理 | verification=-
+- 2026-09-06T21:28:44+08:00 | actor=Codex | event=checkpoint | note=已删除两份旧规划并将状态来源改为Agent/PROJECT_STATUS.md；标准build全量重建中，整合检查日志已迁至log/checks | verification=-
+- 2026-09-06T21:30:05+08:00 | actor=Codex | event=complete | note=主目录已统一标准build/install/log；两份根目录规划删除，状态来源统一为Agent/PROJECT_STATUS.md，旧产物可从回收站恢复 | verification=13 packages built; Agent/layering22; full822 passed/8 skipped; installed imports/1mm tolerance/path checks; compileall/diff OK; no hardware actions
+- 2026-09-06T21:30:12+08:00 | actor=Codex | event=start | note=按用户要求将J3上端余量设为0.02rad，与J2方式一致；先做边界失败测试，同步SDK及主项目限位，仅软件修改不操作硬件 | verification=-
+- 2026-09-06T21:33:41+08:00 | actor=Codex | event=complete | note=J3上端余量已按用户要求设为0.02rad，SDK和主项目限位同步，安装更新完成；未操作硬件或提交推送 | verification=TDD red-green; SDK449 passed; main827 passed/8 skipped; layering20; compileall; MJCF check; three-package build; installed J3 upper0.02; diff check
+- 2026-09-06T21:33:58+08:00 | actor=Codex | event=start | note=清理六份过时根目录文档，保留MoveIt有效操作于现行手册；说明五类requirements用途，不改变依赖或硬件 | verification=-
+- 2026-09-06T21:35:45+08:00 | actor=Codex | event=complete | note=六份旧根目录文档已清理并合并MoveIt有效说明；五份requirements保留且用途写明，环境不变 | verification=827 passed/8 skipped; obsolete references removed; requirements unchanged; git diff --check OK; no hardware actions
+- 2026-09-06T21:53:44+08:00 | actor=Codex | event=start | note=按用户授权发布源码与文档整理到GitHub，并同步整合版本到main；保留开发分支，不上传本地数据或操作硬件 | verification=-
+- 2026-09-06T21:56:18+08:00 | actor=Codex | event=verified | note=GitHub发布内容准备完成；827项软件测试通过，J3已独立提交，下一步正常合并远端main并推送 | verification=827 passed/8 skipped; compileall/diff; no newly tracked models, engines, logs or evidence payloads

@@ -2,7 +2,7 @@
 
 这个文档只放仍然保留的独立功能启动指令和测试顺序。
 
-> P0 安全门已于 2026-08-06 通过分级真机验收：连接失能、显式 enable、当前位置 hold、disable 和失败 cleanup 均有证据。P0 通过不等于完整视觉抓取已获准；在 P2-P6 感知、标定和系统门完成前，仍优先使用仿真或 plan-only，并按小角度、低速度逐级开放实机动作。
+> P0-P6 已按用户确认的工程范围关闭，验收依据及未实测边界见 `Agent/PROJECT_STATUS.md`。阶段关闭不是新的运动授权；真机启动和执行前仍需确认本次授权、串口唯一归属及现场安全。连接保持失能，运动必须显式 enable。
 
 ## RViz MoveIt 末端拖动
 
@@ -18,10 +18,10 @@ RViz MotionPlanning
 
 真机：
 
-> 当前禁止直接执行以下入口，直到 P0 真机验收确认启动驱动不会自动上力并能可靠失能。
+> 仅在本次真机操作已获授权后使用，不得与其他占用同一串口的控制器同时启动。
 
 ```bash
-cd ~/robotarm_ros2
+cd /home/a/project/rebot_Arm
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -37,7 +37,7 @@ ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py channel:=/dev/ttyACM1
 仿真 / 不连接真机：
 
 ```bash
-cd ~/robotarm_ros2
+cd /home/a/project/rebot_Arm
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -68,10 +68,10 @@ Web Dashboard
 
 启动完整网页遥操作：
 
-> 当前禁止直接执行以下真机入口，直到 P0 真机验收完成。
+> 仅在本次真机操作已获授权后使用；此入口包含控制器，不与上面的真机入口并行启动。
 
 ```bash
-cd ~/robotarm_ros2
+cd /home/a/project/rebot_Arm
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -120,7 +120,7 @@ RViz 轻量机械臂实时状态显示
 4. 点击 Execute，确认真机小幅运动
 5. Execute 过程中点击 Stop，确认轨迹停止且按钮恢复
 6. 拉动 gripper，确认网页 joint7 和真机夹爪都有变化
-7. 点击 Disable，确认真机失能
+7. 受控回到已确认的安全停放位，核验到位并静止后点击 Disable；健康但回位失败时保持使能，等待人工处置
 ```
 
 辅助检查：
@@ -130,3 +130,37 @@ ros2 topic echo --once /rebotarm/arm_status
 ros2 action list | grep follow_joint_trajectory
 ros2 service list | grep -E "plan_kinematic_path|check_state_validity"
 ```
+
+## MoveIt 实机操作与停机
+
+以下内容接替已清理的根目录 MoveIt 使用说明。使用原生 MotionPlanning，
+不依赖旧自定义预览和执行节点。只需要 MoveIt 实机链时，可以选择独立入口：
+
+```bash
+cd /home/a/project/rebot_Arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+fuser -v /dev/ttyACM0
+```
+
+版本检查必须成功，串口必须无人占用；若已有控制器，应使用其现有入口或由操作者
+正常结束，不能抢占端口。确认本次操作授权后，在同一环境启动：
+
+```bash
+ros2 launch rebotarm_bringup moveit_hardware.launch.py \
+  channel:=/dev/ttyACM0 use_rviz:=true
+```
+
+1. 检查 `/rebotarm/arm_status`、新鲜 joint states 及唯一的
+   `/rebotarm/follow_joint_trajectory` action server，确认控制器无错误。
+2. 在 MotionPlanning 选择 `Planning Group = arm`，设置目标并点击 `Plan`。
+3. 核对起始姿态、轨迹和现场净空；确认授权并显式 enable 后，点击 `Execute`。
+4. 同时观察实机、RViz 当前姿态与 action 结果；发出目标不等于已经到位。
+
+结束时先停止活动轨迹，确认控制器健康并按本次已验证的基线受控回位；若采用
+已确认的网页停放位，可调用 `/rebotarm/safe_home` 并核验成功、实际到位及静止。
+随后调用 `/rebotarm/disable`，确认失能后在启动终端正常退出。
+回位失败但保持能力正常时继续 enabled hold，等待人工处置；不要用批量
+`pkill` 或直接失能代替受控停机。电机故障、通信丢失等严重故障和明确急停
+遵循控制器保护策略。

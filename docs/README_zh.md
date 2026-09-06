@@ -5,7 +5,7 @@
 ## 当前依据
 
 - Agent 实时状态、完成度和阻塞：[`../Agent/README.md`](../Agent/README.md)
-- 总体路线、阶段优先级和验收门：[`../新项目规划.md`](../新项目规划.md)
+- 已关闭阶段的验收清单与依据：[`../Agent/PROJECT_STATUS.md`](../Agent/PROJECT_STATUS.md)
 - package ownership / 包职责和依赖边界：[`architecture.md`](architecture.md)
 - 项目术语：[`../CONTEXT.md`](../CONTEXT.md)
 - coding agent / 编码代理规则：[`../AGENTS.md`](../AGENTS.md)
@@ -13,21 +13,17 @@
 如文档之间发生冲突：
 
 1. 安全约束以 `AGENTS.md`、`architecture.md` 和当前代码事实为准；
-2. 项目优先级以 `新项目规划.md` 为准；
+2. 新任务优先级和范围以用户最新明确要求为准；已完成阶段以 `Agent/PROJECT_STATUS.md` 为准；
 3. 操作命令必须同时满足当前代码参数和文档中的阶段状态；
-4. `docs/superpowers/` 和根目录旧 `项目规划.md` 仅作为历史证据，不覆盖当前主规划。
+4. 历史设计文档与 Git 中保留的旧规划仅供追溯，不覆盖当前状态。
 
 项目实施完成度不在本文手工维护，读取 [`../Agent/STATE.json`](../Agent/STATE.json)。
 
 ## 当前状态说明
 
-截至 2026-08-06：
-
-- MuJoCo 基础闭环已经存在，后续采用固定上游版本的 gap analysis / 差距分析，不整体覆盖当前实现；
-- Gemini 2 + YOLO 的 Ubuntu 原生独立入口已经存在，但真实 RGB-D、SDK 内参和深度尺度仍待硬件验收；
-- 完整视觉抓取入口尚未完成 `ubuntu_native` profile 集成；
-- Ubuntu 本地 GraspNet 服务尚未完成；
-- P0 软件安全门和分级真机验收已完成：`HardwareManager.connect()` 只连接并保持失能，显式 enable、当前位置 hold、disable 和失败 cleanup 均有证据；完整视觉抓取仍需通过 P2-P6 后续门。
+P0-P6 已按用户确认的工程范围关闭，等待用户提供新规划，不自行创建 P7。
+根目录两份旧规划已清理，历史内容保留在 Git 中。各阶段验收依据、豁免和
+未实测边界见 `Agent/PROJECT_STATUS.md`，后续维护事实见 `Agent/MEMORY.md`。
 
 ## 架构与环境
 

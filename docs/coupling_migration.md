@@ -33,9 +33,9 @@ ROS `/joint_states` 发布频率不变，但同一接收批次的重复发布使
 ## 验证与使用
 
 反馈与解耦成果已整合到主目录；使用重新构建的非symlink安装空间
-`/home/a/project/rebot_Arm/install`。旧主目录安装完整保留在
-`install_before_integration_20260906`，工作树的 `install_coupling_audit`
-仍保留作已测试版本参考。下一次人工启动前，在新终端加载：
+`/home/a/project/rebot_Arm/install`。主目录统一使用标准 `build/`、`install/`、
+`log/`，不再保留带整合日期的目录。旧构建和旧安装备份已移入回收站；
+独立工作树不受本次整理影响。下一次人工启动前，在新终端加载：
 
 ```bash
 unset PYTHONPATH AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH
@@ -51,4 +51,4 @@ MuJoCo安装资源加载、Dashboard HTTP读取及禁用命令拦截、录制去
 Python编译通过；10个关键模块来自主目录安装且与源码一致，20个URDF网格引用
 和11个启动入口参数解析通过。MotorBridge运行契约为 `0.4.6+rebotarm.2`、
 `feedback_sequence=true`。构建有simulation assets的setuptools包发现警告，
-未导致失败。检查日志保留在主目录 `log_integration_20260906/checks`。
+未导致失败。整合检查日志保留在主目录 `log/checks`。

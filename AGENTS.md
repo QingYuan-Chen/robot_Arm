@@ -51,8 +51,8 @@ below.
 
 ## Agent State and Memory
 
-`Agent/` is the live project-state source. Historical files such as
-`codex_memory.md`, `项目规划.md`, and `INTERACTIVE_SYSTEM_STATUS_ZH.md` must not
+`Agent/` is the live project-state source. Retired root-level plans, usage
+guides, and status snapshots remain available in Git history; they must not
 override current code evidence or `Agent/STATE.json`.
 
 For every implementation task:

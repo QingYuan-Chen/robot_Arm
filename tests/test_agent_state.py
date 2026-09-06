@@ -44,7 +44,8 @@ def test_generated_agent_state_has_required_live_fields() -> None:
     state = json.loads((ROOT / "Agent/STATE.json").read_text(encoding="utf-8"))
 
     assert state["schema_version"] == 1
-    assert state["plan_source"] == "新项目规划.md"
+    assert state["plan_source"] == "Agent/PROJECT_STATUS.md"
+    assert (ROOT / state["plan_source"]).is_file()
     assert 0.0 <= state["overall_completion_percent"] <= 100.0
     assert len(state["phases"]) == 7
     first_incomplete = next(
@@ -56,6 +57,7 @@ def test_generated_agent_state_has_required_live_fields() -> None:
     else:
         assert state["overall_completion_percent"] == 100.0
     module = _load_module()
+    assert module.build_state()["plan_source"] == state["plan_source"]
     assert state["active_phase"] == module.parse_active_phase()
     assert state["blockers"] == module.parse_section_bullets(module.MEMORY, "## 当前阻塞")
     assert state["next_actions"]

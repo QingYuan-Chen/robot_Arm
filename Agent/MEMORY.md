@@ -1,6 +1,6 @@
 # reBotArm Agent 实时记忆
 
-> 本文件只保存当前仍有效的事实、决策、阻塞和交接信息。详细历史见 `codex_memory.md`、旧 `项目规划.md` 和 Git history。
+> 本文件只保存当前仍有效的事实、决策、阻塞和交接信息。已清理的旧工程记忆和操作文档可从 Git history 追溯。
 
 ## 当前焦点
 
@@ -10,6 +10,9 @@
 
 ## 当前事实
 
+- 2026-09-06 用户要求提交并整理GitHub，随后明确选择将整合版本同步到main且保留现有开发分支。发布准备包含已验证的J3限位同步、两份规划和六份旧手册清理、标准build/install/log约定、首页及13包目录说明；新增本地模型/engine/运行数据/额外实验记录/外部SDK忽略规则，仅影响未跟踪文件，现有模型和来源快照不移除、不重写历史。远端main含独立Star Arm工具提交bab08dc，必须正常合并保留，不得用旧本地main覆盖。发布前主项目827 passed/8 skipped、compileall/diff通过；模型、环境和实验数据仍在本机，未操作硬件。最终远端同步结果以本轮后续活动记录为准。
+- 2026-09-06 按用户要求清理六份根目录旧文档：历史工程记忆、交互状态快照、交互验收、旧实机预检、旧USAGE及MoveIt使用说明；全部已有Git历史可恢复。MoveIt仍有效的规划/执行/反馈检查及受控停机说明合并到 `docs/rebotarm_feature_commands.md`，移除旧节点依赖和过时P0禁用提示，保留本次动作授权、唯一串口、基线确认后失能及健康回位失败保持原则。AGENTS和Agent文档引用已同步。五份requirements分别服务控制器bootstrap、视觉、GraspNet、MuJoCo、TensorRT独立安装步骤，因环境版本与安装参数不同予以保留；用途表见 `docs/local_setup_zh.md`，未更改依赖文件或安装环境。全量827 passed/8 skipped，当前文档/代码无已删文件引用，diff检查通过；未操作硬件、未提交推送，也未改另一任务的J3实现。
+- 2026-09-06 用户明确要求J3按J2方式增加0.02rad上端余量，当前软件范围同步为 `[-3.14,+0.02] rad`：Star SDK mapping、主项目硬件检查、MoveIt URDF及由其生成的MuJoCo模型/分析profile均已更新。该范围同时接受目标和反馈，不改零位、不加减反馈偏移；`0.020001 rad`仍拒绝，其余轴和夹爪不变。TDD先复现SDK四项、硬件三项正值被拒，再做最小数值修复；SDK449 passed，主项目827 passed/8 skipped，分层20、编译/diff和MJCF生成一致性通过。controller/moveit_config/simulation三包重建，并回读installed J3与URDF上限均为0.02。本轮未访问串口、未使能或发送运动命令，未提交推送，实体复测待用户执行。
 - 2026-09-06 主目录整合前版本已提交为 `cea5528`（681 passed、15 skipped），反馈与解耦工作树已提交为 `6fc58e8`（822 passed、8 skipped），随后启动正式Git合并。此前125项试迁入已先按SHA256撤回并保留 `/tmp/rebot-integration-20260906-tx1xx4k7` 备份。当前仅做软件整合与构建，整合后主目录的实机验收仍待用户执行；不推送、不操作硬件。来源工作树的P6范围收口记录同步保留，不将退出范围的项目改写为通过。
 - 2026-09-06 用户确认本工作树遥操作测试正常，要求先分别提交两个目录，再整合到主目录。本工作树当前全量测试822 passed、8 skipped（加载ROS及install_coupling_audit消息包，禁用pytest自动插件）；此结果不代表整合后的主目录已完成实机验收。仅提交源码、测试、文档和版本管理资源，保留运行证据、构建目录、模型权重及本机链接；不推送、不操作硬件。
 - 2026-09-06 operator 授权的前两项耦合维护已完成，P6 保持关闭，不新建阶段。活动仿真包移除未启用的 `mujoco_ros_adapter_node.py`、`upstream_backend.py` 及专属旧执行循环测试，去掉 `rebotarm_motion` 清单依赖；正式 `mujoco_ros_node.py` 保持原实现，公共离线分析模块和历史归档保留。8 个 launch 改为每类进程独立解释器：launch 参数优先，其次 `REBOTARM_MUJOCO_PYTHON` / `REBOTARM_VISION_PYTHON` / `GRASPNET_PYTHON`，最后 PATH `python3`；取消 launch 的工作区 venv 搜索及混合 launch 的全组视觉 PYTHONPATH 注入。新构建为工作树 `install_decoupling` 三包 overlay，原 `install` 仍链接主目录旧构建；使用方式见 `docs/launch_python_configuration.md`。为既有 vision setup 资源要求补建 `tools/yolo26m-seg-fp16-b1-640-linux.engine` 到主目录同名模型的本地符号链接，模型未修改，链接不纳入源码提交。全量 `761 passed, 8 skipped`、分层20、正式 MuJoCo 后端55、三包构建、8个已安装launch参数解析和compileall/diff检查通过；未启动硬件或发送动作。
@@ -89,7 +92,8 @@
 
 ## 当前决策
 
-- `新项目规划.md` 是当前主规划，旧 `项目规划.md` 是 MuJoCo 历史记录。
+- 根目录两份旧规划已按用户要求清理；当前验收状态统一以 `Agent/PROJECT_STATUS.md` 为准，旧规划内容可从 Git 历史恢复，新规划等待用户提供。
+- 2026-09-06 主目录整理：用户要求以整合后版本为主，不再保留日期标记。因CMake缓存包含绝对构建路径，未直接改名缓存，而是在标准 `build/` 中重新构建13包并更新 `install/`；原整合日志移动到标准 `log/`，验证记录保留在 `log/checks`。旧 `build/`、旧 `log/`、`build_integration_20260906/` 和 `install_before_integration_20260906/` 已移入系统回收站，可恢复；模型、环境、实验数据和独立工作树未动。删除根目录两份规划并同步索引、Agent状态来源及测试，历史文件仍可从Git恢复。验证：Agent/分层22通过，全量822 passed/8 skipped，13包构建成功、compileall和diff检查通过；从/tmp核验controller、messages、teach和motion安装导入正常，1mm闭合反馈容差不变，构建与安装环境配置无旧日期目录/工作树路径引用。唯一构建警告仍是simulation assets的既有setuptools包发现提示。未操作硬件、未提交或推送；P0-P6关闭状态保持。
 - active runtime 只允许 package-owned upstream MuJoCo node；旧 package-owned current 实现仅留带 SHA-256 manifest 的归档，不安装 console entrypoint，也不参与 launch。
 - P5 paired sim-to-real 的仿真端只允许 active `rebotarm_mujoco_node`；废弃的 current baseline 只可作为历史 provenance/旧 P1 证据，不作为新 replay、runtime 或 comparison backend。
 - P0 安全优先于任何实机视觉联调。
