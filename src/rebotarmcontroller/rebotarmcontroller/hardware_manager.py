@@ -109,7 +109,8 @@ _JOINT_POSITION_LIMITS_RAD = {
     # Keep a small positive software margin for encoder quantization/backlash;
     # this is not an additional commanded workspace.
     "joint2": (-3.14, 0.02),
-    "joint3": (-3.14, 0.0),
+    # Operator-approved J3 upper margin, matching J2; no encoder offset is applied.
+    "joint3": (-3.14, 0.02),
     "joint4": (-1.87, 1.57),
     "joint5": (-1.57, 1.57),
     "joint6": (-3.14, 3.14),

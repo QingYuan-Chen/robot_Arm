@@ -1050,9 +1050,11 @@ def test_connect_rejects_missing_or_out_of_limit_feedback_and_disconnects() -> N
     assert manager.lifecycle_state == "DISCONNECTED"
 
 
-def test_joint2_zero_margin_accepts_quantization_but_rejects_larger_positive_feedback() -> None:
+@pytest.mark.parametrize("joint_name", ["joint2", "joint3"])
+@pytest.mark.parametrize("position", [0.000478, 0.019, 0.02])
+def test_zero_margin_accepts_feedback_but_rejects_larger_positive_feedback(joint_name, position) -> None:
     manager = make_manager()
-    manager.arm._motor_map["joint2"].state.pos = 0.019
+    manager.arm._motor_map[joint_name].state.pos = position
 
     manager.connect()
 
@@ -1060,9 +1062,9 @@ def test_joint2_zero_margin_accepts_quantization_but_rejects_larger_positive_fee
     manager.shutdown()
 
     manager = make_manager()
-    manager.arm._motor_map["joint2"].state.pos = 0.021
+    manager.arm._motor_map[joint_name].state.pos = 0.020001
 
-    with pytest.raises(RuntimeError, match="joint2 position"):
+    with pytest.raises(RuntimeError, match=f"{joint_name} position"):
         manager.connect()
 
     assert manager.connected is False

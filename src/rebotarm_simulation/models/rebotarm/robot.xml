@@ -39,7 +39,7 @@
           <geom name="link2_link2_collision" type="mesh" mesh="link2" class="collision" contype="1" conaffinity="1" group="3" />
           <body name="link3" pos="-0.264 0 0">
             <inertial pos="0.12104 -0.0536211 -0.0310138" quat="-0.00138181 0.704593 0.00278372 0.709605" mass="0.8353" diaginertia="0.00648251 0.00632715 0.000467564" />
-            <joint name="joint3" pos="0 0 0" axis="0 0 1" range="-3.14 0" actuatorfrcrange="-27 27" damping="10" armature="0.02" frictionloss="0.02" />
+            <joint name="joint3" pos="0 0 0" axis="0 0 1" range="-3.14 0.02" actuatorfrcrange="-27 27" damping="10" armature="0.02" frictionloss="0.02" />
             <geom name="link3_link3_visual" type="mesh" contype="0" conaffinity="0" group="2" rgba="0.627451 0.627451 0.627451 1" mesh="link3" class="visual" />
             <geom name="link3_link3_collision" type="mesh" mesh="link3" class="collision" contype="1" conaffinity="1" group="3" />
             <body name="link4" pos="0.2426 -0.054 -0.001625">

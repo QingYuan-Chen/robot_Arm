@@ -76,7 +76,7 @@ COLLISION_GEOMS = [
 MOTOR_PROFILES = [
     MotorProfile("joint1", "-2.8 2.8", "-27 27", "270", "24"),
     MotorProfile("joint2", "-3.14 0.02", "-27 27", "270", "24"),
-    MotorProfile("joint3", "-3.14 0", "-27 27", "270", "24"),
+    MotorProfile("joint3", "-3.14 0.02", "-27 27", "270", "24"),
     MotorProfile("joint4", "-1.87 1.57", "-7 7", "70", "10"),
     MotorProfile("joint5", "-1.57 1.57", "-7 7", "70", "10"),
     MotorProfile("joint6", "-3.14 3.14", "-7 7", "70", "10"),
@@ -89,7 +89,7 @@ MOTOR_PROFILES = [
 UPSTREAM_ARM_MOTOR_PROFILES = [
     MotorProfile("joint1", "-2.8 2.8", "-27 27", "270", "24"),
     MotorProfile("joint2", "-3.14 0.02", "-27 27", "270", "24"),
-    MotorProfile("joint3", "-3.14 0", "-27 27", "270", "24"),
+    MotorProfile("joint3", "-3.14 0.02", "-27 27", "270", "24"),
     MotorProfile("joint4", "-1.87 1.57", "-12.5 12.5", "70", "10"),
     MotorProfile("joint5", "-1.57 1.57", "-12.5 12.5", "70", "10"),
     MotorProfile("joint6", "-3.14 3.14", "-12.5 12.5", "70", "10"),
