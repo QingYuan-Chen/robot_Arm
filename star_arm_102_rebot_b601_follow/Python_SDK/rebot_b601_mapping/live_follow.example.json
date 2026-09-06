@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "mapping_acceptance": "rviz_visual_accepted",
+  "control_rate_hz": 50.0,
+  "default_speed_rad_s": 0.5,
+  "max_speed_rad_s": 1.5,
+  "max_acceleration_rad_s2": 5.0,
+  "max_jerk_rad_s3": 20.0,
+  "max_tracking_error_rad": 0.25,
+  "tracking_error_grace_s": 0.3,
+  "leader_stale_timeout_s": 0.5,
+  "follower_stale_timeout_s": 0.25,
+  "safe_home_rad": [-1.549363136291504, 0.01659393310546875, -0.02002716064453125, -0.00858306884765625, 0.10395240783691406, 0.00133514404296875],
+  "safe_home_tolerance_rad": 0.02,
+  "safe_home_velocity_tolerance_rad_s": 0.05,
+  "safe_home_stable_s": 1.0,
+  "safe_home_timeout_s": 30.0,
+  "deadline_miss_limit": 3
+}
