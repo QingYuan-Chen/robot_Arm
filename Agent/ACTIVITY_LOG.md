@@ -584,3 +584,18 @@
 - 2026-09-06T22:16:58+08:00 | actor=Codex | event=complete | note=112个历史材料/闲置副本/旧模型文件退出跟踪，本机保留；有效测试和来源授权保留，准备提交同步main | verification=发布副本仅补SDK/install环境：807 passed, 7 skipped；compileall/diff通过；112文件保留且与HEAD逐字节一致
 - 2026-09-06T22:21:53+08:00 | actor=Codex | event=start | note=同步安装/模型准备/逐进程解释器与README，验证无机器专属模型的源码构建；不修改现有环境和真机 | verification=-
 - 2026-09-06T22:32:22+08:00 | actor=Codex | event=complete | note=安装脚本/模型可选打包/README已同步当前架构，独立构建验证完成，准备提交推送main | verification=无PT/engine副本13包构建通过；新install+SDK全量811 passed/7 skipped；分层20、compileall/bash/diff和3类launch参数解析通过；未重装环境或操作硬件
+- 2026-09-07T00:16:22+08:00 | actor=Codex | event=start | note=整理当前视觉真机抓取启动链路，将可持久化参数写入bringup profile并保留显式串口选择 | verification=-
+- 2026-09-07T00:25:34+08:00 | actor=Codex | event=complete | note=视觉真机抓取启动参数已配置化，新增严格profile封装并保留显式串口选择 | verification=新profile 7 passed；视觉与解释器聚焦118 passed；分层20 passed；全量836 passed, 8 skipped；bringup构建、required compileall、launch解析、MotorBridge契约与diff check通过；未访问串口或启动实机
+- 2026-09-07T00:30:58+08:00 | actor=Codex | event=start | note=将P6单瓶抓取runner已验收参数配置化，保留动态输出路径和显式真机确认 | verification=-
+- 2026-09-07T00:36:10+08:00 | actor=Codex | event=complete | note=P6单瓶抓取runner参数已写入严格YAML profile，逐次确认和动态输出继续由命令行提供 | verification=P6聚焦16 passed, 1 skipped；全量842 passed, 8 skipped；分层20 passed；compileall、runner py_compile、diff check和错误确认fail-closed smoke通过；未启动ROS或操作硬件
+- 2026-09-07T00:50:30+08:00 | actor=Codex | event=start | note=追查并修复视觉抓取失败后未保持及恢复本轮安全基线 | verification=-
+- 2026-09-07T01:11:53+08:00 | actor=Codex | event=complete | note=同步P6失败恢复与视觉链单一动作执行权，修复非有限设备值导致报告丢失 | verification=聚焦27 passed；视觉/P5/P6/Grasp/Candidate 194 passed, 1 skipped；全量848 passed, 8 skipped；分层20 passed；compileall/py_compile、两包标准install重建、Launch静态解析、MotorBridge反馈序号契约和diff check通过；未操作硬件
+- 2026-09-07T01:25:31+08:00 | actor=Codex | event=start | note=诊断两次P6实机假失败并修复事件驱动arm_status被误当周期心跳 | verification=-
+- 2026-09-07T01:26:04+08:00 | actor=Codex | event=complete | note=修复P6回位验收将事件驱动arm_status误判为过期的假失败 | verification=两份实机报告均证明正常return成功且最大baseline误差0.00267/0.00381rad；新增回归测试后聚焦28 passed、视觉相关195 passed/1 skipped、全量849 passed/8 skipped、分层20 passed；compileall/py_compile、rebotarm_motion标准install重建及diff check通过；未发送动作
+- 2026-09-07T01:36:37+08:00 | actor=Codex | event=start | note=修复反馈短暂中断恢复后ArmStatus仍锁存255导致P6预检误报 | verification=-
+- 2026-09-07T01:40:51+08:00 | actor=Codex | event=complete | note=修复反馈恢复后ArmStatus仍锁存255导致P6预检误报 | verification=TDD验证ArmStatus从[255]*6恢复为[1]*6且故障不重复发布；controller聚焦126 passed；全量850 passed/8 skipped；分层20 passed；compileall/py_compile/diff check；标准rebotarmcontroller安装态重建并核验；未操作硬件
+- 2026-09-07T01:42:44+08:00 | actor=Codex | event=verified | note=校正P6启动前健康状态语义并复验ArmStatus恢复发布 | verification=失能启动期回归为[255]*6到[0]*6；使能态健康值仍为[1]*6；controller聚焦126 passed；全量850 passed/8 skipped；diff check通过；未操作硬件
+- 2026-09-07T01:57:16+08:00 | actor=Codex | event=start | note=修复rebotarmcontroller被错误改为symlink-install导致旧终端入口PackageNotFoundError | verification=-
+- 2026-09-07T01:59:20+08:00 | actor=Codex | event=complete | note=恢复rebotarmcontroller普通安装态并消除旧终端PackageNotFoundError | verification=install含实体包和egg-info；无build路径的旧环境可加载distribution与console entrypoint；源码/安装哈希一致；controller聚焦126 passed；全量850 passed/8 skipped；分层20 passed；compileall/diff check；MotorBridge .2反馈序号契约通过；未启动实机
+- 2026-09-07T02:08:49+08:00 | actor=Codex | event=start | note=整理视觉抓取配置、P6恢复与ArmStatus反馈修复并提交本地 | verification=-
+- 2026-09-07T02:09:32+08:00 | actor=Codex | event=complete | note=视觉抓取配置、P6失败恢复与ArmStatus反馈修复已整理，准备本地提交 | verification=用户确认测试无问题；全量850 passed/8 skipped；controller聚焦126 passed；分层20 passed；compileall/diff check；MotorBridge 0.4.6+rebotarm.2 feedback_sequence=true；普通install旧环境入口加载通过；排除evidence/models/build/install/log；不推送

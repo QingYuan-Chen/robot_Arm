@@ -35,22 +35,30 @@ class _Node:
 
 class _CacheOnlyHardware:
     joint_names = [f"joint{i}" for i in range(1, 7)]
+    mode = "mit"
+    enabled = False
+    control_loop_active = False
+    state_machine = "IDLE"
+    error_codes = []
 
     def __init__(self) -> None:
         self.refresh_calls = 0
         self.identity = (1,) * 6
+        self.feedback_valid = True
 
     def refresh_feedback_if_due(self) -> None:
         self.refresh_calls += 1
 
     def get_cached_joint_sample(self):
+        if not self.feedback_valid:
+            raise RuntimeError("arm feedback stale")
         return np.zeros(6), np.zeros(6), np.zeros(6), [1] * 6, self.identity
 
     def get_joint_state(self):
         raise AssertionError("publisher attempted synchronous serial feedback")
 
     def get_joint_status_codes(self):
-        return [1] * 6
+        return [0] * 6 if self.feedback_valid else [255] * 6
 
     def get_gripper_state(self):
         return -1.0, 0.0, 0.0, 1
@@ -64,6 +72,7 @@ def test_joint_state_publisher_reads_validated_cache_without_serial_io() -> None
     publisher = JointStatePublisher.__new__(JointStatePublisher)
     publisher._publish_lock = threading.Lock()
     publisher._last_feedback_identity = None
+    publisher._status_refresh_pending = False
     publisher._node = _Node()
     publisher._hardware = _CacheOnlyHardware()
     publisher._publisher = _Recorder()
@@ -97,6 +106,7 @@ def test_joint_state_publisher_reports_status_when_feedback_cache_is_invalid() -
     publisher = JointStatePublisher.__new__(JointStatePublisher)
     publisher._publish_lock = threading.Lock()
     publisher._last_feedback_identity = None
+    publisher._status_refresh_pending = False
     publisher._node = _Node()
     publisher._hardware = _CacheOnlyHardware()
     publisher._hardware.get_cached_joint_sample = lambda: (_ for _ in ()).throw(
@@ -115,3 +125,29 @@ def test_joint_state_publisher_reports_status_when_feedback_cache_is_invalid() -
     assert status_calls == [1]
     assert publisher._publisher.messages == []
     assert publisher._node.warnings == ["joint state read failed: arm feedback stale"]
+
+
+def test_joint_state_publisher_refreshes_latched_status_after_feedback_recovers() -> None:
+    publisher = JointStatePublisher.__new__(JointStatePublisher)
+    publisher._publish_lock = threading.Lock()
+    publisher._last_feedback_identity = None
+    publisher._status_refresh_pending = False
+    publisher._node = _Node()
+    publisher._hardware = _CacheOnlyHardware()
+    publisher._hardware.feedback_valid = False
+    publisher._publisher = _Recorder()
+    publisher._status_publisher = _Recorder()
+    publisher._joint_state_publishers = {
+        name: _Recorder() for name in publisher._hardware.joint_names
+    }
+    publisher._gripper_state_publisher = _Recorder()
+
+    publisher.publish()
+    publisher.publish()
+    publisher._hardware.feedback_valid = True
+    publisher.publish()
+
+    assert len(publisher._status_publisher.messages) == 2
+    assert list(publisher._status_publisher.messages[0].per_joint_status_code) == [255] * 6
+    assert list(publisher._status_publisher.messages[1].per_joint_status_code) == [0] * 6
+    assert len(publisher._publisher.messages) == 1

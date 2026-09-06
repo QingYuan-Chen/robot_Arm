@@ -13,6 +13,7 @@ class JointStatePublisher:
         self._hardware = hardware
         self._last_feedback_identity = None
         self._last_feedback_stamp = None
+        self._status_refresh_pending = False
         self._publish_lock = threading.Lock()
         self._publisher = node.create_publisher(
             JointState,
@@ -76,8 +77,16 @@ class JointStatePublisher:
             # Do not restamp stale joint positions as current, but do refresh
             # the latched status so the web UI reports the communication fault
             # instead of appearing frozen on a healthy last sample.
-            self.publish_status()
+            if not self._status_refresh_pending:
+                self.publish_status()
+                self._status_refresh_pending = True
             return
+
+        if self._status_refresh_pending:
+            # ArmStatus is event-driven and transient-local. Replace the
+            # latched fault as soon as verified arm feedback recovers.
+            self.publish_status()
+            self._status_refresh_pending = False
 
         msg = JointState()
         if identity != self._last_feedback_identity:

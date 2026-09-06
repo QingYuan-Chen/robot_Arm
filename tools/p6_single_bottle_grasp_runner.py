@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -22,6 +23,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from rebotarm_msgs.msg import GraspPlan
 from rebotarm_msgs.srv import ExecutePose, GraspGripper, SetGripper
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,16 +36,90 @@ from rebotarm_motion.paired_trajectory_protocol import (
     build_quintic_command,
     build_retimed_path_command,
 )
-from rebotarm_motion.real_failure_recovery import recover_real_failure
+from rebotarm_motion.real_failure_recovery import (
+    recover_real_failure,
+    verify_recovery_baseline,
+)
 
 
 REAL_CONFIRMATION = "REAL_SINGLE_BOTTLE_GRASP"
 ARM_JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
 MIN_CANDIDATE_CONFIDENCE = 0.4
 
+_PROFILE_ARGUMENT_TYPES = {
+    "namespace": str,
+    "runs": int,
+    "plan_timeout_sec": float,
+    "max_plan_age_sec": float,
+    "pregrasp_sec": float,
+    "approach_sec": float,
+    "hold_sec": float,
+    "return_sec": float,
+    "gripper_open_m": float,
+    "gripper_open_max_effort": float,
+    "grasp_close_force": float,
+    "grasp_hold_force": float,
+    "grasp_close_timeout_sec": float,
+    "controller_grasp_hold_timeout_sec": float,
+}
+_PER_RUN_ARGUMENTS = {"config", "confirm", "output"}
 
-def _parse_args() -> argparse.Namespace:
+
+def _load_runner_profile(path: Path) -> dict[str, object]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise RuntimeError(f"invalid runner profile schema_version: {path}")
+    if set(payload) != {"schema_version", "runner_arguments"}:
+        unexpected = sorted(set(payload) - {"schema_version", "runner_arguments"})
+        raise RuntimeError(f"unknown runner profile fields: {', '.join(unexpected)}")
+
+    arguments = payload.get("runner_arguments")
+    if not isinstance(arguments, dict):
+        raise RuntimeError(f"runner_arguments must be a mapping: {path}")
+    persisted_per_run = _PER_RUN_ARGUMENTS & set(arguments)
+    if persisted_per_run:
+        raise RuntimeError(
+            "per-run fields cannot be persisted: "
+            + ", ".join(sorted(persisted_per_run))
+        )
+
+    missing = set(_PROFILE_ARGUMENT_TYPES) - set(arguments)
+    unknown = set(arguments) - set(_PROFILE_ARGUMENT_TYPES)
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("missing: " + ", ".join(sorted(missing)))
+        if unknown:
+            details.append("unknown: " + ", ".join(sorted(unknown)))
+        raise RuntimeError("invalid runner profile fields; " + "; ".join(details))
+
+    for name, expected_type in _PROFILE_ARGUMENT_TYPES.items():
+        value = arguments[name]
+        if expected_type is float:
+            valid = not isinstance(value, bool) and isinstance(value, (int, float))
+        else:
+            valid = type(value) is expected_type
+        if not valid:
+            raise RuntimeError(
+                f"runner profile field {name} must be {expected_type.__name__}"
+            )
+    return dict(arguments)
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument("--config", type=Path)
+    config_args, _ = config_parser.parse_known_args(argv)
+    profile_defaults = (
+        _load_runner_profile(config_args.config) if config_args.config else {}
+    )
+
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="YAML runner profile; explicit command-line values override it",
+    )
     parser.add_argument("--namespace", default="rebotarm")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--plan-timeout-sec", type=float, default=45.0)
@@ -55,7 +131,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--gripper-open-m",
         type=float,
-        required=True,
+        required="gripper_open_m" not in profile_defaults,
         help="mechanically verified safe opening in metres; no implicit full-open target",
     )
     parser.add_argument(
@@ -114,12 +190,39 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--confirm", default="")
-    return parser.parse_args()
+    parser.set_defaults(**profile_defaults)
+    return parser.parse_args(argv)
+
+
+def _authorized_scope(args: argparse.Namespace) -> str:
+    return (
+        "fresh bottle plan; "
+        f"{args.pregrasp_sec:g}s pregrasp, {args.approach_sec:g}s approach, "
+        f"close, {args.hold_sec:g}s hold, {args.return_sec:g}s return; "
+        "no lift or retreat"
+    )
 
 
 def _write_json(path: Path, payload: object) -> None:
+    def json_safe(value):
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        if isinstance(value, dict):
+            return {key: json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [json_safe(item) for item in value]
+        return value
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    encoded = json.dumps(
+        json_safe(payload),
+        ensure_ascii=False,
+        indent=2,
+        allow_nan=False,
+    ) + "\n"
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(encoded, encoding="utf-8")
+    temporary.replace(path)
 
 
 def _pose_payload(pose) -> dict[str, object]:
@@ -480,6 +583,13 @@ def _run_one(
         trial["enabled_final_errors_rad"] = list(errors)
         if max(abs(value) for value in errors) > 0.02:
             raise RuntimeError(f"baseline return error exceeds 0.02 rad: {errors}")
+        verification = verify_recovery_baseline(node=node, baseline=baseline)
+        trial["baseline_verification"] = verification
+        if not verification["verified"]:
+            raise RuntimeError(
+                "baseline stability verification failed: "
+                f"{verification['reason']}"
+            )
         trial["services"].append(node.call_trigger(node.disable_client, "disable"))
         enabled = False
         node.hold_and_collect(0.5)
@@ -487,8 +597,13 @@ def _run_one(
         trial["success"] = True
     except Exception as exc:
         trial["failure"] = f"{type(exc).__name__}: {exc}"
+        print(f"[p6] failure: {trial['failure']}", flush=True)
         if enabled and baseline is not None:
             try:
+                print(
+                    "[p6] recovery: stopping motion and verifying enabled hold",
+                    flush=True,
+                )
                 enabled = recover_real_failure(
                     node=node,
                     report=trial,
@@ -498,8 +613,18 @@ def _run_one(
                     command_label=f"single_bottle_trial_{index}_failure_return_baseline",
                     duration_sec=args.return_sec,
                 )
+                print(
+                    "[p6] recovery: "
+                    f"{trial['failure_recovery']['outcome']}",
+                    flush=True,
+                )
             except Exception as recovery_exc:
                 trial["recovery_failure"] = f"{type(recovery_exc).__name__}: {recovery_exc}"
+                print(
+                    f"[p6] recovery exception: {trial['recovery_failure']}; "
+                    "controller state left unchanged for operator recovery",
+                    flush=True,
+                )
         trial["final_status"] = node._status_payload()
     return trial
 
@@ -538,7 +663,7 @@ def main() -> None:
     report: dict[str, object] = {
         "schema_version": 1,
         "backend": "real",
-        "authorized_scope": "fresh bottle plan; 45s pregrasp, 45s approach, close, 20s hold, 45s return; no lift or retreat",
+        "authorized_scope": _authorized_scope(args),
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "trials": [],
     }
@@ -577,6 +702,8 @@ def main() -> None:
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+    if not bool(report.get("success", False)):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

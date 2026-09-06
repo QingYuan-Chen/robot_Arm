@@ -2495,6 +2495,7 @@ def test_invalid_coordinate_publishes_unknown_without_losing_arm_feedback() -> N
     output = JointStatePublisher.__new__(JointStatePublisher)
     output._publish_lock = threading.Lock()
     output._last_feedback_identity = None
+    output._status_refresh_pending = False
     output._node = node
     output._hardware = manager
     output._publisher = publisher("joints")

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import numpy as np
+import pytest
+from types import SimpleNamespace
+import time
 
 
 @dataclass
@@ -25,6 +28,7 @@ class _Node:
         return_critical: bool = False,
         stop_exception: Exception | None = None,
         disable_exception: Exception | None = None,
+        refresh_feedback: bool = True,
     ) -> None:
         self.latest_status = _Status()
         if critical:
@@ -34,8 +38,16 @@ class _Node:
         self.return_critical = return_critical
         self.stop_exception = stop_exception
         self.disable_exception = disable_exception
+        self.refresh_feedback = refresh_feedback
         self.calls: list[str] = []
         self.positions = np.zeros(6, dtype=np.float64)
+        self.velocities = np.zeros(6, dtype=np.float64)
+        self.last_joint_monotonic = time.monotonic()
+        self.latest_joint_state = SimpleNamespace(
+            name=[f"joint{index}" for index in range(1, 7)],
+            position=self.positions,
+            velocity=self.velocities,
+        )
 
     def call_trigger(self, client, label: str):
         self.calls.append(label)
@@ -49,7 +61,10 @@ class _Node:
         return {"success": True, "message": label}
 
     def hold_and_collect(self, _seconds: float) -> None:
-        return None
+        if self.refresh_feedback:
+            self.last_joint_monotonic = time.monotonic()
+        self.latest_joint_state.position = self.positions
+        self.latest_joint_state.velocity = self.velocities
 
     def _status_payload(self):
         return {
@@ -70,6 +85,7 @@ class _Node:
             self.latest_status.error_codes = ["ARM_FEEDBACK: arm feedback stale"]
         if self.return_success:
             self.positions = np.asarray(command["points"][-1]["positions"], dtype=np.float64)
+            self.latest_joint_state.position = self.positions
         return {
             "command": command,
             "samples": [],
@@ -91,6 +107,7 @@ def test_recoverable_capture_failure_returns_before_disable() -> None:
         allow_controlled_return=True,
         legs_key="motion_legs",
         command_label="test_return",
+        verification_stable_sec=0.0,
     )
     assert still_enabled is False
     assert node.calls == ["trajectory_stop", "disable"]
@@ -220,6 +237,7 @@ def test_failed_protective_disable_is_recorded_without_false_success() -> None:
         allow_controlled_return=True,
         legs_key="motion_legs",
         command_label="test_return",
+        verification_stable_sec=0.0,
     )
 
     assert still_enabled is True
@@ -239,3 +257,108 @@ def test_paired_runner_recognizes_only_healthy_enabled_hold() -> None:
     assert healthy_enabled_hold(_Status(enabled=False, control_loop_active=False)) is False
     assert healthy_enabled_hold(_Status(error_codes=["fault"])) is False
     assert healthy_enabled_hold(_Status(per_joint_status_code=[1, 1, 1, 1, 1, 2])) is False
+
+
+def test_baseline_must_be_position_and_velocity_stable_before_disable() -> None:
+    from rebotarm_motion.real_failure_recovery import verify_recovery_baseline
+
+    node = _Node()
+    node.positions[:] = 0.1
+    node.velocities[4] = 0.06
+
+    result = verify_recovery_baseline(
+        node=node,
+        baseline=np.full(6, 0.1),
+        stable_sec=0.0,
+        timeout_sec=0.0,
+    )
+
+    assert result["verified"] is False
+    assert result["critical"] is False
+    assert result["reason"] == "baseline_not_stable_before_timeout"
+    assert result["worst_position_error_rad"] == pytest.approx(0.0)
+    assert result["worst_velocity_rad_s"] == pytest.approx(0.06)
+
+
+def test_event_driven_arm_status_age_is_not_treated_as_feedback_staleness() -> None:
+    from rebotarm_motion.real_failure_recovery import verify_recovery_baseline
+
+    node = _Node()
+    node.last_status_monotonic = time.monotonic() - 10.0
+
+    result = verify_recovery_baseline(
+        node=node,
+        baseline=np.zeros(6),
+        stable_sec=0.0,
+        timeout_sec=0.0,
+    )
+
+    assert result["verified"] is True
+    assert result["reason"] == "baseline_stable"
+
+
+def test_stale_feedback_is_critical_during_baseline_verification() -> None:
+    from rebotarm_motion.real_failure_recovery import verify_recovery_baseline
+
+    node = _Node(refresh_feedback=False)
+    node.last_joint_monotonic = time.monotonic() - 1.0
+
+    result = verify_recovery_baseline(
+        node=node,
+        baseline=np.zeros(6),
+        stable_sec=0.0,
+        timeout_sec=0.0,
+    )
+
+    assert result["verified"] is False
+    assert result["critical"] is True
+    assert result["reason"] == "joint_feedback_stale"
+
+
+def test_recovery_keeps_enabled_hold_when_baseline_velocity_is_not_stable() -> None:
+    from rebotarm_motion.real_failure_recovery import recover_real_failure
+
+    node = _Node()
+    node.velocities[2] = 0.06
+    report = {"services": [], "motion_legs": []}
+
+    still_enabled = recover_real_failure(
+        node=node,
+        report=report,
+        baseline=np.full(6, 0.1),
+        allow_controlled_return=True,
+        legs_key="motion_legs",
+        command_label="test_return",
+        verification_stable_sec=0.0,
+        recovery_timeout_sec=0.0,
+    )
+
+    assert still_enabled is True
+    assert node.calls == ["trajectory_stop"]
+    assert report["failure_recovery"]["outcome"] == (
+        "return_not_stable_healthy_enabled_hold"
+    )
+
+
+def test_recovery_attempts_protective_disable_for_stale_feedback() -> None:
+    from rebotarm_motion.real_failure_recovery import recover_real_failure
+
+    node = _Node(refresh_feedback=False)
+    node.last_joint_monotonic = time.monotonic() - 1.0
+    report = {"services": [], "motion_legs": []}
+
+    still_enabled = recover_real_failure(
+        node=node,
+        report=report,
+        baseline=np.zeros(6),
+        allow_controlled_return=True,
+        legs_key="motion_legs",
+        command_label="test_return",
+        verification_stable_sec=0.0,
+    )
+
+    assert still_enabled is False
+    assert node.calls == ["trajectory_stop", "disable"]
+    assert report["failure_recovery"]["outcome"] == (
+        "joint_feedback_stale_protective_disable"
+    )
