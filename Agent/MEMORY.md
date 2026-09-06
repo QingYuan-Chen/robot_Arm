@@ -616,3 +616,11 @@ P5/P6共用恢复链现在先停止轨迹并核验控制器状态、六轴状态
 随后01:44视觉链中的`reBotArmController`在启动约0.10秒后以exit code 1退出，导致MoveIt从未收到joint state，01:46两次P6报告均在10秒预检后报`joint feedback unavailable`且`final_status.available=false`。根因不是反馈采集或MotorBridge回退，而是Codex此前错误地对标准`install/rebotarmcontroller`单包使用`--symlink-install`：安装态只留下egg-link并要求环境新增`build/rebotarmcontroller`，重建前已source的终端仍只有旧install site-packages，因此入口在ROS/硬件初始化前发生`PackageNotFoundError`。证据包括控制器无ROS日志、串口覆盖临时文件未更新、旧环境纯Python可稳定复现缺少包元数据；重新source后的环境可加载。已将错误的单包build/install产物备份到`/tmp/rebotarmcontroller-symlink-install-backup-20260907-0158`，以普通非symlink模式重建标准安装。修复后即使PYTHONPATH不含任何controller build路径，也能从install中的实体包目录加载distribution、console entrypoint及ArmStatus恢复代码；源码与安装副本哈希一致。全量850 passed/8 skipped、controller聚焦126 passed、分层20 passed、required compileall/diff check通过；MotorBridge仍为`0.4.6+rebotarm.2 feedback_sequence=true`。本问题的流程约束是：标准共享install不得为单包临时切换symlink模式；若必须改变安装模式，必须完整重建并验证旧终端兼容性。该修复未启动视觉链、未使能或发送动作，自动测试不构成实机验收。
 
 用户随后确认测试无问题并授权整理后本地提交；提交范围仅包含上述视觉真机启动profile、P6配置/报告与失败恢复、ArmStatus恢复发布、对应测试及Agent记录，不包含本地实机证据、模型、build/install/log产物，也不推送远端。
+
+## 2026-09-07 单次瓶体视觉抓取功能化
+
+已实测的P6单瓶抓取runner已整理为正式`rebotarm_vision`功能，安装入口为`rebotarm_single_bottle_grasp`，实现位于`rebotarm_vision.single_bottle_grasp`，默认从随包安装的`config/single_bottle_grasp.yaml`读取已验收参数。正式实现仍只接受`bottle`、`base_link`、confidence不低于`0.4`且jaw width不超过`0.085 m`的fresh plan，动作仍为捕获本轮baseline、MoveIt预抓取/接近规划、受保护轨迹、限力闭合保持、张开释放、返回本轮baseline、稳定验收后失能；不新增lift、retreat、固定safe-home或无力传感器条件下的抓取成功分类。逐次`--confirm REAL_SINGLE_BOTTLE_GRASP`和动态`--output`仍禁止写入profile。
+
+原先嵌在`tools/p5_paired_trajectory_runner.py`的ROS反馈监视与FollowJointTrajectory客户端已移入`rebotarm_motion.guarded_trajectory_client`，P5工具改为复用该正式motion实现；旧`tools/p6_single_bottle_grasp_runner.py`仅保留为兼容转发，旧P6 YAML由安装型feature profile替代。视觉硬件launch继续强制`plan_only`、关闭持续`visual_grasp_executor`并开启motion execution，确保单一动作发起者。标准非symlink `install/`已重建motion、vision和bringup；从`/tmp`且无源码`PYTHONPATH`验证ROS可发现新console entry、模块与profile均来自install，源码/安装副本哈希一致。验证为聚焦`44 passed, 1 skipped`、全量`856 passed, 8 skipped`、分层`20 passed`、required compileall/py_compile/diff check通过。未访问串口、启动ROS运行时、使能或发送动作；本次是已验收行为的产品化整理，不构成新的实机验收或授权。用户确认两命令设计后授权整理并本地提交，不推送。
+
+用户确认正式功能继续使用两个独立命令：先启动`visual_grasp_hardware.launch.py`支撑链并人工检查点云、候选位姿、controller状态和现场净空，再以`rebotarm_single_bottle_grasp`携带逐次`--confirm`启动一次动作。不新增自动串联支撑链与运动的一键launch，避免启动时序或候选首次出现直接取得动作权限；现有产品代码无需调整。

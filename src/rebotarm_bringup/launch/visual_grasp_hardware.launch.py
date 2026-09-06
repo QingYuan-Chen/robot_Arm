@@ -121,15 +121,15 @@ def _load_hardware_profile(path: Path, *, anchor: Path) -> dict[str, str]:
         raise RuntimeError("use_hardware 必须为 true")
     if arguments["execution_mode"] != "plan_only":
         raise RuntimeError(
-            "execution_mode 必须为 plan_only；实机动作只允许由 P6 runner 发起"
+            "execution_mode 必须为 plan_only；实机动作只允许由单次瓶体抓取功能发起"
         )
     if arguments["start_visual_grasp_executor"] is not False:
         raise RuntimeError(
-            "start_visual_grasp_executor 必须为 false；禁止与 P6 runner 同时发起动作"
+            "start_visual_grasp_executor 必须为 false；禁止与单次瓶体抓取功能同时发起动作"
         )
     if arguments["start_motion_execution"] is not True:
         raise RuntimeError(
-            "start_motion_execution 必须为 true；P6 runner 需要规划和轨迹执行服务"
+            "start_motion_execution 必须为 true；单次瓶体抓取功能需要规划和轨迹执行服务"
         )
 
     resolved = {}

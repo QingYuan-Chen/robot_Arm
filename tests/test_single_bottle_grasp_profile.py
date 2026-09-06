@@ -10,13 +10,13 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNER_PATH = ROOT / "tools/p6_single_bottle_grasp_runner.py"
-PROFILE_PATH = ROOT / "tools/p6_single_bottle_grasp.yaml"
+RUNNER_PATH = ROOT / "src/rebotarm_vision/rebotarm_vision/single_bottle_grasp.py"
+PROFILE_PATH = ROOT / "src/rebotarm_vision/config/single_bottle_grasp.yaml"
 
 
 def _load_runner_module():
     spec = importlib.util.spec_from_file_location(
-        "p6_single_bottle_profile_test", RUNNER_PATH
+        "single_bottle_grasp_profile_test", RUNNER_PATH
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -29,7 +29,7 @@ def test_single_bottle_profile_pins_accepted_run_parameters() -> None:
 
     assert payload == {
         "schema_version": 1,
-        "runner_arguments": {
+        "feature_arguments": {
             "namespace": "rebotarm",
             "runs": 1,
             "plan_timeout_sec": 45.0,
@@ -82,30 +82,50 @@ def test_runner_loads_profile_and_allows_explicit_cli_override(tmp_path: Path) -
     )
 
 
+def test_runner_uses_installed_feature_profile_by_default(tmp_path: Path) -> None:
+    runner = _load_runner_module()
+
+    args = runner._parse_args(
+        [
+            "--output",
+            str(tmp_path / "trial.json"),
+            "--confirm",
+            runner.REAL_CONFIRMATION,
+        ]
+    )
+
+    assert args.config.name == "single_bottle_grasp.yaml"
+    assert args.pregrasp_sec == 10.0
+    assert args.approach_sec == 3.0
+    assert args.hold_sec == 3.0
+    assert args.return_sec == 10.0
+    assert args.gripper_open_max_effort == 1.5
+
+
 @pytest.mark.parametrize("forbidden", ["confirm", "output", "config"])
 def test_runner_profile_rejects_per_run_fields(
     tmp_path: Path, forbidden: str
 ) -> None:
     runner = _load_runner_module()
     payload = yaml.safe_load(PROFILE_PATH.read_text(encoding="utf-8"))
-    payload["runner_arguments"][forbidden] = "must-not-be-persisted"
+    payload["feature_arguments"][forbidden] = "must-not-be-persisted"
     profile = tmp_path / "invalid.yaml"
     profile.write_text(yaml.safe_dump(payload), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match=forbidden):
-        runner._load_runner_profile(profile)
+        runner._load_feature_profile(profile)
 
 
 def test_runner_profile_rejects_missing_or_unknown_fields(tmp_path: Path) -> None:
     runner = _load_runner_module()
     payload = yaml.safe_load(PROFILE_PATH.read_text(encoding="utf-8"))
-    payload["runner_arguments"].pop("return_sec")
-    payload["runner_arguments"]["return_duration_sec"] = 10.0
+    payload["feature_arguments"].pop("return_sec")
+    payload["feature_arguments"]["return_duration_sec"] = 10.0
     profile = tmp_path / "invalid.yaml"
     profile.write_text(yaml.safe_dump(payload), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="return_sec|return_duration_sec"):
-        runner._load_runner_profile(profile)
+        runner._load_feature_profile(profile)
 
 
 def test_failure_report_converts_non_finite_device_values_to_null(

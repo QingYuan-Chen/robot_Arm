@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T02:09:32+08:00",
+  "generated_at": "2026-09-07T03:39:43+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "aa1dcc5",
+    "head": "cc362bb",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-07T02:09:32+08:00 | actor=Codex | event=complete | note=视觉抓取配置、P6失败恢复与ArmStatus反馈修复已整理，准备本地提交 | verification=用户确认测试无问题；全量850 passed/8 skipped；controller聚焦126 passed；分层20 passed；compileall/diff check；MotorBridge 0.4.6+rebotarm.2 feedback_sequence=true；普通install旧环境入口加载通过；排除evidence/models/build/install/log；不推送"
+  "last_event": "- 2026-09-07T03:39:43+08:00 | actor=codex | event=complete | note=单次瓶体视觉抓取正式功能与两阶段命令设计已整理，准备本地提交 | verification=全量856 passed, 8 skipped；分层20 passed；最终聚焦59 passed；required compileall/py_compile/diff check；三包普通install及隔离入口验证通过；未操作硬件；不推送"
 }

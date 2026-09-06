@@ -2,6 +2,12 @@
 
 本文记录当前阶段的视觉链路方案、启动方式、验证方法和常见问题。
 
+已完成实机测试的单次瓶体抓取现已作为正式功能安装，入口为
+`rebotarm_single_bottle_grasp`。它与持续运行的
+`rebotarm_visual_grasp_executor` 具有不同的动作和恢复语义，禁止同时运行；启动、
+配置及本轮基线恢复规则见
+[单次瓶体视觉抓取](../../docs/single_bottle_grasp_zh.md)。
+
 ## 1. 当前结论
 
 Ubuntu 物理机现在优先使用原生视觉链路：

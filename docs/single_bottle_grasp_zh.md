@@ -1,0 +1,58 @@
+# 单次瓶体视觉抓取
+
+`rebotarm_single_bottle_grasp` 是已完成实机测试的单次瓶体抓取功能入口。它消费
+`/grasp/filtered_plan` 的新鲜瓶体候选，执行以下固定流程：
+
+```text
+捕获本轮六轴基线
+-> MoveIt 规划预抓取与抓取位姿
+-> 使能并张开夹爪
+-> 预抓取
+-> 从真实预抓取反馈重新规划接近段
+-> 接近
+-> 限力闭合并保持
+-> 张开释放
+-> 返回本轮基线
+-> 位置、速度与稳定时间验收
+-> 失能
+```
+
+该功能不执行抬升、撤退或固定 safe-home，也不把夹爪堵转判定当成成功夹住物体的
+证明。发生可恢复失败时，它停止轨迹并尝试受控返回本轮基线；只有回位验收通过后
+才失能。控制器、电机或反馈不健康时走保护性失能；硬件健康但回位失败时保持使能，
+等待人工恢复。
+
+运行参数默认从随包安装的
+`rebotarm_vision/config/single_bottle_grasp.yaml` 加载。这个配置保留已经实测的
+`10/3/3/10 s` 四段时长、`0.080 m` 张开宽度和夹爪力矩参数。证据输出路径与逐次
+真机确认不能写入配置，必须由每次命令显式提供。
+
+先启动视觉、MoveIt 和硬件支撑链。串口仍由启动命令显式指定：
+
+```bash
+cd /home/a/project/rebot_Arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+export RMW_FASTRTPS_USE_SHM=0
+
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed || exit 1
+fuser -v /dev/ttyUSB0 /dev/ttyACM0
+
+ros2 launch rebotarm_bringup visual_grasp_hardware.launch.py \
+  channel:=/dev/ttyACM0
+```
+
+确认现场安全、候选正确并取得本轮实机动作授权后，在第二个终端执行一次：
+
+```bash
+cd /home/a/project/rebot_Arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run rebotarm_vision rebotarm_single_bottle_grasp \
+  --output "Agent/evidence/visual_grasp/single_bottle_$(date +%Y%m%d_%H%M%S).json" \
+  --confirm REAL_SINGLE_BOTTLE_GRASP
+```
+
+`tools/p6_single_bottle_grasp_runner.py` 仅保留为旧命令兼容入口。新使用方式应调用
+安装后的 `rebotarm_single_bottle_grasp`，以免把产品功能继续绑定到验收阶段编号。

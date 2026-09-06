@@ -1,7 +1,7 @@
 schema_version: 1
 
 # Per-run confirmation and output path stay on the command line.
-runner_arguments:
+feature_arguments:
   namespace: rebotarm
   runs: 1
   plan_timeout_sec: 45.0

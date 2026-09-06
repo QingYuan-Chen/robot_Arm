@@ -599,3 +599,9 @@
 - 2026-09-07T01:59:20+08:00 | actor=Codex | event=complete | note=恢复rebotarmcontroller普通安装态并消除旧终端PackageNotFoundError | verification=install含实体包和egg-info；无build路径的旧环境可加载distribution与console entrypoint；源码/安装哈希一致；controller聚焦126 passed；全量850 passed/8 skipped；分层20 passed；compileall/diff check；MotorBridge .2反馈序号契约通过；未启动实机
 - 2026-09-07T02:08:49+08:00 | actor=Codex | event=start | note=整理视觉抓取配置、P6恢复与ArmStatus反馈修复并提交本地 | verification=-
 - 2026-09-07T02:09:32+08:00 | actor=Codex | event=complete | note=视觉抓取配置、P6失败恢复与ArmStatus反馈修复已整理，准备本地提交 | verification=用户确认测试无问题；全量850 passed/8 skipped；controller聚焦126 passed；分层20 passed；compileall/diff check；MotorBridge 0.4.6+rebotarm.2 feedback_sequence=true；普通install旧环境入口加载通过；排除evidence/models/build/install/log；不推送
+- 2026-09-07T03:23:04+08:00 | actor=codex | event=start | note=将已验收P6单瓶抓取整理为正式单次瓶体视觉抓取功能，保持实机安全语义不变 | verification=-
+- 2026-09-07T03:31:34+08:00 | actor=codex | event=complete | note=已验收单瓶抓取已迁为正式rebotarm_single_bottle_grasp功能，P6脚本仅保留兼容入口 | verification=聚焦44 passed, 1 skipped；全量856 passed, 8 skipped；分层20 passed；required compileall/py_compile/diff check；motion/vision/bringup普通install重建；/tmp无源码PYTHONPATH验证console entry、模块、profile和哈希一致；未操作硬件
+- 2026-09-07T03:35:33+08:00 | actor=codex | event=start | note=将视觉感知支撑链与单次瓶体抓取执行器组合为统一正式launch，保留显式串口、报告和真机确认 | verification=-
+- 2026-09-07T03:36:45+08:00 | actor=codex | event=complete | note=确认视觉支撑链与单次抓取保持两个独立命令，不新增一键自动串联launch | verification=现有docs/single_bottle_grasp_zh.md已按两阶段命令记录；本轮未改产品代码、未启动ROS或操作硬件
+- 2026-09-07T03:39:11+08:00 | actor=codex | event=start | note=按用户确认整理单次瓶体视觉抓取功能化改动并创建本地提交，不推送 | verification=-
+- 2026-09-07T03:39:43+08:00 | actor=codex | event=complete | note=单次瓶体视觉抓取正式功能与两阶段命令设计已整理，准备本地提交 | verification=全量856 passed, 8 skipped；分层20 passed；最终聚焦59 passed；required compileall/py_compile/diff check；三包普通install及隔离入口验证通过；未操作硬件；不推送
