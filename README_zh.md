@@ -63,7 +63,7 @@
 | ROS2 | Jazzy，安装路径 `/opt/ros/jazzy` |
 | Python | 系统 Python 3.12 |
 | Python 环境 | 不使用 conda |
-| 底层 SDK | 推荐 `~/seeed/rebotarm_ros2/third_party/reBotArm_control_py/` |
+| 底层 SDK | 仓库内 `third_party/reBotArm_control_py/`，按依赖清单固定版本 |
 | 默认串口 | `/dev/ttyACM0`，可通过 launch 参数覆盖 |
 
 每次构建或运行前先 source ROS2：
@@ -109,9 +109,9 @@ python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 
 
 ```bash
-cd /home/a/project/rebot_Arm
+# 在当前仓库根目录执行
 mkdir -p third_party
-git clone https://github.com/huangbinai/rebotarm_control.git third_party/reBotArm_control_py
+vcs import third_party < rebotarm_dependencies.repos
 ```
 
 ### Step 4. 确认底层 SDK 可导入
@@ -129,11 +129,15 @@ python3 -c "from reBotArm_control_py.actuator import RobotArm; from reBotArm_con
 ## 构建工作空间
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+# 在未激活 venv/conda 的新终端，进入当前仓库根目录
 source /opt/ros/jazzy/setup.bash
-colcon build --base-paths src --executor sequential
+/usr/bin/python3 -m colcon build --base-paths src --executor sequential --symlink-install
 source install/setup.bash
 ```
+
+构建不要求视觉模型或GPU，现有模型可选打包；启用检测时必须提供实际模型路径。
+视觉、GraspNet和MuJoCo使用各自的运行解释器，不通过切换构建解释器选择环境。
+系统依赖、安装顺序及运行参数以 [本机安装说明](docs/local_setup_zh.md) 为准。
 
 验证包和入口：
 
@@ -173,9 +177,12 @@ rebot_Arm/
 
 ## 快速启动
 
-### 启动完整系统
+### 启动基础驱动
 
-启动控制节点、`robot_state_publisher`，可选 RViz：
+启动控制节点、`robot_state_publisher`，可选RViz；不包含网页或视觉。
+该入口会连接真机，使用前确认本轮授权和串口归属。
+完整网页遥操作入口为`rebotarm_app.launch.py`，见
+[功能手册](docs/rebotarm_feature_commands.md)。
 
 ```bash
 ros2 launch rebotarm_bringup bringup.launch.py
@@ -213,7 +220,7 @@ ros2 run rebotarmcontroller reBotArmController
 先在一个终端启动控制节点：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+# 在当前仓库根目录执行
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
@@ -222,7 +229,7 @@ ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0
 然后在另一个终端执行控制命令：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+# 在当前仓库根目录执行
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
@@ -262,7 +269,7 @@ ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 所有示例都假设已经启动 `reBotArmController`：
 
 ```bash
-cd ~/seeed/rebotarm_ros2
+# 在当前仓库根目录执行
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 launch rebotarm_bringup bringup.launch.py channel:=/dev/ttyACM0

@@ -1,6 +1,9 @@
 # Ubuntu 原生 Gemini2 与 YOLO 环境
 
-> 当前状态：本文描述的独立 Ubuntu 视觉入口已经存在；真实 Gemini 2 RGB-D 稳定性、SDK 内参、实际 stream profile、深度尺度和 RGB-D 对齐仍待 P2 硬件验收。完整 `visual_grasp_system.launch.py` 尚未完成 `vision_profile:=ubuntu_native` 集成。
+> 当前状态：Ubuntu原生Gemini2、YOLO和同进程GraspNet已集成到
+> `visual_grasp_system.launch.py` 的 `vision_profile:=ubuntu_native`。
+> P0-P6已按当前范围关闭；新设备仍需复核相机、模型、手眼标定和现场条件，
+> 历史验收不构成新一轮真机动作授权。
 
 本机方案不再依赖 Windows HTTP 服务，数据链路为：
 
@@ -14,14 +17,17 @@ Gemini2 USB -> pyorbbecsdk -> rebotarm_vision_node
 
 ## 1. 安装
 
-在仓库根目录执行：
+先按 [本机安装说明](local_setup_zh.md) 安装系统依赖并构建ROS工作区，
+再从仓库根目录安装视觉运行环境：
 
 ```bash
 ./tools/setup_ubuntu_vision.sh
 ```
 
-脚本会创建 `.venv-vision`，安装 CUDA 12.8 版 PyTorch、Ultralytics 和
-Orbbec Python SDK，并使用该 Python 重新构建 `rebotarm_vision`。
+脚本创建 `.venv-vision`，固定安装 PyTorch `2.11.0+cu128`、torchvision
+`0.26.0+cu128`、Ultralytics、TensorRT和Orbbec Python SDK，并检查导入。
+它不构建ROS包、不下载模型、不导出engine、不连接相机或控制器。
+所有ROS包统一用系统Python构建，运行时再按节点指定解释器。
 
 这里固定 `numpy==1.26.4` 和 `pyorbbecsdk2==2.0.18`。不要直接升级到
 `pyorbbecsdk2==2.1.1`，它在 Python 3.12 上要求 NumPy 2，与 ROS 2 Jazzy
@@ -43,29 +49,41 @@ lsusb | grep -i -E "orbbec|2bc5"
 
 ## 3. 启动
 
+### 新部署：直接使用已有PT模型
+
 ```bash
-./tools/run_ubuntu_vision.sh
+./tools/run_ubuntu_vision.sh \
+  yolo_model_path:="$PWD/tools/yolo26s-seg.pt" yolo_device:=0
 ```
 
-默认使用：
+无需TensorRT engine即可启动相机/YOLO；它不是已验证YOLO26m engine的等效性能或精度验收。
+无CUDA时可用同一PT模型配合`yolo_device:=cpu`，速率需重新评估。
+包装脚本默认通过`REBOTARM_VISION_PYTHON`选择`.venv-vision/bin/python`，
+不激活venv、不向整组ROS节点注入视觉site-packages；外部环境可设置该变量覆盖。
 
-- Gemini2 彩色流 `1280x720 @ 30 FPS`
-- Gemini2 深度流 `1280x720 @ 30 FPS`
+当前相机配置：
+
+- Gemini2 彩色流 `640x480 @ 30 FPS`
+- Gemini2 深度原始流 `640x400 @ 30 FPS`，硬件对齐到彩色图
 - 硬件深度对齐
-- `YOLO26m-seg FP16 TensorRT engine`（源文件：`tools/yolo26m-seg-fp16-b1-640-linux.engine`）
-- engine SHA-256：`9fe8e3b024a1804d890e4a760f9326a2475f370857f2249083f4c19fce920f48`
 - NVIDIA GPU `device=0`
 - 检测发布 `/grasp/detections`
 - 标注图发布 `/camera/color/annotated`
 
-TensorRT engine 只用于当前 Linux/CUDA/TensorRT 运行环境，不能切到 CPU。临时改用
-CPU 时需要同时回退到随包保留的 `.pt` 模型：
+### 可选：部署目标机器的TensorRT engine
+
+使用来源已确认、适配目标GPU及CUDA/TensorRT版本的engine，通过绝对路径指定：
 
 ```bash
 ./tools/run_ubuntu_vision.sh \
-  yolo_model_path:="$PWD/install/rebotarm_vision/share/rebotarm_vision/models/yolo26s-seg.pt" \
-  yolo_device:=cpu
+  yolo_model_path:=/absolute/path/to/reviewed-model.engine yolo_device:=0
 ```
+
+engine不能用于CPU，也不能假定可跨机器/Windows复用。需要重新导出时，必须使用
+对应的原始权重及目标环境；不能将YOLO26s导出结果改名冒充YOLO26m。
+仓库不提供YOLO26m源权重的自动下载或engine导出流程，未准备好时使用上面的PT路径。
+旧本机默认仍为包内`models/yolo26m-seg-fp16-b1-640-linux.engine`：构建时
+`tools/`中有该文件才会打包。外部模型无需重建；运行时模型缺失将报错，不静默换模型。
 
 ## 4. 验证
 
@@ -181,8 +199,10 @@ Ubuntu生产路径不再单独启动localhost HTTP service。相机/YOLO topics 
 ROS 2环境中单独验证整合后的in-process node：
 
 ```bash
+source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run rebotarm_vision rebotarm_graspnet_baseline_node --ros-args \
+export GRASPNET_PYTHON="$PWD/.venv-graspnet/bin/python"
+ros2 run --prefix "$GRASPNET_PYTHON" rebotarm_vision rebotarm_graspnet_baseline_node --ros-args \
   --params-file install/rebotarm_vision/share/rebotarm_vision/config/graspnet_ubuntu.yaml
 ```
 
@@ -195,9 +215,32 @@ timestamp和`camera_depth_frame`交给同进程GraspNet runner，再把结果发
 `tools/run_ubuntu_graspnet_service.sh`和`tools/ubuntu_graspnet_service.py`仅保留为历史回退/
 contract测试工具，不在Ubuntu生产launch中启动；Windows/network candidates兼容模式不受影响。
 
-响应原样保留 `timestamp_ns` 与 `frame_id`，并包含 `backend_configured`、`stale`
+仅旧HTTP回退服务的响应原样保留 `timestamp_ns` 与 `frame_id`，并包含 `backend_configured`、`stale`
 和 `candidates`。输入单位、图像尺寸、bbox、intrinsics 或 header 不合法时返回
 HTTP 400；backend 未配置时返回 HTTP 503。
 
-因此环境和 service liveness 通过不等于真实 GraspNet 推理已通过；真实候选输出仍需
-在模型资产完成 provenance / license 审核后单独验收。
+新部署的依赖导入或旧service liveness通过不等于真实推理通过；必须核实自己的模型资产，
+并验证当前输入下的候选输出。模型代码、pointnet2扩展、graspnetAPI和checkpoint需
+与所选GraspNet版本匹配，环境安装脚本不负责提供这些第三方资产。
+
+## 7. 完整视觉链路（无真机、仅规划）
+
+先设置上节的GraspNet模型根目录和checkpoint。
+在没有其他相机/仿真节点运行时执行；不要与第3节的相机入口重复启动：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+export REBOTARM_VISION_PYTHON="$PWD/.venv-vision/bin/python"
+export GRASPNET_PYTHON="$PWD/.venv-graspnet/bin/python"
+ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
+  vision_profile:=ubuntu_native use_hardware:=false execution_mode:=plan_only \
+  start_visual_ready:=false start_visual_grasp_executor:=false \
+  vision_yolo_model_path:="$PWD/tools/yolo26s-seg.pt"
+```
+
+这会使用真实相机和RViz-only运动学后端，不启动MuJoCo物理仿真或真机控制器；
+真实相机相对模拟机器人TF是否有物理意义需自行核验，候选规划不代表实机可执行。
+真实感知加MuJoCo物理后端使用独立的`real_perception_sim_execution.launch.py`，
+参数以其`--show-args`为准，不能同时启动两个模拟执行后端。
+真实执行另见功能手册和现场授权边界。

@@ -6,27 +6,16 @@ venv_dir="${repo_root}/.venv-vision"
 python_bin="${venv_dir}/bin/python"
 
 python3 -m venv --system-site-packages "${venv_dir}"
-"${python_bin}" -m pip install --upgrade "pip<27" "setuptools<80" wheel
-"${python_bin}" -m pip install \
-  torch torchvision \
+env PYTHONPATH= "${python_bin}" -m pip install --upgrade "pip<27" "setuptools<80" wheel
+env PYTHONPATH= "${python_bin}" -m pip install \
+  torch==2.11.0+cu128 torchvision==0.26.0+cu128 \
   --index-url https://download.pytorch.org/whl/cu128
-"${python_bin}" -m pip install -r "${repo_root}/requirements-vision.txt"
-"${python_bin}" -m pip install --no-deps -r "${repo_root}/requirements-tensorrt.txt"
+env PYTHONPATH= "${python_bin}" -m pip install -r "${repo_root}/requirements-vision.txt"
+env PYTHONPATH= "${python_bin}" -m pip install --no-deps -r "${repo_root}/requirements-tensorrt.txt"
 
 set +u
 source /opt/ros/jazzy/setup.bash
-source "${venv_dir}/bin/activate"
 set -u
-# colcon invokes setup.py through python3 discovered on PATH. Activating the
-# venv here ensures generated ROS console scripts use the vision interpreter.
-"${python_bin}" -m colcon \
-  --log-base "${repo_root}/log" \
-  build \
-  --symlink-install \
-  --base-paths "${repo_root}/src" \
-  --build-base "${repo_root}/build" \
-  --install-base "${repo_root}/install" \
-  --packages-up-to rebotarm_vision
 
 "${python_bin}" - <<'PY'
 import cv2
@@ -49,7 +38,9 @@ PY
 
 echo
 echo "Environment ready."
+echo "Build the ROS workspace separately with system Python; see docs/local_setup_zh.md."
+echo "No models are downloaded or exported. Select a model using yolo_model_path."
 echo "Install the Orbbec udev rule once after connecting the camera:"
 echo "  ${repo_root}/tools/install_orbbec_udev_rules.sh"
 echo "Start Ubuntu-native vision with:"
-echo "  ${repo_root}/tools/run_ubuntu_vision.sh"
+echo "  ${repo_root}/tools/run_ubuntu_vision.sh yolo_model_path:=\"${repo_root}/tools/yolo26s-seg.pt\" yolo_device:=0"

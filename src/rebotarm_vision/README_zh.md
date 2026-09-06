@@ -14,19 +14,23 @@ Gemini2 摄像头
 -> ROS2 topic
 ```
 
-Ubuntu 默认模型为打包安装的
-`models/yolo26m-seg-fp16-b1-640-linux.engine`；`yolo26s-seg.pt` 继续随包保留，
-只作为兼容/CPU 回退。Linux engine 不能用于 Windows，也不能在 CPU 上运行。
+Ubuntu旧本机默认模型路径为`models/yolo26m-seg-fp16-b1-640-linux.engine`，
+仅在构建时源文件存在才打包；模型缺失不阻塞源码构建。新部署可显式使用
+仓库提供的`tools/yolo26s-seg.pt`，或传入本机兼容engine路径。
+Linux engine不能用于Windows或CPU；PT运行不等于YOLO26m部署验收。
 
 安装和启动请优先执行：
 
 ```bash
+# 先按docs/local_setup_zh.md完成系统依赖与源码构建
 ./tools/setup_ubuntu_vision.sh
 ./tools/install_orbbec_udev_rules.sh
-./tools/run_ubuntu_vision.sh
+./tools/run_ubuntu_vision.sh yolo_model_path:="$PWD/tools/yolo26s-seg.pt" yolo_device:=0
 ```
 
-详见仓库根目录的 `docs/ubuntu_vision_setup_zh.md`。
+安装脚本只准备依赖；运行脚本按节点选择解释器，不重建ROS包或注入全局视觉依赖。
+Ubuntu原生相机、YOLO和同进程GraspNet已集成；P0-P6按当前范围关闭，
+新一轮硬件动作仍需另行授权。详见仓库根目录的 `docs/ubuntu_vision_setup_zh.md`。
 
 如果仍在 VMware 中运行 Ubuntu，USB 直通导致彩色流纯灰或 MJPG 坏帧时，
 可继续使用原有 Windows HTTP 兼容链路：

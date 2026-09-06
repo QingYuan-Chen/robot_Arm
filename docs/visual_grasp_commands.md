@@ -1,6 +1,9 @@
 # reBotArm 视觉抓取启动手册
 
-> 当前安全状态：P0-P5已关闭，P6正在分级验收。当前Ubuntu-native真实感知+active MuJoCo无运动runtime已通过；完整自动抓取、结果分类和剩余实机动作尚未验收。继续优先使用Ubuntu视觉独立验证、无硬件perception preview、MuJoCo仿真和显式plan-only检查。
+> 当前安全状态：P0-P6已按用户确认的工程范围关闭，未执行的完整自动抓取、结果分类和剩余实机动作不计为通过。新部署与每轮真机动作仍需独立预检和授权。先使用Ubuntu视觉独立验证、无硬件预览或显式plan-only检查。
+
+安装、模型准备及分环境解释器以 [Ubuntu视觉说明](ubuntu_vision_setup_zh.md) 为准；
+以下涉及历史本机模型的命令不能代替新部署的资产准备。
 
 目标主路线是单 Ubuntu：
 
@@ -35,7 +38,7 @@ Windows 或其他网络主机上的 YOLO / depth / GraspNet
 
 ```bash
 cd /home/a/project/rebot_Arm
-./tools/run_ubuntu_vision.sh
+./tools/run_ubuntu_vision.sh yolo_model_path:="$PWD/tools/yolo26s-seg.pt" yolo_device:=0
 ```
 
 检查：

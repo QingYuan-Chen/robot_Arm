@@ -30,11 +30,13 @@ P0-P6 已按用户确认的工程范围关闭，等待用户提供新规划，�
 - [`architecture.md`](architecture.md)：ROS 2 package ownership、依赖方向和执行权限。
 - [`node_topology.mermaid`](node_topology.mermaid)：当前与目标后端选择拓扑。
 - [`local_setup_zh.md`](local_setup_zh.md)：Ubuntu 24.04 / ROS 2 Jazzy 本机环境、构建和安全顺序。
-- [`ubuntu_vision_setup_zh.md`](ubuntu_vision_setup_zh.md)：Gemini 2 + YOLO 的 Ubuntu 原生环境和当前验收缺口。
+- [`ubuntu_vision_setup_zh.md`](ubuntu_vision_setup_zh.md)：Gemini 2 + YOLO + GraspNet 的原生环境、模型准备及逐进程启动。
+- [`launch_python_configuration.md`](launch_python_configuration.md)：系统Python构建与分环境运行的解释器契约。
 
 ## MuJoCo
 
-- [`mujoco_sim.md`](mujoco_sim.md)：现有 MuJoCo 模型、adapter、benchmark 和启动方式。
+- [`仿真包README`](../src/rebotarm_simulation/README_mujoco.md)：当前MuJoCo安装、物理后端和启动方式。
+- [`mujoco_sim.md`](mujoco_sim.md)：早期模型、adapter和离线分析记录，旧命令不作为当前部署入口。
 - [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md)：固定上游版本、许可证证据和禁止复制边界。
 - [`mujoco_sim_to_real_params.md`](mujoco_sim_to_real_params.md)：仿真参数到真机参数的映射边界。
 

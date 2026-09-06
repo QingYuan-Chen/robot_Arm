@@ -10,7 +10,7 @@
 | 环境、依赖与 MotorBridge 安装 | [本机环境说明](docs/local_setup_zh.md) |
 | 网页遥操作、RViz 与实机操作 | [功能操作手册](docs/rebotarm_feature_commands.md) |
 | 控制器接口 | [ROS SDK 说明](README_zh.md) |
-| 仿真 | [MuJoCo 使用说明](docs/mujoco_sim.md) |
+| 仿真 | [MuJoCo 使用说明](src/rebotarm_simulation/README_mujoco.md) |
 | 包职责与依赖边界 | [架构说明](docs/architecture.md) |
 | 当前阶段及验收依据 | [Agent 状态](Agent/README.md) |
 | 其他文档 | [文档索引](docs/README_zh.md) |
@@ -27,24 +27,28 @@
 
 标准本机构建目录为 `build/`、`install/`、`log/`，不提交到 Git。
 模型下载、TensorRT engine、本地运行数据及额外实验原始证据也不自动纳入提交。
-已有受版本管理的模型和上游参考资产保留，来源见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+当前仍随仓库提供 `tools/yolo26s-seg.pt`；历史比较副本仅本机留存。
+正式仿真资源及其来源见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
 ## 环境与构建
 
-基线为 Ubuntu 24.04、ROS 2 Jazzy、Python 3.12。先按环境说明安装所需组件；
+基线为 Ubuntu 24.04、ROS 2 Jazzy、Python 3.12。先按
+[安装说明](docs/local_setup_zh.md) 准备系统依赖和所需运行组件；
 五份 `requirements-*.txt` 按控制器、视觉、GraspNet、MuJoCo、TensorRT 拆分，
 不要合并安装到同一个环境。
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --base-paths src --executor sequential
+/usr/bin/python3 -m colcon build --base-paths src --executor sequential --symlink-install
 source install/setup.bash
 python3 -m pytest tests -q
 ```
 
-完整视觉包构建还要求本机提供 `tools/yolo26m-seg-fp16-b1-640-linux.engine`；
-该机器相关产物不在 Git 中，相关说明见 [部署与解释器配置](docs/launch_python_configuration.md)。
-纯源码克隆不包含所有本机模型、SDK、虚拟环境和实验数据，不能据此假定全部功能可直接运行。
+在未激活其他虚拟环境的新终端构建。源码构建不要求相机、GPU、TensorRT engine
+或 GraspNet 权重；视觉依赖安装脚本不再重建工作区。检测启动时才检查模型，
+可用现有 `.pt` 或显式指定本机 engine，见 [视觉安装与模型准备](docs/ubuntu_vision_setup_zh.md)。
+运行时按节点设置 [解释器参数](docs/launch_python_configuration.md)，不要全局注入视觉依赖。
+完整回归还需要已构建的 ROS 消息及固定厂商 SDK；纯源码构建通过不代表真机验收。
 
 ## 真机边界
 

@@ -1,4 +1,8 @@
 from pathlib import Path
+import runpy
+import shutil
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,23 +74,54 @@ def test_vision_dependencies_preserve_ros_numpy_abi() -> None:
     assert "tensorrt-cu12-libs==10.13.3.9.post1" in tensorrt_requirements
 
 
-def test_ubuntu_vision_launcher_exports_venv_dependencies_for_ros_entrypoints() -> None:
+def test_ubuntu_vision_launcher_selects_only_the_vision_interpreter() -> None:
     launcher = _read("tools/run_ubuntu_vision.sh")
 
-    assert 'sysconfig.get_path("purelib")' in launcher
-    assert 'export PYTHONPATH="${vision_site_packages}${PYTHONPATH:+:${PYTHONPATH}}"' in launcher
-    assert launcher.index("export PYTHONPATH=") < launcher.index(
-        "exec ros2 launch rebotarm_vision"
-    )
+    assert 'export REBOTARM_VISION_PYTHON=' in launcher
+    assert 'export PYTHONPATH=' not in launcher
+    assert '/bin/activate' not in launcher
+    assert 'exec ros2 launch rebotarm_vision vision_ubuntu.launch.py "$@"' in launcher
 
 
-def test_ubuntu_vision_setup_activates_venv_before_colcon_build() -> None:
+def test_ubuntu_vision_setup_does_not_rebuild_workspace_with_venv() -> None:
     setup = _read("tools/setup_ubuntu_vision.sh")
 
-    activate = 'source "${venv_dir}/bin/activate"'
-    build = '"${python_bin}" -m colcon'
-    assert activate in setup
-    assert build in setup
-    assert setup.index(activate) < setup.index(build)
+    assert '/bin/activate' not in setup
+    assert '"${python_bin}" -m colcon' not in setup
+    assert 'torch==2.11.0+cu128 torchvision==0.26.0+cu128' in setup
     assert 'pip install --no-deps -r "${repo_root}/requirements-tensorrt.txt"' in setup
     assert "import tensorrt" in setup
+
+
+@pytest.mark.parametrize(
+    "models",
+    [(), ("yolo26s-seg.pt",), ("yolo26s-seg.pt", "yolo26m-seg-fp16-b1-640-linux.engine")],
+)
+def test_vision_packaging_allows_missing_runtime_models(tmp_path, monkeypatch, models):
+    package = tmp_path / "src/rebotarm_vision"
+    package.mkdir(parents=True)
+    shutil.copyfile(ROOT / "src/rebotarm_vision/setup.py", package / "setup.py")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for name in models:
+        (tools / name).write_bytes(b"test model")
+    captured = {}
+    monkeypatch.setattr("setuptools.setup", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.chdir(package)
+    runpy.run_path(str(package / "setup.py"), run_name="__main__")
+    installed = dict(captured["data_files"]).get("share/rebotarm_vision/models", [])
+    assert {Path(path).name for path in installed} == set(models)
+    assert captured["name"] == "rebotarm_vision"
+
+
+def test_install_docs_use_pinned_sdk_and_explicit_runtime_interpreters():
+    readme = _read("README_zh.md")
+    vision = _read("docs/ubuntu_vision_setup_zh.md")
+    simulation = _read("src/rebotarm_simulation/README_mujoco.md")
+    assert "vcs import third_party < rebotarm_dependencies.repos" in readme
+    assert "~/seeed/rebotarm_ros2" not in readme
+    assert 'ros2 run --prefix "$GRASPNET_PYTHON"' in vision
+    assert "尚未完成 `vision_profile:=ubuntu_native` 集成" not in vision
+    assert "export REBOTARM_MUJOCO_PYTHON=" in simulation
+    assert "/usr/bin/python3 -m colcon build" in simulation
+    assert "/bin/activate" not in simulation

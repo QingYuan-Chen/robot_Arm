@@ -2,7 +2,13 @@
 
 本文记录本仓库在 Ubuntu 24.04 / ROS 2 Jazzy 上的本地运行基线。
 
-> 当前安全状态：P0 软件门控和真实机械臂的 joint states、enable/hold/disable、失败 cleanup 已通过验收。`HardwareManager.connect()` 仍只连接并保持失能，动作目标在显式 enable 前会被拒绝。P0 通过不替代 P2-P6 的感知、标定和完整系统验收；完成后续证据前继续优先使用无硬件仿真、视觉独立验证和明确的 plan-only 检查。
+> 当前状态：P0-P6 已按用户确认的工程范围关闭，未执行项不冒充通过。
+> `HardwareManager.connect()` 只连接并保持失能，任何新机器或新一轮真机动作仍需
+> 独立确认现场条件和授权。安装、构建、导入检查不会授权或自动启动硬件。
+
+下列命令均从当前仓库根目录执行。推荐顺序：系统依赖 → 源码构建 →
+按需安装控制器/视觉/GraspNet/MuJoCo依赖 → 配置模型和逐进程解释器 → 软件检查。
+源码构建与设备、模型准备分离，不再要求新克隆预先具有机器专属TensorRT engine。
 
 ## 1. 系统依赖
 
@@ -19,10 +25,24 @@
 
 GraspNet 与 MuJoCo 的 PyYAML 固定版本分别为6.0.1和6.0.3；直接合并会产生
 版本冲突。TensorRT 是视觉环境的独立安装步骤，不是第五个虚拟环境。
-这些文件保留当前安装契约，本次文档清理不改变依赖版本或已安装环境。
+视觉和GraspNet使用相同的固定PyTorch/CUDA wheel版本，但仍保留独立环境。
+
+先按ROS官方说明安装ROS 2 Jazzy，再准备构建和运行所需系统包：
 
 ```bash
-sudo apt install ros-jazzy-moveit ros-jazzy-pinocchio
+sudo apt update
+sudo apt install build-essential git python3-venv python3-pip \
+  python3-colcon-common-extensions python3-vcstool python3-rosdep python3-pytest \
+  ros-jazzy-moveit ros-jazzy-pinocchio ros-jazzy-cv-bridge
+source /opt/ros/jazzy/setup.bash
+# 仅在本机从未初始化rosdep时执行 sudo rosdep init
+rosdep update
+rosdep install --from-paths src --ignore-src --rosdistro jazzy -r -y
+```
+
+### 控制器依赖（真机或完整软件回归需要）
+
+```bash
 python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
 ```
 
@@ -48,8 +68,7 @@ python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 此版本还校验达妙反馈的 CAN ID、电机 ID 和完整 DLC，并要求置零前主动查询到
 新的 status0 反馈；调用 disable 或新建句柄都不能代替状态确认。置零 API 不会
 自动失能，调用方仍需完成置零后的新帧验收。构建保留旧版本 wheel 以便回退。
-如需回退用户包，可执行
-`python3 -m pip install --user --break-system-packages --force-reinstall motorbridge==0.4.6`。
+重复安装bootstrap清单后也必须重新安装审查补丁并检查；不要把原始0.4.6用作真机运行版本。
 
 厂商 SDK 使用仓库根目录的 `rebotarm_dependencies.repos` 固定版本：
 
@@ -73,11 +92,39 @@ ROS 1 `catkin` 示例包。
 
 ## 2. 构建
 
+在未激活venv/conda、未source旧工作区的全新终端执行。统一使用系统Python，
+视觉安装脚本只准备依赖，不再以视觉venv重写控制器或ROS入口。
+
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
+/usr/bin/python3 -m colcon build --base-paths src --executor sequential --symlink-install
 source install/setup.bash
 ```
+
+不需要连接设备，也不需要先提供YOLO/GraspNet权重。构建时存在的
+`tools/yolo26s-seg.pt` 和旧默认engine会按原路径打包；不存在时不阻塞构建。
+运行时显式传入外部模型路径无需重建。不要把“构建通过”等同于“推理资产已准备”。
+
+安装控制器依赖并构建后可运行软件回归（不会授权真机动作）：
+
+```bash
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+python3 -m pytest tests -q
+```
+
+历史材料及其专属测试仅本机保留，已有开发目录若要只验证发布范围，可用
+`git ls-files -z tests | xargs -0 python3 -m pytest -q`。
+
+### 可选MuJoCo运行环境
+
+```bash
+python3 -m venv --system-site-packages third_party/rebotarm_mujoco_venv
+third_party/rebotarm_mujoco_venv/bin/python -m pip install -r requirements-mujoco.txt
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
+```
+
+不需要激活该venv或重新构建ROS包。仿真入口和模型见
+`src/rebotarm_simulation/README_mujoco.md`。
 
 ## 3. 硬件配置
 
@@ -104,10 +151,13 @@ Ubuntu 物理机直连 Gemini2 并在本机运行 CUDA YOLO 时，使用：
 ```bash
 ./tools/setup_ubuntu_vision.sh
 ./tools/install_orbbec_udev_rules.sh
-./tools/run_ubuntu_vision.sh
+./tools/run_ubuntu_vision.sh yolo_model_path:="$PWD/tools/yolo26s-seg.pt" yolo_device:=0
 ```
 
-完整说明见 `docs/ubuntu_vision_setup_zh.md`。
+上述命令只启动相机和YOLO，不启动机械臂。CPU可改为`yolo_device:=cpu`。
+使用TensorRT前应在目标机器准备兼容engine并显式传入路径，安装脚本不会下载或导出模型。
+GraspNet独立环境、模型输入和完整视觉launch见 `docs/ubuntu_vision_setup_zh.md`。
+逐进程解释器设置见 `docs/launch_python_configuration.md`。
 
 网络备用链路仍使用 `src/rebotarm_vision/config/camera.yaml`，默认连接本机：
 
@@ -157,7 +207,8 @@ shutdown_safe_home:=false
 auto_enable:=false
 ```
 
-这些默认值已经落地；实机执行仍必须显式选择硬件后端并调用 `/rebotarm/enable`，且必须先完成 P0 实机分级验收。
+这些默认值已经落地；实机执行仍必须显式选择硬件后端并调用 `/rebotarm/enable`，
+且针对当前机器完成分级预检。旧阶段的验收结果不自动适用于新设备。
 
 ## 6. P0 Gate B/C：显式 enable、hold 与 disable
 

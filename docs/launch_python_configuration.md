@@ -21,25 +21,28 @@
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/a/project/rebot_Arm/install/setup.bash
-export REBOTARM_MUJOCO_PYTHON=/home/a/project/rebot_Arm/third_party/rebotarm_mujoco_venv/bin/python
-export REBOTARM_VISION_PYTHON=/home/a/project/rebot_Arm/.venv-vision/bin/python
-export GRASPNET_PYTHON=/home/a/project/rebot_Arm/.venv-graspnet/bin/python
+source install/setup.bash
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
+export REBOTARM_VISION_PYTHON="$PWD/.venv-vision/bin/python"
+export GRASPNET_PYTHON="$PWD/.venv-graspnet/bin/python"
 ```
 
 整合前的工作树分别使用 `install_decoupling` 和 `install_coupling_audit` 验证。
 整合后主目录独立构建全部包，不再依赖工作树overlay。主目录重建命令为：
 
 ```bash
-cd /home/a/project/rebot_Arm
+# 从当前仓库根目录、未激活虚拟环境的新终端执行
 unset PYTHONPATH AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH
 source /opt/ros/jazzy/setup.bash
-colcon build --base-paths src --executor sequential
+/usr/bin/python3 -m colcon build --base-paths src --executor sequential --symlink-install
 ```
 
-工作树缺失的 `tools/yolo26m-seg-fp16-b1-640-linux.engine` 已通过本地符号链接
-引用主目录同名模型，使视觉包能按既有资源规则构建；模型本体未改动，该链接不应
-纳入源码提交。新部署仍须按视觉包既有安装要求提供模型文件。
+模型不再是构建前置条件。构建时存在的旧默认engine和PT模型会可选打包，
+缺失则不打包；运行时启用检测仍必须提供可读且兼容的模型。
+独立视觉使用`yolo_model_path`，完整视觉使用`vision_yolo_model_path`覆盖路径。
+模型准备和PT启动示例见 [视觉环境说明](ubuntu_vision_setup_zh.md)。
+`tools/setup_ubuntu_vision.sh`只安装依赖；`tools/run_ubuntu_vision.sh`只为视觉
+设置解释器环境变量，不再激活venv或注入全局PYTHONPATH。
 
 部署到其他机器时，改为那台机器实际安装的解释器路径即可。也可以在每次 launch
 中设置表中的参数覆盖环境变量。GraspNet 模型根目录、checkpoint、相机配置和

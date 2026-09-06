@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T22:16:58+08:00",
+  "generated_at": "2026-09-06T22:32:22+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "f060d68",
+    "head": "e4eb754",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-06T22:16:58+08:00 | actor=Codex | event=complete | note=112个历史材料/闲置副本/旧模型文件退出跟踪，本机保留；有效测试和来源授权保留，准备提交同步main | verification=发布副本仅补SDK/install环境：807 passed, 7 skipped；compileall/diff通过；112文件保留且与HEAD逐字节一致"
+  "last_event": "- 2026-09-06T22:32:22+08:00 | actor=Codex | event=complete | note=安装脚本/模型可选打包/README已同步当前架构，独立构建验证完成，准备提交推送main | verification=无PT/engine副本13包构建通过；新install+SDK全量811 passed/7 skipped；分层20、compileall/bash/diff和3类launch参数解析通过；未重装环境或操作硬件"
 }

@@ -8,10 +8,11 @@ vision_model_sources = [
     Path("../../tools/yolo26s-seg.pt"),
 ]
 
-for vision_model_source in vision_model_sources:
-    vision_model = (Path(__file__).resolve().parent / vision_model_source).resolve()
-    if not vision_model.is_file():
-        raise FileNotFoundError(f"vision model not found: {vision_model}")
+# Runtime assets are optional at build time; detection validates its model path.
+vision_model_sources = [
+    path for path in vision_model_sources
+    if (Path(__file__).resolve().parent / path).is_file()
+]
 
 setup(
     name=package_name,
