@@ -577,3 +577,4 @@
 - 2026-09-06T21:35:45+08:00 | actor=Codex | event=complete | note=六份旧根目录文档已清理并合并MoveIt有效说明；五份requirements保留且用途写明，环境不变 | verification=827 passed/8 skipped; obsolete references removed; requirements unchanged; git diff --check OK; no hardware actions
 - 2026-09-06T21:53:44+08:00 | actor=Codex | event=start | note=按用户授权发布源码与文档整理到GitHub，并同步整合版本到main；保留开发分支，不上传本地数据或操作硬件 | verification=-
 - 2026-09-06T21:56:18+08:00 | actor=Codex | event=verified | note=GitHub发布内容准备完成；827项软件测试通过，J3已独立提交，下一步正常合并远端main并推送 | verification=827 passed/8 skipped; compileall/diff; no newly tracked models, engines, logs or evidence payloads
+- 2026-09-06T21:58:31+08:00 | actor=Codex | event=complete | note=GitHub PR #1已合并到main，首页与简介更新，开发分支保留；本地主目录切换main，追加发布记录 | verification=PR1 merged 359d9f1; code tree equals tested afb3f9b; 827 passed/8 skipped; compileall/diff; no hardware actions; no newly uploaded local artifacts

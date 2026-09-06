@@ -10,6 +10,7 @@
 
 ## 当前事实
 
+- 2026-09-06 GitHub发布完成：J3同步提交e24cc52、文档/首页/忽略规则整理提交d3259cc；正常合并远端main的Star Arm工具后推送开发分支afb3f9b，经现有PR #1合入main，合并提交359d9f1。GitHub默认分支仍为main，仓库简介已补全，现有三个开发/备份分支均保留；本地主目录已切换main并快进同步，未force-push或删除历史。主项目合并后827 passed/8 skipped，compileall/diff通过；合并后的代码树与已测发布头一致。旧规划/手册从当前树移除但可历史恢复，既有模型/上游参考资产保留，本轮未新增模型、engine、日志、构建产物或本地实验数据。此发布记录随后单独提交同步；不构成真机验收，未操作硬件。
 - 2026-09-06 用户要求提交并整理GitHub，随后明确选择将整合版本同步到main且保留现有开发分支。发布准备包含已验证的J3限位同步、两份规划和六份旧手册清理、标准build/install/log约定、首页及13包目录说明；新增本地模型/engine/运行数据/额外实验记录/外部SDK忽略规则，仅影响未跟踪文件，现有模型和来源快照不移除、不重写历史。远端main含独立Star Arm工具提交bab08dc，必须正常合并保留，不得用旧本地main覆盖。发布前主项目827 passed/8 skipped、compileall/diff通过；模型、环境和实验数据仍在本机，未操作硬件。最终远端同步结果以本轮后续活动记录为准。
 - 2026-09-06 按用户要求清理六份根目录旧文档：历史工程记忆、交互状态快照、交互验收、旧实机预检、旧USAGE及MoveIt使用说明；全部已有Git历史可恢复。MoveIt仍有效的规划/执行/反馈检查及受控停机说明合并到 `docs/rebotarm_feature_commands.md`，移除旧节点依赖和过时P0禁用提示，保留本次动作授权、唯一串口、基线确认后失能及健康回位失败保持原则。AGENTS和Agent文档引用已同步。五份requirements分别服务控制器bootstrap、视觉、GraspNet、MuJoCo、TensorRT独立安装步骤，因环境版本与安装参数不同予以保留；用途表见 `docs/local_setup_zh.md`，未更改依赖文件或安装环境。全量827 passed/8 skipped，当前文档/代码无已删文件引用，diff检查通过；未操作硬件、未提交推送，也未改另一任务的J3实现。
 - 2026-09-06 用户明确要求J3按J2方式增加0.02rad上端余量，当前软件范围同步为 `[-3.14,+0.02] rad`：Star SDK mapping、主项目硬件检查、MoveIt URDF及由其生成的MuJoCo模型/分析profile均已更新。该范围同时接受目标和反馈，不改零位、不加减反馈偏移；`0.020001 rad`仍拒绝，其余轴和夹爪不变。TDD先复现SDK四项、硬件三项正值被拒，再做最小数值修复；SDK449 passed，主项目827 passed/8 skipped，分层20、编译/diff和MJCF生成一致性通过。controller/moveit_config/simulation三包重建，并回读installed J3与URDF上限均为0.02。本轮未访问串口、未使能或发送运动命令，未提交推送，实体复测待用户执行。

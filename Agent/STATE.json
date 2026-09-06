@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T21:56:18+08:00",
+  "generated_at": "2026-09-06T21:58:31+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -162,9 +162,9 @@
     "[已完成、关闭前plan-only验证] operator 授权的真实视觉测试中，机械臂全程 `disabled/IDLE/status0`；fresh valid bottle plan confidence `0.9310057`、jaw `0.0749830 m`、age `2.946 s`，MoveIt `execute=false` 对 pregrasp/grasp 分别生成 `55/82` 点轨迹。未启动 VisualGraspExecutor、未 enable、未发送 trajectory 或夹爪命令；清理后 runtime、ROS daemon、8081/8088、串口占用均为空。当前队列停止，等待 operator 提供下一份规划，不自行创建 P7。"
   ],
   "git": {
-    "branch": "codex/mujoco-sim-landing",
-    "head": "e24cc52",
+    "branch": "main",
+    "head": "359d9f1",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-06T21:56:18+08:00 | actor=Codex | event=verified | note=GitHub发布内容准备完成；827项软件测试通过，J3已独立提交，下一步正常合并远端main并推送 | verification=827 passed/8 skipped; compileall/diff; no newly tracked models, engines, logs or evidence payloads"
+  "last_event": "- 2026-09-06T21:58:31+08:00 | actor=Codex | event=complete | note=GitHub PR #1已合并到main，首页与简介更新，开发分支保留；本地主目录切换main，追加发布记录 | verification=PR1 merged 359d9f1; code tree equals tested afb3f9b; 827 passed/8 skipped; compileall/diff; no hardware actions; no newly uploaded local artifacts"
 }
