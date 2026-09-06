@@ -2,6 +2,8 @@
 
 本文记录本仓库在 Ubuntu 24.04 / ROS 2 Jazzy 上的本地运行基线。
 
+> 当前安全状态：P0 软件门控和真实机械臂的 joint states、enable/hold/disable、失败 cleanup 已通过验收。`HardwareManager.connect()` 仍只连接并保持失能，动作目标在显式 enable 前会被拒绝。P0 通过不替代 P2-P6 的感知、标定和完整系统验收；完成后续证据前继续优先使用无硬件仿真、视觉独立验证和明确的 plan-only 检查。
+
 ## 1. 系统依赖
 
 ```bash
@@ -92,7 +94,71 @@ ros2 launch rebotarm_vision vision.launch.py \
 
 ## 5. 安全顺序
 
-1. 先运行 MoveIt/RViz 无硬件演示。
-2. 再检查串口或 CAN、关节方向、零位和软限位。
-3. 使用低速度验证 `joint_states`、停止服务和单点轨迹。
-4. 最后启用网页执行、示教回放和视觉抓取。
+1. 先运行 MoveIt/RViz 或 MuJoCo 无硬件演示，确认没有打开串口或 CAN。
+2. 在真机旁验证已完成的 `connect()` / `enable()` 解耦：启动驱动不得自动上力。
+3. 检查串口或 CAN、关节方向、零位、软限位和 enable 失败回滚。
+4. 在失能状态验证 `joint_states`，再显式 enable 并保持当前位置。
+5. 使用低速度验证停止服务、单关节小角度和单个安全姿态。
+6. 依次开放网页执行、示教回放、视觉 plan-only 和视觉低速执行。
+
+完整视觉抓取的目标安全默认值是：
+
+```text
+use_hardware:=false
+execution_mode:=plan_only
+move_to_visual_ready_on_start:=false
+shutdown_safe_home:=false
+auto_enable:=false
+```
+
+这些默认值已经落地；实机执行仍必须显式选择硬件后端并调用 `/rebotarm/enable`，且必须先完成 P0 实机分级验收。
+
+## 6. P0 Gate B/C：显式 enable、hold 与 disable
+
+先在终端 A 只启动硬件 driver：
+
+```bash
+cd /home/a/project/rebot_Arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 launch rebotarm_bringup driver_only.launch.py \
+  channel:=/dev/ttyACM0 \
+  joint_state_rate:=20.0
+```
+
+确认启动日志为 `CONNECTED_DISABLED`。终端 B 从仓库根目录运行专用验收工具：
+
+```bash
+cd /home/a/project/rebot_Arm
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run rebotarmcontroller p0_gate_bc_acceptance \
+  --hold-seconds 10 \
+  --max-position-jump-rad 0.03 \
+  --max-abs-velocity-rad-s 0.05
+```
+
+工具只有在以下 preflight / 预检全部成立时才继续：
+
+- 六轴 joint names、位置和速度有效；
+- `enabled=false`、`control_loop_active=false`、`state_machine=IDLE`；
+- 六个电机状态码全为 `0`，controller 没有 error code；
+- 当前绝对速度没有超过验收阈值。
+
+现场确认工作区清空、机械臂有失能防坠措施且急停可用后，按工具提示输入精确确认词：
+
+```text
+ENABLE_HOLD_TEST
+```
+
+随后工具只执行显式 enable、当前位置 hold 监控和 disable，不发送 trajectory、safe-home 或 gripper 命令。位置跳变或速度超限时会请求 `trajectory_stop` 和 `disable`；物理急停始终是软件失效时的第一停止手段。
+
+无论通过、失败还是操作员中止，工具都会在以下目录写入 JSON 证据：
+
+```text
+Agent/evidence/P0/gate-bc-YYYYMMDD-HHMMSS.json
+```
+
+只有最终状态满足 `enabled=false`、控制循环停止、六个状态码全为 `0`，且 disable 后 joint states 继续刷新，Gate C 才能通过。

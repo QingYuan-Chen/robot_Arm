@@ -128,11 +128,11 @@ def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
 def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert 'DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.105, 0.0, 0.0]")' in launch_text
+    assert 'DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.04, 0.0, 0.0]")' in launch_text
 
 
-def test_real_grasp_profiles_follow_upstream_explicit_ee_site_nominal():
-    expected = "[-0.105, 0.0, 0.0]"
+def test_real_grasp_profiles_follow_operator_measured_tcp():
+    expected = "[-0.04, 0.0, 0.0]"
     for relative in (
         "src/rebotarm_vision/config/camera.yaml",
         "src/rebotarm_vision/config/camera_ubuntu.yaml",
@@ -140,10 +140,8 @@ def test_real_grasp_profiles_follow_upstream_explicit_ee_site_nominal():
     ):
         assert f"tcp_offset_xyz: {expected}" in _read(relative)
 
-    upstream_model = _read(
-        "third_party/robotarm_ros2_mujoco_snapshot/src/rebotarm_simulation/models/rebotarm/robot.xml"
-    )
-    assert 'name="ee_site" pos="-0.105 0 0"' in upstream_model
+    local_model = _read("src/rebotarm_simulation/models/rebotarm/robot.xml")
+    assert 'name="ee_site" pos="-0.04 0 0"' in local_model
 
 
 def test_visual_grasp_strategy_defaults_are_split_into_yaml_profiles():
@@ -330,9 +328,9 @@ def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
     assert '"start_vision": "true"' in launch_text
     assert '"vision_profile": "ubuntu_native"' in launch_text
     assert '"start_graspnet_baseline": "true"' in launch_text
-    assert '"graspnet_source_mode": "local_service"' in launch_text
+    assert '"graspnet_source_mode": "in_process"' in launch_text
     assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
-    assert '"graspnet_local_infer_url": graspnet_local_infer_url' in launch_text
+    assert "graspnet_local_infer_url" not in launch_text
     assert 'SetEnvironmentVariable(name="PYTHONPATH", value=_vision_pythonpath())' in launch_text
     assert '"candidate_ik_input_topic": "/grasp/graspnet_candidates"' in launch_text
     assert '"candidate_pose_policy": "preserve_candidate_pose"' in launch_text
@@ -354,11 +352,10 @@ def test_visual_grasp_system_can_disable_rviz_only_controller_for_external_mujoc
     assert 'start_sim_trajectory_controller = LaunchConfiguration("start_sim_trajectory_controller")' in launch_text
     assert 'DeclareLaunchArgument(\n                "start_sim_trajectory_controller",' in launch_text
     assert "start_sim_trajectory_controller," in launch_text
-    assert '"local_infer_url": graspnet_local_infer_url' in launch_text
-    assert '"local_timeout_ms": graspnet_local_timeout_ms' in launch_text
     assert '"max_input_skew_ms": graspnet_max_input_skew_ms' in launch_text
     assert "graspnet_config," in launch_text
-    assert 'DeclareLaunchArgument("graspnet_config", default_value=graspnet_policy_params)' in launch_text
+    assert 'DeclareLaunchArgument("graspnet_config", default_value=graspnet_ubuntu_params)' in launch_text
+    assert 'prefix=graspnet_python_executable' in launch_text
 
 
 def test_sim_trajectory_controller_publishes_gripper_state_for_rviz_finger_links():
@@ -482,9 +479,10 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert "rebotarm_graspnet_baseline_node" in setup_scripts
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_source_mode", default_value="network")' in launch_text
+    assert 'DeclareLaunchArgument("graspnet_source_mode", default_value="in_process")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_model_root", default_value="")' in launch_text
+    assert '"GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"' in launch_text
+    assert '"GRASPNET_CHECKPOINT_PATH"' in launch_text
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
     assert '"source_mode": graspnet_source_mode' in launch_text
@@ -495,7 +493,7 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert "candidate_scoring_mode" not in launch_text
     assert '"scoring_mode"' not in launch_text
     assert 'DeclareLaunchArgument("executor_input_topic", default_value="/grasp/filtered_plan")' in launch_text
-    assert "GraspNetBaselineBackend" in node_text
+    assert "InProcessGraspNetBackend" in node_text
     assert "NetworkGraspNetClient" in node_text
     assert "GraspCandidateArray" in node_text
     assert "self.candidates_pub.publish(candidates)" in node_text
@@ -829,7 +827,7 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
     profile_text = _read("src/rebotarm_vision/config/flat_graspnet.yaml")
 
     assert "candidate_pose_policy: preserve_candidate_pose" in profile_text
-    assert "tcp_offset_xyz: [-0.105, 0.0, 0.0]" in profile_text
+    assert "tcp_offset_xyz: [-0.04, 0.0, 0.0]" in profile_text
     assert "target_base_offset_xyz: [0.0, 0.0, 0.0]" in profile_text
     assert "candidate_workspace_gate_enabled: true" in profile_text
     assert "candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]" in profile_text
@@ -1046,7 +1044,8 @@ def test_gripper_action_aborts_when_target_is_not_reached():
         "\n    def ", 1
     )[0]
 
-    assert "result.reached_goal = self._hardware.gripper_reached_target()" in gripper_body
+    assert "failure_reason is None and self._hardware.gripper_reached_target()" in gripper_body
+    assert "self._hardware.cancel_gripper_position_command(" in gripper_body
     assert "if result.reached_goal:" in gripper_body
     assert "goal_handle.succeed()" in gripper_body
     assert "goal_handle.abort()" in gripper_body
@@ -1461,7 +1460,7 @@ def test_controller_shutdown_safe_home_is_explicit_opt_in_before_disable():
     assert "joint positions are not finite" in controller_text
     assert "shutdown safe_home skipped" in controller_text
     assert "shutdown conditional safe_home complete" in controller_text
-    assert "self.hardware.endpos_ctrl.safe_home()" in controller_text
+    assert "self.hardware.safe_home(self.safe_home_joint_positions())" in controller_text
     assert "self.hardware.shutdown()" in controller_text
     assert "def connected(self) -> bool:" in hardware_text
     assert "def gripper_active(self) -> bool:" in hardware_text

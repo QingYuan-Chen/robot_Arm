@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import deque
+import json
+import os
 
 import numpy as np
 import rclpy
@@ -17,18 +19,11 @@ from sensor_msgs.msg import CameraInfo, Image
 from rebotarm_msgs.msg import Detection2DArray, GraspCandidateArray
 
 from .graspnet_baseline_adapter import (
-    CameraIntrinsics,
-    GraspNetBaselineBackend,
-    build_point_cloud_for_detection,
+    InProcessGraspNetBackend,
+    closest_timestamped_frame,
     payload_to_candidate_array,
-    predictions_to_candidate_array,
 )
 from .network_graspnet_client import NetworkGraspNetClient, NetworkGraspNetConfig
-from .local_graspnet_client import (
-    LocalGraspNetClient,
-    LocalGraspNetConfig,
-    closest_timestamped_frame,
-)
 from .ordinary_grasp_node import depth_image_to_array
 
 
@@ -55,14 +50,17 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("network_candidates_url", "http://127.0.0.1:8081/graspnet_candidates.json")
         self.declare_parameter("network_timeout_ms", 1000)
         self.declare_parameter("network_poll_hz", 5.0)
-        self.declare_parameter("local_infer_url", "http://127.0.0.1:8081/infer")
-        self.declare_parameter("local_timeout_ms", 2000)
         self.declare_parameter("max_input_skew_ms", 100)
         self.declare_parameter("depth_scale_m_per_unit", 0.001)
-        self.declare_parameter("model_root", "")
-        self.declare_parameter("checkpoint_path", "")
+        self.declare_parameter("model_root", os.environ.get("GRASPNET_MODEL_ROOT", ""))
+        self.declare_parameter(
+            "checkpoint_path", os.environ.get("GRASPNET_CHECKPOINT_PATH", "")
+        )
         self.declare_parameter("device", "cuda:0")
         self.declare_parameter("backend_module", "graspnet_baseline_inference")
+        self.declare_parameter(
+            "backend_module_path", os.environ.get("GRASPNET_BACKEND_MODULE_PATH", "")
+        )
         self.declare_parameter("max_grasps", 20)
         self.declare_parameter("max_jaw_width_m", 0.085)
         self.declare_parameter("max_points", 20000)
@@ -75,14 +73,8 @@ class GraspNetBaselineNode(Node):
 
         self.output_frame_id = str(self.get_parameter("output_frame_id").value)
         self.source_mode = str(self.get_parameter("source_mode").value).strip()
-        if self.source_mode not in {"network", "local_backend", "local_service"}:
+        if self.source_mode not in {"network", "in_process"}:
             raise ValueError(f"unsupported source_mode: {self.source_mode}")
-        self.intrinsics = CameraIntrinsics(
-            fx=float(self.get_parameter("fx").value),
-            fy=float(self.get_parameter("fy").value),
-            cx=float(self.get_parameter("cx").value),
-            cy=float(self.get_parameter("cy").value),
-        )
         self.latest_color_bgr: np.ndarray | None = None
         self.latest_depth_mm: np.ndarray | None = None
         self.latest_color_timestamp_ns = 0
@@ -91,12 +83,13 @@ class GraspNetBaselineNode(Node):
         self.color_frame_cache = deque(maxlen=8)
         self.depth_frame_cache = deque(maxlen=8)
         self.latest_camera_info: dict[str, float] | None = None
-        self.last_local_detection_timestamp_ns = 0
-        self.pending_local_detections: Detection2DArray | None = None
+        self.last_inprocess_detection_timestamp_ns = 0
+        self.pending_inprocess_detections: Detection2DArray | None = None
         self._warned_backend = False
-        self.backend = self._create_backend() if self.source_mode == "local_backend" else None
+        self.backend = (
+            self._create_inprocess_backend() if self.source_mode == "in_process" else None
+        )
         self.network_client = self._create_network_client() if self.source_mode == "network" else None
-        self.local_client = self._create_local_client() if self.source_mode == "local_service" else None
 
         self.candidates_pub = self.create_publisher(
             GraspCandidateArray,
@@ -119,7 +112,7 @@ class GraspNetBaselineNode(Node):
                 self._on_depth,
                 qos_profile_sensor_data,
             )
-            if self.source_mode == "local_service":
+            if self.source_mode == "in_process":
                 self.create_subscription(
                     CameraInfo,
                     str(self.get_parameter("input_camera_info_topic").value),
@@ -140,7 +133,8 @@ class GraspNetBaselineNode(Node):
         self.get_logger().info(
             "GraspNet baseline candidate node ready: "
             f"output={str(self.get_parameter('output_candidates_topic').value)}, "
-            f"source_mode={self.source_mode}"
+            f"source_mode={self.source_mode}, "
+            f"backend_available={self.backend.available if self.backend is not None else 'n/a'}"
         )
 
     def _create_network_client(self) -> NetworkGraspNetClient:
@@ -151,25 +145,21 @@ class GraspNetBaselineNode(Node):
             )
         )
 
-    def _create_backend(self) -> GraspNetBaselineBackend:
-        try:
-            return GraspNetBaselineBackend(
-                model_root=str(self.get_parameter("model_root").value),
-                checkpoint_path=str(self.get_parameter("checkpoint_path").value),
-                device=str(self.get_parameter("device").value),
-                module_name=str(self.get_parameter("backend_module").value),
-            )
-        except Exception as exc:
-            self.get_logger().warn(f"GraspNet baseline backend unavailable: {type(exc).__name__}: {exc}")
-            return GraspNetBaselineBackend(model_root="")
-
-    def _create_local_client(self) -> LocalGraspNetClient:
-        return LocalGraspNetClient(
-            LocalGraspNetConfig(
-                infer_url=str(self.get_parameter("local_infer_url").value),
-                timeout_ms=int(self.get_parameter("local_timeout_ms").value),
-            )
+    def _create_inprocess_backend(self) -> InProcessGraspNetBackend:
+        backend = InProcessGraspNetBackend(
+            model_root=str(self.get_parameter("model_root").value),
+            checkpoint_path=str(self.get_parameter("checkpoint_path").value),
+            device=str(self.get_parameter("device").value),
+            module_name=str(self.get_parameter("backend_module").value),
+            module_path=str(self.get_parameter("backend_module_path").value),
+            num_point=max(1, int(self.get_parameter("max_points").value)),
         )
+        if not backend.available:
+            self.get_logger().error(
+                "GraspNet in-process backend unavailable; candidates will fail closed: "
+                f"{backend.backend_error}"
+            )
+        return backend
 
     def _on_color(self, msg: Image) -> None:
         try:
@@ -178,8 +168,8 @@ class GraspNetBaselineNode(Node):
             self.color_frame_cache.append(
                 (self.latest_color_timestamp_ns, self.latest_color_bgr)
             )
-            if self.source_mode == "local_service":
-                self._try_process_local_service_detection()
+            if self.source_mode == "in_process":
+                self._try_process_inprocess_detection()
         except ValueError as exc:
             self.get_logger().warn(str(exc))
 
@@ -195,8 +185,8 @@ class GraspNetBaselineNode(Node):
                     self.latest_depth_frame_id,
                 )
             )
-            if self.source_mode == "local_service":
-                self._try_process_local_service_detection()
+            if self.source_mode == "in_process":
+                self._try_process_inprocess_detection()
         except ValueError as exc:
             self.get_logger().warn(str(exc))
 
@@ -207,7 +197,7 @@ class GraspNetBaselineNode(Node):
             "cx": float(msg.k[2]),
             "cy": float(msg.k[5]),
         }
-        self._try_process_local_service_detection()
+        self._try_process_inprocess_detection()
 
     def _on_network_timer(self) -> None:
         if self.network_client is None:
@@ -227,90 +217,31 @@ class GraspNetBaselineNode(Node):
         self.candidates_pub.publish(candidates)
 
     def _on_detections(self, msg: Detection2DArray) -> None:
-        detection_timestamp_ns = self._stamp_to_ns(msg.header.stamp)
-        if self.source_mode == "local_service":
-            self._on_local_service_detections(msg)
-            return
-        if self.latest_depth_mm is None or self.latest_color_bgr is None:
-            return
-        if not msg.detections:
-            self._publish_empty(
-                timestamp_ns=detection_timestamp_ns,
-                frame_id=self.latest_depth_frame_id,
-            )
-            return
-        if self.backend is None or not self.backend.available:
-            if not self._warned_backend:
-                self.get_logger().warn(
-                    "GraspNet baseline backend is not configured; "
-                    "install/wrap graspnet-baseline before using V1.3 candidates"
-                )
-                self._warned_backend = True
-            self._publish_empty(
-                timestamp_ns=detection_timestamp_ns,
-                frame_id=self.latest_depth_frame_id,
-            )
+        if self.source_mode == "in_process":
+            self._on_inprocess_detections(msg)
             return
 
-        detection = max(msg.detections, key=lambda item: float(item.confidence))
-        crop = build_point_cloud_for_detection(
-            self.latest_depth_mm,
-            self.latest_color_bgr,
-            detection,
-            self.intrinsics,
-            min_depth_m=float(self.get_parameter("min_depth_m").value),
-            max_depth_m=float(self.get_parameter("max_depth_m").value),
-        )
-        if crop.points.size == 0:
-            self.get_logger().warn("GraspNet baseline skipped frame: no valid depth in selected detection ROI")
-            self._publish_empty(
-                timestamp_ns=detection_timestamp_ns,
-                frame_id=self.latest_depth_frame_id,
-            )
-            return
-        points, colors = self._downsample(crop.points, crop.colors)
-        try:
-            predictions = self.backend.infer(
-                points=points,
-                colors=colors,
-                max_grasps=int(self.get_parameter("max_grasps").value),
-            )
-        except Exception as exc:
-            self.get_logger().warn(f"GraspNet baseline inference failed: {type(exc).__name__}: {exc}")
-            self._publish_empty(
-                timestamp_ns=detection_timestamp_ns,
-                frame_id=self.latest_depth_frame_id,
-            )
-            return
-        candidates = predictions_to_candidate_array(
-            predictions,
-            frame_id=self.output_frame_id,
-            class_name=str(detection.class_name),
-            max_candidates=int(self.get_parameter("max_grasps").value),
-        )
-        self.candidates_pub.publish(candidates)
+    def _on_inprocess_detections(self, msg: Detection2DArray) -> None:
+        self.pending_inprocess_detections = msg
+        self._try_process_inprocess_detection()
 
-    def _on_local_service_detections(self, msg: Detection2DArray) -> None:
-        self.pending_local_detections = msg
-        self._try_process_local_service_detection()
-
-    def _try_process_local_service_detection(self) -> None:
-        msg = self.pending_local_detections
+    def _try_process_inprocess_detection(self) -> None:
+        msg = self.pending_inprocess_detections
         if msg is None:
             return
         detection_timestamp_ns = self._stamp_to_ns(msg.header.stamp)
-        if detection_timestamp_ns <= self.last_local_detection_timestamp_ns:
-            self.pending_local_detections = None
+        if detection_timestamp_ns <= self.last_inprocess_detection_timestamp_ns:
+            self.pending_inprocess_detections = None
             return
         if not msg.detections:
-            self.pending_local_detections = None
-            self.last_local_detection_timestamp_ns = detection_timestamp_ns
+            self.pending_inprocess_detections = None
+            self.last_inprocess_detection_timestamp_ns = detection_timestamp_ns
             self._publish_empty(
                 timestamp_ns=detection_timestamp_ns,
                 frame_id=self.latest_depth_frame_id,
             )
             return
-        if self.local_client is None or self.latest_camera_info is None:
+        if self.backend is None or self.latest_camera_info is None:
             return
         color_frame = closest_timestamped_frame(
             self.color_frame_cache, detection_timestamp_ns
@@ -330,32 +261,49 @@ class GraspNetBaselineNode(Node):
             # The matching image callback may not have been scheduled yet.
             # Keep only this newest detection pending and retry when RGB/depth arrives.
             return
-        self.pending_local_detections = None
-        self.last_local_detection_timestamp_ns = detection_timestamp_ns
+        self.pending_inprocess_detections = None
+        self.last_inprocess_detection_timestamp_ns = detection_timestamp_ns
         detection = max(msg.detections, key=lambda item: float(item.confidence))
-        payload = self.local_client.infer(
+        if not self.backend.available:
+            self._publish_empty(timestamp_ns=depth_timestamp_ns, frame_id=depth_frame_id)
+            return
+        detection_payload = {
+            "x_min": int(detection.x_min),
+            "y_min": int(detection.y_min),
+            "x_max": int(detection.x_max),
+            "y_max": int(detection.y_max),
+            "confidence": float(detection.confidence),
+            "class_name": str(detection.class_name),
+        }
+        if bool(getattr(detection, "has_mask", False)) and len(
+            getattr(detection, "mask_polygon_xy", [])
+        ) >= 6:
+            detection_payload["mask_polygon_xy"] = [
+                float(value) for value in detection.mask_polygon_xy
+            ]
+        try:
+            payload = self.backend.infer(
+                timestamp_ns=depth_timestamp_ns,
+                frame_id=depth_frame_id,
+                color_bgr=color_bgr,
+                depth_m=depth_mm.astype(np.float32)
+                * float(self.get_parameter("depth_scale_m_per_unit").value),
+                camera_info=self.latest_camera_info,
+                detection=detection_payload,
+                max_grasps=int(self.get_parameter("max_grasps").value),
+                max_jaw_width_m=float(self.get_parameter("max_jaw_width_m").value),
+            )
+        except Exception as exc:
+            self.get_logger().warn(
+                f"GraspNet in-process inference failed: {type(exc).__name__}: {exc}"
+            )
+            self._publish_empty(timestamp_ns=depth_timestamp_ns, frame_id=depth_frame_id)
+            return
+        self._log_stage_counts(
             timestamp_ns=depth_timestamp_ns,
             frame_id=depth_frame_id,
-            color_bgr=color_bgr,
-            depth_m=depth_mm.astype(np.float32)
-            * float(self.get_parameter("depth_scale_m_per_unit").value),
-            intrinsics=self.latest_camera_info,
-            bbox={
-                "x_min": int(detection.x_min),
-                "y_min": int(detection.y_min),
-                "x_max": int(detection.x_max),
-                "y_max": int(detection.y_max),
-                "confidence": float(detection.confidence),
-                "class_name": str(detection.class_name),
-            },
-            max_grasps=int(self.get_parameter("max_grasps").value),
-            max_jaw_width_m=float(self.get_parameter("max_jaw_width_m").value),
-            mask_polygon_xy=(
-                [float(value) for value in detection.mask_polygon_xy]
-                if bool(getattr(detection, "has_mask", False))
-                and len(getattr(detection, "mask_polygon_xy", [])) >= 6
-                else None
-            ),
+            class_name=str(detection.class_name),
+            candidates=payload.get("candidates", []),
         )
         candidates = payload_to_candidate_array(
             payload,
@@ -364,12 +312,34 @@ class GraspNetBaselineNode(Node):
         )
         self.candidates_pub.publish(candidates)
 
-    def _downsample(self, points: np.ndarray, colors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        max_points = max(1, int(self.get_parameter("max_points").value))
-        if len(points) <= max_points:
-            return points, colors
-        step = max(1, int(len(points) / max_points))
-        return points[::step][:max_points], colors[::step][:max_points]
+    def _log_stage_counts(
+        self,
+        *,
+        timestamp_ns: int,
+        frame_id: str,
+        class_name: str,
+        candidates,
+    ) -> None:
+        if self.backend is None:
+            return
+        stage_counts = self.backend.last_stage_counts
+        if not stage_counts:
+            return
+        top_score = None
+        if candidates:
+            top_score = float(candidates[0].get("score", 0.0))
+        record = {
+            "event": "graspnet_stage_counts",
+            "transport": "in_process",
+            "timestamp_ns": int(timestamp_ns),
+            "frame_id": str(frame_id),
+            "class_name": str(class_name),
+            "max_grasps": int(self.get_parameter("max_grasps").value),
+            "max_jaw_width_m": float(self.get_parameter("max_jaw_width_m").value),
+            **stage_counts,
+            "published_top_score": top_score,
+        }
+        self.get_logger().info(json.dumps(record, separators=(",", ":")))
 
     def _publish_empty(
         self,
@@ -398,9 +368,15 @@ def main(args=None) -> None:
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
+        try:
+            node.destroy_node()
+        except KeyboardInterrupt:
+            pass
         if rclpy.ok():
-            rclpy.shutdown()
+            try:
+                rclpy.shutdown()
+            except KeyboardInterrupt:
+                pass
 
 
 if __name__ == "__main__":

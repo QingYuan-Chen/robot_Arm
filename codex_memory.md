@@ -1,5 +1,7 @@
 # reBotArm 工程记忆
 
+> 文档状态：历史工程流水记录。当前事实、执行队列、阻塞和项目完成度已经迁移到 `Agent/`；新任务优先读取 `Agent/MEMORY.md`、`Agent/PROJECT_STATUS.md` 和 `Agent/STATE.json`。本文不再作为“当前状态”来源。
+
 本文用于记录本仓库已经完成的工程改造、环境基线、验证结果和后续工作。
 后续修改工程前，应先阅读本文件、`AGENTS.md`、`CONTEXT.md` 和
 `docs/architecture.md`。

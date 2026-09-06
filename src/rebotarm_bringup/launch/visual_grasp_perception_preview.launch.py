@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
@@ -7,19 +10,36 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
+def _workspace_path(environment_name: str, relative_path: str) -> str:
+    configured = os.environ.get(environment_name, "").strip()
+    if configured:
+        return configured
+    source = Path(__file__).resolve()
+    for parent in source.parents:
+        candidate = parent / relative_path
+        if candidate.exists():
+            return str(candidate)
+    return ""
+
+
+def _graspnet_python_executable() -> str:
+    return _workspace_path("GRASPNET_PYTHON", ".venv-graspnet/bin/python") or "python3"
+
+
 def generate_launch_description():
     bringup_share = FindPackageShare("rebotarm_bringup")
     vision_share = FindPackageShare("rebotarm_vision")
 
     grasp_pose_policy_params = PathJoinSubstitution([vision_share, "config", "grasp_pose_policy.yaml"])
     table_safety_params = PathJoinSubstitution([vision_share, "config", "table_safety.yaml"])
-    graspnet_policy_params = PathJoinSubstitution([vision_share, "config", "graspnet_policy.yaml"])
+    graspnet_ubuntu_params = PathJoinSubstitution([vision_share, "config", "graspnet_ubuntu.yaml"])
 
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     ordinary_depth_quality_enabled = LaunchConfiguration("ordinary_depth_quality_enabled")
     start_vision = LaunchConfiguration("start_vision")
     vision_camera_config = LaunchConfiguration("vision_camera_config")
     vision_handeye_config = LaunchConfiguration("vision_handeye_config")
+    vision_yolo_model_path = LaunchConfiguration("vision_yolo_model_path")
     start_ordinary_grasp = LaunchConfiguration("start_ordinary_grasp")
     ordinary_grasp_root = LaunchConfiguration("ordinary_grasp_root")
     start_graspnet_baseline = LaunchConfiguration("start_graspnet_baseline")
@@ -31,6 +51,7 @@ def generate_launch_description():
     graspnet_candidates_url = LaunchConfiguration("graspnet_candidates_url")
     graspnet_network_timeout_ms = LaunchConfiguration("graspnet_network_timeout_ms")
     graspnet_network_poll_hz = LaunchConfiguration("graspnet_network_poll_hz")
+    graspnet_python_executable = LaunchConfiguration("graspnet_python_executable")
     graspnet_model_root = LaunchConfiguration("graspnet_model_root")
     graspnet_checkpoint_path = LaunchConfiguration("graspnet_checkpoint_path")
     graspnet_device = LaunchConfiguration("graspnet_device")
@@ -90,6 +111,16 @@ def generate_launch_description():
                 "vision_handeye_config",
                 default_value=PathJoinSubstitution([vision_share, "config", "handeye.yaml"]),
             ),
+            DeclareLaunchArgument(
+                "vision_yolo_model_path",
+                default_value=PathJoinSubstitution(
+                    [
+                        vision_share,
+                        "models",
+                        "yolo26m-seg-fp16-b1-640-linux.engine",
+                    ]
+                ),
+            ),
             DeclareLaunchArgument("start_ordinary_grasp", default_value="false"),
             DeclareLaunchArgument("ordinary_grasp_root", default_value=""),
             DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
@@ -97,12 +128,27 @@ def generate_launch_description():
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
-            DeclareLaunchArgument("graspnet_source_mode", default_value="network"),
+            DeclareLaunchArgument("graspnet_source_mode", default_value="in_process"),
             DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
             DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),
             DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
-            DeclareLaunchArgument("graspnet_model_root", default_value=""),
-            DeclareLaunchArgument("graspnet_checkpoint_path", default_value=""),
+            DeclareLaunchArgument(
+                "graspnet_python_executable",
+                default_value=_graspnet_python_executable(),
+            ),
+            DeclareLaunchArgument(
+                "graspnet_model_root",
+                default_value=_workspace_path(
+                    "GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"
+                ),
+            ),
+            DeclareLaunchArgument(
+                "graspnet_checkpoint_path",
+                default_value=_workspace_path(
+                    "GRASPNET_CHECKPOINT_PATH",
+                    ".local-models/checkpoints/checkpoint-rs.tar",
+                ),
+            ),
             DeclareLaunchArgument("graspnet_device", default_value="cuda:0"),
             DeclareLaunchArgument("graspnet_backend_module", default_value="graspnet_baseline_inference"),
             DeclareLaunchArgument("graspnet_max_grasps", default_value="10"),
@@ -139,7 +185,7 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="0.0"),
             DeclareLaunchArgument("candidate_joint6_symmetry_enabled", default_value="true"),
             DeclareLaunchArgument("candidate_joint6_symmetry_angle_rad", default_value="3.141592653589793"),
-            DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.105, 0.0, 0.0]"),
+            DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.04, 0.0, 0.0]"),
             DeclareLaunchArgument("target_base_offset_xyz", default_value="[0.0, 0.0, 0.0]"),
             DeclareLaunchArgument("base_z_offset_m", default_value="0.05"),
             DeclareLaunchArgument("grasp_base_z_offset_m", default_value="0.0"),
@@ -156,6 +202,7 @@ def generate_launch_description():
                 launch_arguments={
                     "camera_config": vision_camera_config,
                     "handeye_config": vision_handeye_config,
+                    "yolo_model_path": vision_yolo_model_path,
                     "start_ordinary_grasp": start_ordinary_grasp,
                     "ordinary_grasp_root": ordinary_grasp_root,
                     "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
@@ -166,9 +213,10 @@ def generate_launch_description():
                 executable="rebotarm_graspnet_baseline_node",
                 name="rebotarm_graspnet_baseline_node",
                 output="screen",
+                prefix=graspnet_python_executable,
                 condition=IfCondition(start_graspnet_baseline),
                 parameters=[
-                    graspnet_policy_params,
+                    graspnet_ubuntu_params,
                     {
                         "input_color_topic": "/camera/color/image_raw",
                         "input_depth_topic": "/camera/depth/image_raw",

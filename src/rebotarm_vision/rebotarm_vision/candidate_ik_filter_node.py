@@ -69,7 +69,7 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_min_confidence", 0.0)
         self.declare_parameter("filter_stats_log_interval_sec", 5.0)
         self.declare_parameter("lift_z_m", 0.08)
-        self.declare_parameter("tcp_offset_xyz", [-0.105, 0.0, 0.0])
+        self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
         self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
         self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)

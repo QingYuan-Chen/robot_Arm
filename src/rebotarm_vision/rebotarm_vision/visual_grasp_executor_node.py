@@ -76,7 +76,7 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("input_topic", "/grasp/filtered_plan")
         self.declare_parameter("candidates_topic", "/grasp/filtered_candidates")
         self.declare_parameter("target_frame", "base_link")
-        self.declare_parameter("tcp_offset_xyz", [-0.105, 0.0, 0.0])
+        self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
         self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
         self.declare_parameter("grasp_base_z_offset_m", 0.0)

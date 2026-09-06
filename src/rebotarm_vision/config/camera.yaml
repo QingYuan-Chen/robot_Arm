@@ -74,10 +74,9 @@ rebotarm_grasp_tcp_frame:
   ros__parameters:
     parent_frame: end_link
     child_frame: grasp_tcp
-    # end_link -> grasp_tcp translation in end_link frame. This follows the
-    # upstream explicit ee_site nominal value; physical TCP pivot calibration
-    # is intentionally canceled for this deployment.
-    tcp_offset_xyz: [-0.105, 0.0, 0.0]
+    # end_link -> grasp_tcp translation in end_link frame.  This is the
+    # operator-measured physical gripper TCP, not the MuJoCo ee_site value.
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
 
 rebotarm_grasp_preview_sender:
   ros__parameters:
@@ -85,6 +84,6 @@ rebotarm_grasp_preview_sender:
     output_topic: /rebotarm/interactive_control/pose_target
     pose_mode: pregrasp
     target_frame: base_link
-    tcp_offset_xyz: [-0.105, 0.0, 0.0]
+    tcp_offset_xyz: [-0.04, 0.0, 0.0]
     publish_count: 20
     exit_after_publish: true

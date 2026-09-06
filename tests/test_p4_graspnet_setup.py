@@ -38,12 +38,15 @@ def test_graspnet_setup_uses_independent_venv_and_no_model_download() -> None:
     assert "not downloaded" in script
 
 
-def test_graspnet_run_script_uses_isolated_environment_and_localhost_service() -> None:
-    script = _read("tools/run_ubuntu_graspnet_service.sh")
+def test_visual_grasp_launch_uses_isolated_graspnet_python_without_http() -> None:
+    launch = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert ".venv-graspnet/bin/python" in script
-    assert "src/rebotarm_vision" in script
-    assert "ubuntu_graspnet_service.py" in script
+    assert ".venv-graspnet" in launch
+    assert 'prefix=graspnet_python_executable' in launch
+    assert '"graspnet_python_executable"' in launch
+    assert "default_value=_graspnet_python_executable()" in launch
+    assert '"vision_yolo_model_path"' in launch
+    assert '"yolo_model_path": vision_yolo_model_path' in launch
 
 
 def test_graspnet_full_scene_viewer_reuses_pre_sampling_cloud_builder() -> None:
@@ -284,17 +287,18 @@ def test_graspnet_scene_viewer_cleanup_continues_when_window_close_fails() -> No
     assert events == ["close", "destroy_node", "shutdown"]
 
 
-def test_ubuntu_graspnet_ros_profile_posts_rgbd_to_local_service() -> None:
+def test_ubuntu_graspnet_ros_profile_runs_inprocess_without_http() -> None:
     config = _read("src/rebotarm_vision/config/graspnet_ubuntu.yaml")
     node = _read("src/rebotarm_vision/rebotarm_vision/graspnet_baseline_node.py")
     setup = _read("src/rebotarm_vision/setup.py")
 
-    assert "source_mode: local_service" in config
-    assert "local_infer_url: http://127.0.0.1:8081/infer" in config
+    assert "source_mode: in_process" in config
+    assert "http://" not in config
     assert "depth_scale_m_per_unit: 0.001" in config
     assert "max_jaw_width_m: 0.085" in config
-    assert '"local_service"' in node
-    assert "LocalGraspNetClient" in node
+    assert '"in_process"' in node
+    assert "InProcessGraspNetBackend" in node
+    assert "LocalGraspNetClient" not in node
     assert "max_input_skew_ms" in node
     assert 'self.declare_parameter("max_jaw_width_m", 0.085)' in node
     assert 'max_jaw_width_m=float(self.get_parameter("max_jaw_width_m").value)' in node
@@ -304,8 +308,8 @@ def test_ubuntu_graspnet_ros_profile_posts_rgbd_to_local_service() -> None:
     assert '"config/graspnet_ubuntu.yaml"' in setup
 
 
-def test_local_graspnet_selects_cached_frame_nearest_detection_timestamp() -> None:
-    from rebotarm_vision.local_graspnet_client import closest_timestamped_frame
+def test_inprocess_graspnet_selects_cached_frame_nearest_detection_timestamp() -> None:
+    from rebotarm_vision.graspnet_baseline_adapter import closest_timestamped_frame
 
     frames = [(100, "old"), (220, "match"), (400, "future")]
 

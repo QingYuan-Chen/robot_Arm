@@ -4,15 +4,18 @@ This directory is a byte-preserved comparison snapshot of
 `huangbinai/robotarm_ros2` at
 `fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`.
 
-It is intentionally outside the default `src/` tree. Do not add it to the normal
-colcon workspace and do not source it together with the current
-`rebotarm_simulation` installation. Use the P1 comparison runner with an explicit
-`PYTHONPATH` and the pinned MuJoCo virtual environment.
+It is intentionally outside the default `src/` tree and is not added as a
+second colcon package. The default simulation launch uses a small process
+boundary that prepends this snapshot's Python source to the existing ROS
+overlay and execs the pinned MuJoCo virtual environment. Do not source a second
+snapshot `install/` overlay; use `mujoco_moveit_sim.launch.py` or the P1
+comparison runner.
 
-The snapshot is private and provisional because the package metadata declares
-Apache-2.0 but the pinned checkout has no root `LICENSE`, `COPYING` or `NOTICE`
-file. See `UPSTREAM_PROVENANCE.json` and the P1 evidence reports before any
-distribution or source publication.
+The package metadata declares Apache-2.0 but the pinned checkout has no root
+`LICENSE`, `COPYING` or `NOTICE` file. Public redistribution of this exact
+snapshot is authorized by the upstream owner as recorded in the repository root
+`THIRD_PARTY_NOTICES.md`; see `UPSTREAM_PROVENANCE.json` for the pinned source
+and scope. This authorization does not extend to a different upstream revision.
 
 The package keeps non-package support inputs required by the upstream converter
 and motor controller: `src/rebotarm_bringup/config/arm.yaml`,

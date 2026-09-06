@@ -1,18 +1,27 @@
 # reBotArm MuJoCo 仿真落地说明
 
+> 当前状态：本分支已经具有 MuJoCo 模型生成、ROS adapter、metrics、容差判定、step-response 和 viewer 开关。P1 现采用 `huangbinai/robotarm_ros2@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4` 作为 upstream-first 迁移候选；当前仓库自有 Apache-2.0 MJCF/mesh 路径仍是 fallback/对照基线。在来源和差异审计完成前，不直接覆盖默认模型，也不运行无许可证文件的 HJX 资产。完整边界见 [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md) 和 [`mujoco_gap_matrix.md`](mujoco_gap_matrix.md)。
+
 本文记录本工程的 MuJoCo 仿真落地方式。MuJoCo 在本仓库中定位为
 物理和离线验证层，用于接触、抓取、轨迹跟踪和策略迭代；它不直接拥有
 真机通信，也不替代 `rebotarmcontroller` 的硬件安全边界。
 
 ## 目录和边界
 
-当前使用同型号参考仓库作为原始资产来源：
+当前默认模型来源：
 
 ```text
-third_party/reBotArm_develop_hjx
+src/rebotarm_simulation/rebotarm_simulation/assets/rebotarm_base.xml
+src/rebotarm_simulation/rebotarm_simulation/assets/rebotarm_grasp_scene.xml
+src/rebotarm_bringup/description/meshes/
 ```
 
-该目录被 `.gitignore` 忽略，不作为主工程源码直接维护。主工程维护的是：
+MJCF baseline 由本仓库 Apache-2.0 URDF 使用 MuJoCo 3.3.0 编译并整理，mesh
+只从本仓库 `rebotarm_bringup` 读取。`third_party/reBotArm_develop_hjx` 因固定
+commit 缺少许可证文件，只允许行为级观察，不得作为默认运行依赖，不复制其源码
+或资产。完整来源和授权边界见 `mujoco_upstream_sources.md`。
+
+主工程维护的是：
 
 ```text
 src/rebotarm_simulation/rebotarm_simulation/mujoco_model_profile.py
@@ -25,6 +34,36 @@ requirements-mujoco.txt
 
 `rebotarm_simulation` 只负责离线仿真、模型生成、headless 验证和后续 ROS
 仿真适配。真机 SDK、串口、电机最后安全检查仍属于 `rebotarmcontroller`。
+
+所有 MuJoCo 启动还必须满足：
+
+```text
+use_hardware:=false
+不启动 rebotarmcontroller
+不打开串口或 CAN
+不调用真实 enable
+同名 FollowJointTrajectory 只存在一个服务端
+```
+
+## Virtual RGB-D and offline plan-only / 虚拟 RGB-D 与离线规划
+
+Virtual sensing / 虚拟传感默认关闭。启用时，active `rebotarm_mujoco_node`发布同步RGB、毫米depth、两路CameraInfo、ground-truth detection/mask，以及从`base_link`到ROS optical frame的静态TF。MuJoCo camera的`+X right,+Y up,-Z forward`通过`diag(1,-1,-1)`转换为ROS optical的`+X right,+Y down,+Z forward`。
+
+纯仿真、无运动的组合入口：
+
+```bash
+ROS_DOMAIN_ID=100 RMW_FASTRTPS_USE_SHM=0 \
+ros2 launch rebotarm_bringup mujoco_offline_perception.launch.py \
+  virtual_camera_width:=320 \
+  virtual_camera_height:=240 \
+  virtual_camera_rate_hz:=5.0
+```
+
+该入口直接启动`.venv-graspnet`中的in-process GraspNet ROS进程，不需要8081 HTTP service；
+它使用ground-truth object annotation辅助GraspNet，并只启动MoveIt IK/collision filter；
+`start_visual_grasp_executor=false`、`start_motion_execution=false`、
+`start_sim_trajectory_controller=false`。它不会启动Gemini 2或真实driver，也不会发送trajectory。
+当前该入口是plan-only工作台，不等于包含rendered RGB YOLO与MuJoCo执行的完全离线抓取闭环。
 
 ## 环境
 
@@ -48,10 +87,11 @@ third_party/rebotarm_mujoco_venv/bin/python -m pip install -r requirements-mujoc
 
 ```text
 mujoco==3.3.0
-numpy
-pyyaml
-jinja2
-typeguard
+numpy==1.26.4
+cffi==1.17.1
+pyyaml==6.0.3
+jinja2==3.1.6
+typeguard==4.5.2
 ```
 
 `pyyaml`、`jinja2`、`typeguard` 用于让当前带 ROS 可见包的 MuJoCo venv
@@ -60,7 +100,7 @@ typeguard
 
 ## 生成物理版模型
 
-不要直接修改参考仓库的 MJCF。使用主工程生成器从参考 XML 派生物理版 XML：
+不要修改第三方参考仓库。使用主工程生成器从 package-owned MJCF baseline 派生物理版 XML：
 
 ```bash
 PYTHONPATH=src/rebotarm_simulation \
@@ -122,7 +162,7 @@ third_party/rebotarm_mujoco_venv/bin/python \
   --seconds 3.0
 ```
 
-基础抓取场景稳定性：
+基础抓取场景稳定性（当前 keyframe 会同步 home `qpos` 与 actuator `ctrl`；该命令不发送抬升轨迹）：
 
 ```bash
 PYTHONPATH=src/rebotarm_simulation \
@@ -173,12 +213,44 @@ gripper: ctrlrange 0 0.045,   forcerange -20 20, kp 600
 
 adapter 仍然只属于仿真包，不直接调用硬件 SDK。
 
-## ROS 2 / MoveIt 接入
+## Virtual RGB-D / 虚拟RGB-D与真值标注
 
-当前已经新增独立 MuJoCo ROS adapter 节点：
+active `rebotarm_mujoco_node`可选发布`scene.xml`中`fixed_camera`的离屏传感器输出。该能力默认关闭，因此普通motion-only MuJoCo运行不要求EGL；启用命令为：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch rebotarm_simulation mujoco_sim.launch.py \
+  enable_virtual_camera:=true \
+  virtual_camera_width:=640 \
+  virtual_camera_height:=480 \
+  virtual_camera_rate_hz:=15.0
+```
+
+输出接口：
 
 ```text
-rebotarm_mujoco_adapter
+/camera/color/image_raw       sensor_msgs/msg/Image, rgb8
+/camera/depth/image_raw       sensor_msgs/msg/Image, mono16 millimeters
+/camera/color/camera_info     sensor_msgs/msg/CameraInfo
+/camera/depth/camera_info     sensor_msgs/msg/CameraInfo
+/grasp/detections             rebotarm_msgs/msg/Detection2DArray
+```
+
+默认frame为`mujoco_fixed_camera_optical_frame`。RGB、depth、CameraInfo和annotations使用同一个MuJoCo simulation timestamp。CameraInfo由MJCF相机的vertical field of view计算，使用理想pinhole/zero-distortion模型；它是仿真内参，不是Gemini 2实机标定结果。
+
+默认annotation body为`test_cube`。bbox和mask来自MuJoCo segmentation buffer ground truth，不是YOLO推理结果。深度按米转毫米，background、无效值和`virtual_camera.max_depth_m`之外像素写0。
+
+EGL renderer由专用worker thread独占，其create/render/destroy不跨线程；render request只保留最新一帧，避免视觉处理反压造成队列累积。该接口关闭虚拟传感器checkbox，但完整offline loop仍需补齐camera-to-base TF、offline YOLO/GraspNet/MoveIt组合与outcome matrix。
+
+## ROS 2 / MoveIt 接入
+
+当前默认使用固定的上游 MuJoCo ROS adapter；本仓库 package-owned adapter
+仍作为显式 fallback 保留：
+
+```text
+默认：rebotarm_upstream_mujoco_node -> rebotarm_mujoco_node
+回退：rebotarm_mujoco_adapter
 ```
 
 它提供：
@@ -233,6 +305,21 @@ ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py \
   use_rviz:=true \
   python_executable:=third_party/rebotarm_mujoco_venv/bin/python
 ```
+
+该入口的 `simulation_backend` 默认值为 `upstream`，来源固定为
+`third_party/robotarm_ros2_mujoco_snapshot/`。如需对照旧实现，必须显式选择：
+
+```bash
+ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py \
+  simulation_backend:=current \
+  use_rviz:=false \
+  python_executable:=third_party/rebotarm_mujoco_venv/bin/python
+```
+
+两个 backend 互斥，launch 不会同时启动两个
+`follow_joint_trajectory` action server；上游路径使用 `/clock`，MoveIt
+消费者由 launch 自动设置 `use_sim_time=true`，current fallback 则强制使用
+wall clock。
 
 无 RViz 验证：
 

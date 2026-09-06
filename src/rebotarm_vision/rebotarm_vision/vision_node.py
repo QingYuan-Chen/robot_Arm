@@ -11,7 +11,6 @@ from rclpy.qos import (
     HistoryPolicy,
     QoSProfile,
     ReliabilityPolicy,
-    qos_profile_sensor_data,
 )
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
@@ -51,12 +50,12 @@ class RebotArmVisionNode(Node):
         self.color_camera_info_pub = self.create_publisher(
             CameraInfo,
             "/camera/color/camera_info",
-            qos_profile_sensor_data,
+            image_qos,
         )
         self.depth_camera_info_pub = self.create_publisher(
             CameraInfo,
             "/camera/depth/camera_info",
-            qos_profile_sensor_data,
+            image_qos,
         )
         self.detection_pub = self.create_publisher(
             Detection2DArray,

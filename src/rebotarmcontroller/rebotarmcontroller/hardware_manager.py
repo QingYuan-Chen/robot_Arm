@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import yaml
 
 from .conversions import fk_to_pose
+
+_LOG = logging.getLogger(__name__)
 
 _G_MAX_DIST_M = 0.09
 # CAD/software travel is 90 mm, but the currently installed gripper's
@@ -21,12 +24,30 @@ _G_ANGLE_OPEN = -5.0
 _G_OPEN_SOFT_LIMIT = -4.9
 _G_ARRIVE_TOL = 0.12
 _G_TAU_MAX = 1.5
-# Large gripper traverses use a commanded-position ramp rather than a full-step
-# MIT target.  These limits are motor-side values; they are deliberately much
-# lower than the prior implicit +/- 1.5 N.m clamp while the transmission is
-# being mechanically inspected.
-_G_LARGE_MOVE_MAX_SPEED_RAD_S = 0.20
-_G_LARGE_MOVE_MAX_TAU_NM = 0.15
+# Normal position moves use a bounded commanded-position ramp.  The 0.5 rad/s
+# default matches the existing web/keyboard teleop speed baseline; it remains a
+# dedicated gripper parameter so the two mechanisms can be tuned independently.
+_G_POSITION_MAX_SPEED_RAD_S = 0.5
+_G_POSITION_MAX_SPEED_MIN_RAD_S = 0.05
+_G_POSITION_MAX_SPEED_MAX_RAD_S = 3.0
+_G_POSITION_TIMEOUT_MARGIN_SEC = 1.5
+_G_POSITION_TIMEOUT_MARGIN_MAX_SEC = 10.0
+_G_FEEDBACK_STALE_TIMEOUT_SEC = 0.25
+_G_FEEDBACK_STALE_TIMEOUT_MAX_SEC = 2.0
+# These are motor-side torque limits for the MOVE phase only; what prevents
+# driving into a mechanical stop after arrival is the neutral+idle release in
+# _release_gripper_position_target.
+#
+# 2026-08-14: measured on real hardware after the gear repair.  Under a 0.40 N.m
+# cap a 0 -> 10 -> 0 mm no-load cycle stalled at 7.86-8.02 mm and 1.83-1.93 mm;
+# all three legs needed kp*err of 0.536-0.594 N.m, i.e. they stopped at cap
+# saturation rather than at the target, leaving ~2 mm of steady-state error that
+# only passed _G_ARRIVE_TOL by as little as 0.02 mm.  Transmission resistance is
+# therefore genuinely high.  The 2026-09-04 operator decision is to use the
+# known-good Web teleop default of 1.0 N.m, retain 1.5 N.m only as the
+# configurable ceiling, and bound motion with the 0.5 rad/s ramp above.
+_G_LARGE_MOVE_MAX_TAU_NM = 1.0
+_G_LARGE_MOVE_MAX_TAU_CAP_NM = 1.5
 _G_KP_MOVE = 5.0
 _G_KD_MOVE = 1.0
 _G_DEFAULT_FORCE = 0.40
@@ -34,9 +55,27 @@ _G_GRASP_CLOSE_KP = 0.0
 _G_GRASP_CLOSE_KD = 0.5
 _G_GRASP_HOLD_KP = 5.0
 _G_GRASP_HOLD_KD = 1.0
+# NOTE on grip force: grasp_holding commands
+#   kp*(hold_angle - pos) + kd*(-vel) + hold_force
+# with hold_angle frozen at the stall position, so the POSITION term dominates
+# and hold_force is only a feed-forward addition.  Actual grip force is
+# therefore governed by how deep close_force drove the jaws before stalling,
+# not by hold_force.  2026-08-14 real hardware, same hold_force=0.4 both runs:
+#   close_force 0.4 -> stalled 2.02 mm into a 50 mm bottle, held 0.271-0.286 N.m
+#                      (still creeping closed after 10 s; would not grip)
+#   close_force 1.0 -> stalled 15.21 mm in (30% compression), 0.423-0.437 N.m
+#                      (0.158 mm elastic pushback; gripped)
+# Do not treat hold_force as the grip-force knob when tuning.
 _G_GRASP_CLOSE_FORCE_DEFAULT = 0.40
 _G_GRASP_CLOSE_FORCE_MAX = 1.0
 _G_GRASP_HOLD_FORCE_DEFAULT = 0.40
+# grasp_holding loads the motor continuously at 500 Hz.  Upstream never exits
+# that state, so a successful grasp held torque until the next command or
+# controller shutdown -- the same continuous-load mechanism implicated in the
+# 2026-08-12 Joint4 over-temperature.  Hold is therefore bounded and always
+# ends with a neutral release.
+_G_GRASP_HOLD_TIMEOUT_DEFAULT_SEC = 30.0
+_G_GRASP_HOLD_TIMEOUT_MAX_SEC = 120.0
 _G_GRASP_VEL_THRESHOLD = 0.04
 _G_GRASP_MIN_CLOSE_TIME = 0.08
 _G_GRASP_MIN_CLOSURE_M = 0.006
@@ -63,6 +102,25 @@ _JOINT_POSITION_LIMITS_RAD = {
     "joint6": (-3.14, 3.14),
 }
 
+# The vendor ArmEndPos.safe_home drives every joint to 0 rad.  For this arm that
+# is a folded posture, not an open one: joint3's origin is -0.264 m in x while
+# joint4's is +0.2426 m, so with joints 2-5 near zero the forearm folds back onto
+# the upper arm and link2/link5 close to ~1.6 mm.  MoveIt's
+# CheckStartStateCollision then aborts every planning request from there
+# ("1 contact(s) detected : link2 - link5"), so nothing can be planned out of the
+# zero pose and it is unusable as a resting posture.
+#
+# Rest at the visual-ready posture instead: 33.2 mm measured link2/link5
+# clearance, and physically the same compact stance as zero (end_link horizontal
+# reach 0.254 m vs 0.260 m, 24 mm higher), so it costs nothing mechanically and
+# does not leave the arm extended under gravity.  This is also the posture
+# tests/test_paired_trajectory_protocol.py already treats as the canonical
+# working pose, and it matches the "safe_home" named state in the MoveIt SRDF
+# and the MuJoCo keyframes.
+_SAFE_HOME_JOINT_POSITIONS = (-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0)
+_SAFE_HOME_ARRIVE_TOL_RAD = 0.02
+_SAFE_HOME_TIMEOUT_SEC = 30.0
+
 _LIFECYCLE_STATES = {
     "DISCONNECTED",
     "CONNECTED_DISABLED",
@@ -88,7 +146,48 @@ class HardwareManager:
         arm_cfg: Optional[str] = None,
         gripper_cfg: Optional[str] = None,
         channel: str = "",
+        gripper_position_torque_cap_nm: float = _G_LARGE_MOVE_MAX_TAU_NM,
+        gripper_position_max_speed_rad_s: float = _G_POSITION_MAX_SPEED_RAD_S,
+        gripper_position_timeout_margin_sec: float = _G_POSITION_TIMEOUT_MARGIN_SEC,
+        gripper_feedback_stale_timeout_sec: float = _G_FEEDBACK_STALE_TIMEOUT_SEC,
+        grasp_hold_timeout_sec: float = _G_GRASP_HOLD_TIMEOUT_DEFAULT_SEC,
     ) -> None:
+        requested_cap = float(gripper_position_torque_cap_nm)
+        if not 0.05 <= requested_cap <= _G_LARGE_MOVE_MAX_TAU_CAP_NM:
+            raise ValueError(
+                "gripper_position_torque_cap_nm must be within "
+                f"[0.05, {_G_LARGE_MOVE_MAX_TAU_CAP_NM:g}] N.m"
+            )
+        self._gripper_position_torque_cap_nm = requested_cap
+        requested_speed = float(gripper_position_max_speed_rad_s)
+        if not _G_POSITION_MAX_SPEED_MIN_RAD_S <= requested_speed <= _G_POSITION_MAX_SPEED_MAX_RAD_S:
+            raise ValueError(
+                "gripper_position_max_speed_rad_s must be within "
+                f"[{_G_POSITION_MAX_SPEED_MIN_RAD_S:g}, "
+                f"{_G_POSITION_MAX_SPEED_MAX_RAD_S:g}] rad/s"
+            )
+        self._gripper_position_max_speed_rad_s = requested_speed
+        requested_timeout_margin = float(gripper_position_timeout_margin_sec)
+        if not 0.1 <= requested_timeout_margin <= _G_POSITION_TIMEOUT_MARGIN_MAX_SEC:
+            raise ValueError(
+                "gripper_position_timeout_margin_sec must be within "
+                f"[0.1, {_G_POSITION_TIMEOUT_MARGIN_MAX_SEC:g}] s"
+            )
+        self._gripper_position_timeout_margin_sec = requested_timeout_margin
+        requested_stale_timeout = float(gripper_feedback_stale_timeout_sec)
+        if not 0.05 <= requested_stale_timeout <= _G_FEEDBACK_STALE_TIMEOUT_MAX_SEC:
+            raise ValueError(
+                "gripper_feedback_stale_timeout_sec must be within "
+                f"[0.05, {_G_FEEDBACK_STALE_TIMEOUT_MAX_SEC:g}] s"
+            )
+        self._gripper_feedback_stale_timeout_sec = requested_stale_timeout
+        requested_hold_timeout = float(grasp_hold_timeout_sec)
+        if not 0.1 <= requested_hold_timeout <= _G_GRASP_HOLD_TIMEOUT_MAX_SEC:
+            raise ValueError(
+                "grasp_hold_timeout_sec must be within "
+                f"[0.1, {_G_GRASP_HOLD_TIMEOUT_MAX_SEC:g}] s"
+            )
+        self._grasp_hold_timeout_sec = requested_hold_timeout
         self._sdk_root = self._ensure_rebot_sdk_in_syspath()
 
         from reBotArm_control_py.actuator import RobotArm
@@ -118,16 +217,25 @@ class HardwareManager:
         self._gripper_close_force = _G_GRASP_CLOSE_FORCE_DEFAULT
         self._gripper_hold_force = _G_GRASP_HOLD_FORCE_DEFAULT
         self._gripper_hold_angle = 0.0
+        self._gripper_hold_deadline: float | None = None
+        self._gripper_hold_release_reason: str | None = None
         self._gripper_mode = "idle"
         self._gripper_active = False
         self._gripper_pos = 0.0
         self._gripper_vel = 0.0
         self._gripper_torque = 0.0
+        self._gripper_status_code = 255
+        self._gripper_feedback_updated_monotonic: float | None = None
+        self._gripper_feedback_error: str | None = "gripper feedback not received"
+        self._gripper_command_error: str | None = None
+        self._gripper_position_result = "idle"
+        self._gripper_target_timeout_sec = 0.0
+        self._gripper_target_deadline_monotonic: float | None = None
         self._gripper_loop_stop = threading.Event()
         self._gripper_loop_thread: threading.Thread | None = None
         self._gripper_loop_running = False
         self._gripper_last_tick_monotonic: float | None = None
-        self._gripper_lock = threading.Lock()
+        self._gripper_lock = threading.RLock()
         self._motor_lifecycle_lock = threading.RLock()
 
         self._endpos_ctrl = ArmEndPos(self._arm)
@@ -288,34 +396,96 @@ class HardwareManager:
 
         self._refresh_gripper_feedback()
 
-    def _refresh_gripper_feedback(self) -> None:
-        if self._gripper_mot is None or self._gripper_ctrl is None:
-            return
+    @staticmethod
+    def _validated_gripper_feedback_values(state) -> tuple[float, float, float, int]:
+        if state is None:
+            raise RuntimeError("gripper feedback unavailable")
+        position = float(state.pos)
+        velocity = float(state.vel)
+        torque = float(state.torq)
+        if not all(np.isfinite(value) for value in (position, velocity, torque)):
+            raise RuntimeError("gripper feedback contains non-finite values")
+        return position, velocity, torque, int(state.status_code)
 
-        def refresh_transaction() -> None:
+    def _record_gripper_feedback(self, state, *, observed_at: float | None = None) -> None:
+        position, velocity, torque, status = self._validated_gripper_feedback_values(state)
+        timestamp = time.monotonic() if observed_at is None else float(observed_at)
+        with self._gripper_lock:
+            recovered = self._gripper_feedback_error is not None
+            self._gripper_pos = position
+            self._gripper_vel = velocity
+            self._gripper_torque = torque
+            self._gripper_status_code = status
+            self._gripper_feedback_updated_monotonic = timestamp
+            self._gripper_feedback_error = None
+        if recovered:
+            _LOG.info(
+                "gripper feedback recovered pos=%.6frad vel=%.6frad/s "
+                "torque=%.6fNm status=%d updated=%.6f",
+                position,
+                velocity,
+                torque,
+                status,
+                timestamp,
+            )
+
+    def _record_gripper_feedback_error(self, reason: str) -> None:
+        message = str(reason)
+        with self._gripper_lock:
+            changed = message != self._gripper_feedback_error
+            self._gripper_feedback_error = message
+        if changed:
+            _LOG.error("gripper feedback error: %s", message)
+
+    def _gripper_feedback_age_sec(self, *, now: float | None = None) -> float:
+        with self._gripper_lock:
+            updated = self._gripper_feedback_updated_monotonic
+        if updated is None:
+            return float("inf")
+        current = time.monotonic() if now is None else float(now)
+        return max(current - updated, 0.0)
+
+    def _gripper_feedback_failure_reason_locked(self, *, now: float | None = None) -> str | None:
+        if self._gripper_feedback_error is not None:
+            return f"gripper feedback unavailable: {self._gripper_feedback_error}"
+        age = self._gripper_feedback_age_sec(now=now)
+        if age > self._gripper_feedback_stale_timeout_sec:
+            return (
+                "gripper feedback stale: "
+                f"age={age:.3f}s limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
+            )
+        return None
+
+    def _refresh_gripper_feedback(self):
+        if self._gripper_mot is None or self._gripper_ctrl is None:
+            raise RuntimeError("gripper feedback unavailable: motor/controller not initialized")
+
+        def refresh_transaction():
             last_error: Exception | None = None
             for attempt in range(_FEEDBACK_REFRESH_RETRIES):
                 try:
                     self._gripper_mot.request_feedback()
                     self._gripper_ctrl.poll_feedback_once()
-                    if self._gripper_mot.get_state() is not None:
-                        return
+                    state = self._gripper_mot.get_state()
+                    self._record_gripper_feedback(state)
+                    return state
                 except Exception as exc:
                     last_error = exc
                 if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
                     time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
             detail = f": {last_error}" if last_error is not None else ""
-            raise RuntimeError(
+            error = RuntimeError(
                 "gripper feedback unavailable after "
                 f"{_FEEDBACK_REFRESH_RETRIES} attempts{detail}"
             )
+            self._record_gripper_feedback_error(str(error))
+            raise error
 
         lock = getattr(self._gripper_ctrl, "_bus_lock", None)
         if lock is None:
-            refresh_transaction()
-        else:
-            with lock:
-                refresh_transaction()
+            return refresh_transaction()
+        with lock:
+            return refresh_transaction()
 
     def _validated_joint_feedback(
         self,
@@ -455,10 +625,15 @@ class HardwareManager:
                 self._disable_all_motors()
             except Exception:
                 pass
-            if self._endpos_ctrl._running:
-                self._endpos_ctrl.end()
-            else:
-                self._arm.disconnect()
+            # ArmEndPos.end() runs the vendor safe_home() before disconnecting, and
+            # that targets the all-zero folded pose (see _SAFE_HOME_JOINT_POSITIONS).
+            # The control loop is already stopped and the motors already disabled at
+            # this point, so the call cannot move the arm at all -- it only polls for
+            # its full 30 s timeout and leaves _q_target at zero for whoever enables
+            # next.  Retire the controller directly; a deliberate safe_home belongs to
+            # the driver's shutdown hook, which runs earlier while still enabled.
+            self._endpos_ctrl._running = False
+            self._arm.disconnect()
         finally:
             self._connected = False
             self._enabled = False
@@ -487,6 +662,92 @@ class HardwareManager:
             if self._enabled:
                 self.hold_current_position()
             self.set_state_machine("IDLE")
+
+    def safe_home_target(self) -> np.ndarray:
+        return np.array(_SAFE_HOME_JOINT_POSITIONS, dtype=np.float64)
+
+    def _validated_safe_home_target(
+        self, target: Optional[Sequence[float]] = None
+    ) -> np.ndarray:
+        if target is None:
+            return self.safe_home_target()
+        values = np.array([float(value) for value in target], dtype=np.float64)
+        expected = len(_SAFE_HOME_JOINT_POSITIONS)
+        if values.shape != (expected,):
+            raise ValueError(
+                f"safe_home target must hold {expected} joint positions, got {values.shape[0]}"
+            )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("safe_home target must be finite")
+        for name, value in zip(self.joint_names, values):
+            limits = _JOINT_POSITION_LIMITS_RAD.get(name)
+            if limits is None:
+                continue
+            low, high = limits
+            if not low <= value <= high:
+                raise ValueError(
+                    f"safe_home target for {name} is {value:.4f} rad, "
+                    f"outside the allowed range [{low}, {high}]"
+                )
+        return values
+
+    def safe_home(
+        self,
+        target: Optional[Sequence[float]] = None,
+        vlim: Optional[float] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> np.ndarray:
+        """Drive the arm to a collision-free resting posture.
+
+        Replaces ArmEndPos.safe_home, which hardcodes an all-zero target; see
+        _SAFE_HOME_JOINT_POSITIONS for why the zero pose cannot be rested in.
+        The vendor velocity override and arrival polling are kept, but arrival is
+        checked against the requested target rather than against zero, and the
+        move is never allowed to exceed the vendor's own homing speed.
+        """
+        goal = self._validated_safe_home_target(target)
+        ctrl = self._endpos_ctrl
+        with self._motor_lifecycle_lock:
+            self._require_enabled()
+            if not ctrl._running:
+                raise RuntimeError(
+                    "control loop is inactive; safe_home needs position-velocity control"
+                )
+            speed = ctrl._home_vel if vlim is None else float(vlim)
+            if not 0.0 < speed <= ctrl._home_vel:
+                raise ValueError(
+                    f"safe_home vlim must be within (0, {ctrl._home_vel:g}] rad/s"
+                )
+            ctrl._vlim_override = np.full(ctrl._n, speed, dtype=np.float64)
+            ctrl._q_target[:] = goal
+            ctrl._stop_send.set()
+            ctrl._moving = False
+            send_thread = ctrl._send_thread
+            self.set_state_machine("TRAJ_RUNNING")
+        try:
+            if send_thread is not None:
+                send_thread.join()
+            deadline = time.monotonic() + (
+                _SAFE_HOME_TIMEOUT_SEC if timeout_sec is None else float(timeout_sec)
+            )
+            while True:
+                positions, _velocities, _torques = self.get_joint_state()
+                reached = np.array(positions, dtype=np.float64)
+                worst = float(np.max(np.abs(reached - goal)))
+                if worst < _SAFE_HOME_ARRIVE_TOL_RAD:
+                    return reached
+                if time.monotonic() > deadline:
+                    raise TimeoutError(
+                        f"safe_home did not reach {goal.tolist()} within "
+                        f"{_SAFE_HOME_ARRIVE_TOL_RAD} rad; worst joint error {worst:.4f} rad"
+                    )
+                time.sleep(ctrl._dt)
+        finally:
+            ctrl._vlim_override = None
+            with self._motor_lifecycle_lock:
+                if self._enabled:
+                    self.hold_current_position()
+                self.set_state_machine("IDLE")
 
     def enable(self) -> None:
         from motorbridge import Mode
@@ -879,51 +1140,116 @@ class HardwareManager:
 
         self._patch_controller_bus(ctrl)
         self._wrap_motor_bus(self._gripper_mot, ctrl._bus_lock)
+        # Keep initialization single-threaded while the arm and gripper perform
+        # their first fresh-feedback validation on the shared serial bus.  The
+        # position/grasp entry points start this loop on demand.
 
     def set_gripper_target(self, position_m: float, max_effort: float = 0.0) -> None:
         self._require_enabled()
         if self._gripper_mot is None:
             raise RuntimeError("gripper is not initialized")
+        state = self._refresh_gripper_feedback()
+        start_angle, _velocity, _torque, status = self._validated_gripper_feedback_values(state)
+        if status != 1:
+            raise RuntimeError(f"gripper status_code={status}, expected 1 before position command")
         distance = float(np.clip(position_m, 0.0, _G_VERIFIED_OPEN_LIMIT_M))
-        goal = max((distance / _G_MAX_DIST_M) * _G_ANGLE_OPEN, _G_OPEN_SOFT_LIMIT)
+        target = max((distance / _G_MAX_DIST_M) * _G_ANGLE_OPEN, _G_OPEN_SOFT_LIMIT)
         effort = _G_DEFAULT_FORCE if max_effort <= 0.0 else float(max_effort)
-        current = float(getattr(self, "_gripper_pos", 0.0))
-        try:
-            state = self._gripper_mot.get_state()
-            if state is not None:
-                current = float(state.pos)
-        except Exception:
-            pass
+        now = time.monotonic()
+        target_timeout_sec = (
+            abs(target - start_angle) / self._gripper_position_max_speed_rad_s
+            + self._gripper_position_timeout_margin_sec
+        )
         with self._gripper_lock:
-            # Start the next command from the measured motor angle.  Advancing
-            # this target in _gripper_tick enforces a physical command-speed
-            # bound even when the requested jaw displacement is large.
-            self._gripper_pos = current
-            self._gripper_target_angle = current
-            self._gripper_goal_angle = goal
+            self._gripper_target_angle = start_angle
+            self._gripper_goal_angle = target
             self._gripper_target_effort = float(
-                np.clip(effort, 0.05, _G_LARGE_MOVE_MAX_TAU_NM)
+                np.clip(
+                    effort,
+                    0.05,
+                    getattr(
+                        self,
+                        "_gripper_position_torque_cap_nm",
+                        _G_LARGE_MOVE_MAX_TAU_NM,
+                    ),
+                )
             )
-            self._gripper_last_tick_monotonic = time.monotonic()
             self._gripper_mode = "position"
             self._gripper_active = True
+            self._gripper_position_result = "active"
+            self._gripper_command_error = None
+            self._gripper_last_tick_monotonic = now
+            self._gripper_target_timeout_sec = target_timeout_sec
+            self._gripper_target_deadline_monotonic = now + target_timeout_sec
+            feedback_updated = self._gripper_feedback_updated_monotonic
+            applied_effort = self._gripper_target_effort
+        _LOG.info(
+            "gripper position command requested=%.6fm clamped=%.6fm "
+            "start=%.6frad goal=%.6frad effort=%.6fNm speed=%.6frad/s "
+            "timeout=%.3fs feedback_updated=%s",
+            float(position_m),
+            distance,
+            start_angle,
+            target,
+            applied_effort,
+            self._gripper_position_max_speed_rad_s,
+            target_timeout_sec,
+            feedback_updated,
+        )
         self._start_gripper_loop()
 
-    def wait_gripper_target(self, timeout: float = 3.0) -> bool:
+    def gripper_target_timeout_sec(self) -> float:
         with self._gripper_lock:
-            remaining = abs(self._gripper_goal_angle - self._gripper_pos)
-        expected = remaining / _G_LARGE_MOVE_MAX_SPEED_RAD_S
-        deadline = time.monotonic() + max(float(timeout), expected + 3.0)
+            return float(self._gripper_target_timeout_sec)
+
+    @property
+    def gripper_command_error(self) -> str | None:
+        with self._gripper_lock:
+            return self._gripper_command_error
+
+    @property
+    def gripper_feedback_error(self) -> str | None:
+        with self._gripper_lock:
+            return self._gripper_feedback_error
+
+    def wait_gripper_target(self, timeout: float | None = None) -> bool:
+        # Remember which goal this waiter owns so neither the arrival nor the
+        # timeout path can release a newer command issued in the meantime.
+        with self._gripper_lock:
+            owned_goal = self._gripper_goal_angle
+            deadline = self._gripper_target_deadline_monotonic
+        now = time.monotonic()
+        explicit_deadline = (
+            None if timeout is None else now + max(float(timeout), 0.0)
+        )
+        if deadline is None:
+            deadline = now if explicit_deadline is None else explicit_deadline
+        elif explicit_deadline is not None:
+            deadline = min(deadline, explicit_deadline)
         while time.monotonic() < deadline:
             with self._gripper_lock:
-                goal = self._gripper_goal_angle
-            if abs(self._gripper_pos - goal) < _G_ARRIVE_TOL:
-                # A completed positioning move is not a grasp hold.  Release
-                # the MIT position command before acknowledging success so an
-                # open target cannot keep driving into the mechanical stop
-                # while the arm continues with a later stage.
-                return self._release_gripper_position_target(goal)
+                if self._gripper_goal_angle != owned_goal:
+                    return False
+                feedback_failure = self._gripper_feedback_failure_reason_locked()
+                if feedback_failure is not None:
+                    self._fail_active_gripper_command_locked(feedback_failure)
+                    return False
+                if not self._gripper_active:
+                    return self._gripper_position_result == "succeeded"
+                arrived = abs(self._gripper_pos - owned_goal) < _G_ARRIVE_TOL
+            if arrived:
+                # A completed positioning move is not a grasp hold.  Release the
+                # MIT position command before acknowledging success so the motor
+                # cannot keep driving toward the target after this returns.
+                self._release_gripper_position_target(owned_goal)
+                return self.gripper_reached_target()
             time.sleep(0.02)
+        # A timeout also ends this command's ownership of the gripper: stop
+        # driving instead of leaving a stale position hold running.
+        self.cancel_gripper_position_command(
+            "gripper target timeout: "
+            f"goal={owned_goal:.6f}rad feedback={self._gripper_pos:.6f}rad"
+        )
         return False
 
     def set_gripper_position(self, position_m: float, max_effort: float = 0.0) -> tuple[bool, float]:
@@ -939,6 +1265,7 @@ class HardwareManager:
         min_close_time_sec: float = _G_GRASP_MIN_CLOSE_TIME,
         velocity_threshold: float = _G_GRASP_VEL_THRESHOLD,
         min_closure_distance_m: float = _G_GRASP_MIN_CLOSURE_M,
+        hold_timeout_sec: float | None = None,
     ) -> tuple[bool, bool, float, float, float, str]:
         self._require_enabled()
         if self._gripper_mot is None:
@@ -946,6 +1273,14 @@ class HardwareManager:
 
         close_effort = float(np.clip(close_force, 0.05, _G_GRASP_CLOSE_FORCE_MAX))
         hold_effort = float(np.clip(hold_force, 0.05, _G_TAU_MAX))
+        # A grasp hold is always bounded; an unbounded hold keeps loading the
+        # motor at 500 Hz with no exit path.
+        requested_hold = (
+            self._grasp_hold_timeout_sec
+            if hold_timeout_sec is None
+            else float(hold_timeout_sec)
+        )
+        hold_timeout = float(np.clip(requested_hold, 0.1, _G_GRASP_HOLD_TIMEOUT_MAX_SEC))
         timeout = max(float(close_timeout_sec), 0.1)
         min_time = max(float(min_close_time_sec), 0.0)
         velocity_limit = max(float(velocity_threshold), 0.0)
@@ -956,6 +1291,8 @@ class HardwareManager:
         with self._gripper_lock:
             self._gripper_close_force = close_effort
             self._gripper_hold_force = hold_effort
+            self._gripper_hold_deadline = None
+            self._gripper_hold_release_reason = None
             self._gripper_mode = "grasp_closing"
             self._gripper_active = True
         self._start_gripper_loop()
@@ -972,6 +1309,7 @@ class HardwareManager:
                 with self._gripper_lock:
                     self._gripper_hold_angle = float(self._gripper_pos)
                     self._gripper_hold_force = hold_effort
+                    self._gripper_hold_deadline = time.monotonic() + hold_timeout
                     self._gripper_mode = "grasp_holding"
                     self._gripper_active = True
                 contact_position_m = self.gripper_position_m()
@@ -981,31 +1319,48 @@ class HardwareManager:
                     contact_position_m,
                     contact_position_m,
                     hold_effort,
-                    "contact detected and holding",
+                    # No force sensor: this is closure travel plus a velocity
+                    # stall, i.e. stall detection, not a measured contact force.
+                    "closing stalled; holding "
+                    f"(bounded to {hold_timeout:g} s)",
                 )
             time.sleep(0.01)
 
+        # Upstream switched to idle here without neutralizing, leaving the last
+        # closing torque applied.
         with self._gripper_lock:
-            self._gripper_active = False
-            self._gripper_mode = "idle"
+            self._release_grasp_hold_locked("close timeout before stall")
         return (
             False,
             False,
             0.0,
             self.gripper_position_m(),
             hold_effort,
-            "grasp close timeout before contact",
+            "grasp close timeout before stall detected",
         )
 
     def get_gripper_state(self) -> tuple[float, float, float, int]:
-        status = 0
+        status = 255
         if self._gripper_mot is not None:
             try:
                 st = self._gripper_mot.get_state()
-                if st is not None:
-                    status = int(st.status_code)
-            except Exception:
-                status = 0
+                position, velocity, torque, status = self._validated_gripper_feedback_values(st)
+                with self._gripper_lock:
+                    self._gripper_pos = position
+                    self._gripper_vel = velocity
+                    self._gripper_torque = torque
+                    self._gripper_status_code = status
+                age = self._gripper_feedback_age_sec()
+                if age > self._gripper_feedback_stale_timeout_sec:
+                    self._record_gripper_feedback_error(
+                        "gripper feedback stale: "
+                        f"age={age:.3f}s "
+                        f"limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
+                    )
+                    status = 255
+            except Exception as exc:
+                self._record_gripper_feedback_error(str(exc))
+                status = 255
         return self._gripper_pos, self._gripper_vel, self._gripper_torque, status
 
     def gripper_position_m(self) -> float:
@@ -1014,10 +1369,16 @@ class HardwareManager:
 
     def gripper_reached_target(self) -> bool:
         with self._gripper_lock:
-            if not self._gripper_active:
+            if self._gripper_position_result == "succeeded":
                 return True
+            if self._gripper_position_result == "failed" or not self._gripper_active:
+                return False
+            feedback_failure = self._gripper_feedback_failure_reason_locked()
+            if feedback_failure is not None:
+                self._fail_active_gripper_command_locked(feedback_failure)
+                return False
             goal = self._gripper_goal_angle
-        return abs(self._gripper_pos - goal) < _G_ARRIVE_TOL
+            return abs(self._gripper_pos - goal) < _G_ARRIVE_TOL
 
     def send_gripper_motor_cmd(self, cmd) -> None:
         self._require_enabled()
@@ -1139,33 +1500,109 @@ class HardwareManager:
                     self._gripper_mot.send_mit(pos_cmd, vel, kp, kd, tau_safe)
                     self._gripper_mot.request_feedback()
                     self._gripper_ctrl.poll_feedback_once()
+                    state = self._gripper_mot.get_state()
             else:
                 self._gripper_mot.send_mit(pos_cmd, vel, kp, kd, tau_safe)
                 self._gripper_mot.request_feedback()
                 self._gripper_ctrl.poll_feedback_once()
-        except Exception:
-            pass
+                state = self._gripper_mot.get_state()
+            self._record_gripper_feedback(state)
+        except Exception as exc:
+            self._record_gripper_feedback_error(str(exc))
+            raise RuntimeError(f"gripper MIT command feedback failed: {exc}") from exc
 
-    def _release_gripper_position_target(self, expected_goal: float) -> bool:
-        """Neutralize a completed normal position move and leave the gripper idle.
+    def _fail_active_gripper_command_locked(self, reason: str) -> None:
+        message = str(reason)
+        self._gripper_command_error = message
+        self._gripper_position_result = "failed"
+        self._gripper_active = False
+        self._gripper_mode = "idle"
+        self._gripper_target_deadline_monotonic = None
+        _LOG.error(
+            "gripper command failed reason=%s goal=%.6frad command=%.6frad "
+            "feedback=%.6frad updated=%s",
+            message,
+            self._gripper_goal_angle,
+            self._gripper_target_angle,
+            self._gripper_pos,
+            self._gripper_feedback_updated_monotonic,
+        )
+        if self._gripper_mot is None:
+            return
+        try:
+            self._gripper_mot.send_mit(
+                float(self._gripper_pos),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            )
+        except Exception as exc:
+            _LOG.error("gripper neutral command failed after %s: %s", message, exc)
 
-        This deliberately does not apply to ``grasp_closing`` or
-        ``grasp_holding``: those modes are explicitly requested force/hold
-        operations.  The gripper lock is held while the neutral command is
-        sent so a newer target cannot be overwritten by a stale completion.
+    def cancel_gripper_position_command(self, reason: str = "position command canceled") -> bool:
+        with self._gripper_lock:
+            if not self._gripper_active or self._gripper_mode != "position":
+                return False
+            self._fail_active_gripper_command_locked(reason)
+            return True
+
+    def _release_gripper_position_target(
+        self,
+        expected_goal: float,
+        *,
+        require_arrived: bool = True,
+    ) -> bool:
+        """End a normal position move and leave the gripper idle.
+
+        Upstream only returns success from ``wait_gripper_target`` and keeps
+        ``_gripper_active``/``_gripper_mode`` unchanged, so the 500 Hz tick goes
+        on sending MIT position commands after the service has already
+        answered.  This sends one neutral MIT command (zero stiffness, damping
+        and feed-forward torque) and then atomically switches to idle.
+
+        The gripper lock is held for the whole sequence so a newer target
+        cannot be clobbered by a stale completion.  ``grasp_closing`` and
+        ``grasp_holding`` are explicitly requested force operations and are
+        never released here.
         """
         with self._gripper_lock:
-            if (
-                not self._gripper_active
-                or self._gripper_mode != "position"
-                or self._gripper_goal_angle != expected_goal
-                or abs(self._gripper_pos - expected_goal) >= _G_ARRIVE_TOL
-            ):
-                return False
-            arrived_angle = float(self._gripper_pos)
-            # Neutral MIT has zero stiffness, damping and feed-forward torque.
-            # It overwrites the final position command before this path becomes
-            # inactive, so the motor is not left holding an open limit.
+            return self._release_gripper_position_target_locked(
+                expected_goal,
+                require_arrived=require_arrived,
+            )
+
+    def _release_gripper_position_target_locked(
+        self,
+        expected_goal: float,
+        *,
+        require_arrived: bool = True,
+    ) -> bool:
+        """``_release_gripper_position_target`` body; caller must hold the lock.
+
+        This split keeps the ownership checks and neutralization in one place
+        for callers that already hold ``_gripper_lock``.
+        """
+        if not self._gripper_active or self._gripper_mode != "position":
+            return False
+        if self._gripper_goal_angle != expected_goal:
+            return False
+        arrived_angle = float(self._gripper_pos)
+        if require_arrived and abs(arrived_angle - expected_goal) >= _G_ARRIVE_TOL:
+            return False
+        # Clear ownership BEFORE sending neutral.  The 500 Hz tick tests
+        # _gripper_active first, so once this is false no further position
+        # command can be produced and the neutral below is the last word.
+        self._gripper_target_angle = arrived_angle
+        self._gripper_goal_angle = arrived_angle
+        self._gripper_active = False
+        self._gripper_mode = "idle"
+        self._gripper_target_deadline_monotonic = None
+        if require_arrived:
+            self._gripper_position_result = "releasing"
+        elif self._gripper_position_result != "failed":
+            self._gripper_position_result = "failed"
+        try:
             self._gripper_safe_mit(
                 arrived_angle,
                 0.0,
@@ -1173,64 +1610,151 @@ class HardwareManager:
                 0.0,
                 tau_limit=0.05,
             )
-            self._gripper_target_angle = arrived_angle
-            self._gripper_goal_angle = arrived_angle
-            self._gripper_active = False
-            self._gripper_mode = "idle"
+        except Exception as exc:
+            self._gripper_position_result = "failed"
+            self._gripper_command_error = f"gripper neutral release failed: {exc}"
+            raise
+        if require_arrived:
+            self._gripper_position_result = "succeeded"
+            self._gripper_command_error = None
         return True
+
+    def _grasp_hold_expired_locked(self) -> bool:
+        """Whether the bounded grasp hold has run out.  Caller holds the lock."""
+        deadline = self._gripper_hold_deadline
+        if deadline is None:
+            return False
+        return time.monotonic() >= deadline
+
+    def _release_grasp_hold_locked(self, reason: str) -> None:
+        """Neutralize a grasp close/hold and go idle.  Caller holds the lock.
+
+        Upstream left ``grasp_holding`` loaded until the next command and its
+        close-timeout path switched to idle without ever neutralizing the last
+        torque command.  Both paths end here instead.
+        """
+        self._gripper_hold_deadline = None
+        self._gripper_hold_release_reason = reason
+        self._gripper_active = False
+        self._gripper_mode = "idle"
+        self._gripper_safe_mit(
+            float(self._gripper_pos),
+            0.0,
+            0.0,
+            0.0,
+            tau_limit=0.05,
+        )
+
+    def release_grasp_hold(self, reason: str = "external release") -> bool:
+        """Release an active grasp hold without commanding a new position."""
+        with self._gripper_lock:
+            if not self._gripper_active:
+                return False
+            if self._gripper_mode not in ("grasp_closing", "grasp_holding"):
+                return False
+            self._release_grasp_hold_locked(reason)
+        return True
+
+    @property
+    def grasp_hold_release_reason(self) -> str | None:
+        with self._gripper_lock:
+            return self._gripper_hold_release_reason
 
     def _gripper_tick(self) -> None:
         try:
             st = self._gripper_mot.get_state()
-            if st is not None:
-                self._gripper_pos = float(st.pos)
-                self._gripper_vel = float(st.vel)
-                self._gripper_torque = float(st.torq)
-        except Exception:
-            pass
+            position, velocity, torque, status = self._validated_gripper_feedback_values(st)
+            self._gripper_pos = position
+            self._gripper_vel = velocity
+            self._gripper_torque = torque
+            self._gripper_status_code = status
+        except Exception as exc:
+            self._record_gripper_feedback_error(str(exc))
+            with self._gripper_lock:
+                if self._gripper_active:
+                    self._fail_active_gripper_command_locked(
+                        f"gripper feedback read failed: {exc}"
+                    )
+            return
 
+        # The arrival test and the command emission must be atomic.  Sampling
+        # state, releasing the lock, then sending allowed a tick that had
+        # already passed the arrival test to emit one more torque-carrying
+        # command after wait_gripper_target had released -- observed on real
+        # hardware as ~1.2-1.33 mm of extra closing travel after the service
+        # returned.  Closing to zero is the exposed direction because
+        # abs(target) < 1e-6 turns effort into a feed-forward term there.
         with self._gripper_lock:
-            target = self._gripper_target_angle
-            goal = self._gripper_goal_angle
-            effort = self._gripper_target_effort
-            close_force = self._gripper_close_force
-            hold_force = self._gripper_hold_force
-            hold_angle = self._gripper_hold_angle
             mode = self._gripper_mode
-            active = self._gripper_active
-        if not active:
+            if not self._gripper_active:
+                command = None
+            elif (feedback_failure := self._gripper_feedback_failure_reason_locked()) is not None:
+                self._fail_active_gripper_command_locked(feedback_failure)
+                command = None
+            elif mode == "position":
+                goal = self._gripper_goal_angle
+                if abs(self._gripper_pos - goal) < _G_ARRIVE_TOL:
+                    # Reached with no synchronous waiter, or after one returned.
+                    self._release_gripper_position_target_locked(goal)
+                    command = None
+                else:
+                    now = time.monotonic()
+                    previous_tick = self._gripper_last_tick_monotonic
+                    elapsed = 0.0 if previous_tick is None else max(now - previous_tick, 0.0)
+                    max_step = self._gripper_position_max_speed_rad_s * elapsed
+                    target = self._gripper_target_angle
+                    remaining = goal - target
+                    if abs(remaining) <= max_step:
+                        target = goal
+                    elif max_step > 0.0:
+                        target += float(np.copysign(max_step, remaining))
+                    self._gripper_target_angle = target
+                    self._gripper_last_tick_monotonic = now
+                    effort = self._gripper_target_effort
+                    # ``effort`` caps the whole move, not just the closed
+                    # target; without the explicit tau_limit the command torque
+                    # fell back to _G_TAU_MAX.
+                    tau_ff = effort if abs(target) < 1e-6 else 0.0
+                    command = (target, 0.0, _G_KP_MOVE, _G_KD_MOVE, tau_ff, effort)
+            elif mode == "grasp_closing":
+                command = (
+                    0.0,
+                    0.0,
+                    _G_GRASP_CLOSE_KP,
+                    _G_GRASP_CLOSE_KD,
+                    self._gripper_close_force,
+                    _G_TAU_MAX,
+                )
+            elif mode == "grasp_holding":
+                if self._grasp_hold_expired_locked():
+                    self._release_grasp_hold_locked("hold timeout")
+                    command = None
+                else:
+                    command = (
+                        self._gripper_hold_angle,
+                        0.0,
+                        _G_GRASP_HOLD_KP,
+                        _G_GRASP_HOLD_KD,
+                        self._gripper_hold_force,
+                        _G_TAU_MAX,
+                    )
+            else:
+                command = None
+
+            if command is None:
+                try:
+                    self._gripper_mot.request_feedback()
+                    self._gripper_ctrl.poll_feedback_once()
+                    self._record_gripper_feedback(self._gripper_mot.get_state())
+                except Exception as exc:
+                    self._record_gripper_feedback_error(str(exc))
+                return
+
+            pos, vel, kp, kd, tau_ff, tau_limit = command
             try:
-                self._gripper_mot.request_feedback()
-                self._gripper_ctrl.poll_feedback_once()
-            except Exception:
-                pass
-            return
-        if mode == "position" and abs(self._gripper_pos - goal) < _G_ARRIVE_TOL:
-            self._release_gripper_position_target(goal)
-            return
-        if mode == "grasp_closing":
-            self._gripper_safe_mit(0.0, 0.0, _G_GRASP_CLOSE_KP, _G_GRASP_CLOSE_KD, close_force)
-        elif mode == "grasp_holding":
-            self._gripper_safe_mit(hold_angle, 0.0, _G_GRASP_HOLD_KP, _G_GRASP_HOLD_KD, hold_force)
-        else:
-            now = time.monotonic()
-            with self._gripper_lock:
-                previous = self._gripper_last_tick_monotonic
-                self._gripper_last_tick_monotonic = now
-            dt = min(max(now - (previous if previous is not None else now), 0.0), 0.05)
-            max_step = _G_LARGE_MOVE_MAX_SPEED_RAD_S * dt
-            target = float(np.clip(goal, target - max_step, target + max_step))
-            with self._gripper_lock:
-                self._gripper_target_angle = target
-            # In normal position mode, effort is a hard motor-side torque cap,
-            # not an unbounded "force" hint.  Do not add an opening preload.
-            self._gripper_safe_mit(
-                target,
-                0.0,
-                _G_KP_MOVE,
-                _G_KD_MOVE,
-                tau_limit=effort,
-            )
+                self._gripper_safe_mit(pos, vel, kp, kd, tau_ff, tau_limit=tau_limit)
+            except Exception as exc:
+                self._fail_active_gripper_command_locked(str(exc))
 
     def _gripper_loop(self) -> None:
         dt = 1.0 / _G_CTRL_RATE

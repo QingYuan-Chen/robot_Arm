@@ -166,7 +166,7 @@ def _add_sites(root: ET.Element) -> None:
     end_link = root.find('.//body[@name="end_link"]')
     if end_link is None:
         raise ValueError("converted MJCF is missing end_link")
-    ET.SubElement(end_link, "site", {"name": "ee_site", "pos": "-0.105 0 0", "size": "0.008"})
+    ET.SubElement(end_link, "site", {"name": "ee_site", "pos": "-0.04 0 0", "size": "0.008"})
     ET.SubElement(
         end_link,
         "site",

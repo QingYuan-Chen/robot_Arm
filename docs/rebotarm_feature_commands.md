@@ -2,6 +2,8 @@
 
 这个文档只放仍然保留的独立功能启动指令和测试顺序。
 
+> P0 安全门已于 2026-08-06 通过分级真机验收：连接失能、显式 enable、当前位置 hold、disable 和失败 cleanup 均有证据。P0 通过不等于完整视觉抓取已获准；在 P2-P6 感知、标定和系统门完成前，仍优先使用仿真或 plan-only，并按小角度、低速度逐级开放实机动作。
+
 ## RViz MoveIt 末端拖动
 
 这两个入口保留，但路线是 MoveIt 原生 MotionPlanning：
@@ -15,6 +17,8 @@ RViz MotionPlanning
 不再启动自定义 `ee_target` marker。
 
 真机：
+
+> 当前禁止直接执行以下入口，直到 P0 真机验收确认启动驱动不会自动上力并能可靠失能。
 
 ```bash
 cd ~/robotarm_ros2
@@ -63,6 +67,8 @@ Web Dashboard
 ```
 
 启动完整网页遥操作：
+
+> 当前禁止直接执行以下真机入口，直到 P0 真机验收完成。
 
 ```bash
 cd ~/robotarm_ros2

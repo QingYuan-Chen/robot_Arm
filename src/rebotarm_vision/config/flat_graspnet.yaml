@@ -5,8 +5,8 @@
 # pregrasp-height, joint-motion, and gripper gates.
 flat_graspnet:
   candidate_pose_policy: preserve_candidate_pose
-  # Keep aligned with upstream MuJoCo ee_site: pos="-0.105 0 0".
-  tcp_offset_xyz: [-0.105, 0.0, 0.0]
+  # Operator-measured physical end_link -> TCP offset.
+  tcp_offset_xyz: [-0.04, 0.0, 0.0]
   target_base_offset_xyz: [0.0, 0.0, 0.0]
   candidate_workspace_gate_enabled: true
   candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]

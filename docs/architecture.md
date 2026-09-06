@@ -129,6 +129,37 @@ It is responsible for:
 It must not bypass motion validation or controller safety. A visual grasp must
 go through planning, collision checking, and execution gates.
 
+### Simulation ownership
+
+`rebotarm_simulation` owns offline robot physics and the simulated controller
+backend.
+
+It is responsible for:
+
+- MuJoCo model generation and validation
+- simulated `FollowJointTrajectory` execution
+- simulated joint and gripper state
+- headless physics checks and optional viewer integration
+- trajectory metrics, step-response benchmarks, and simulated contact feedback
+
+It must not import or call the real motor SDK. A simulation launch must not
+start `rebotarmcontroller`, open a hardware channel, or expose a second active
+`FollowJointTrajectory` server under the same name.
+
+### Bringup ownership
+
+`rebotarm_bringup` owns launch-time composition and backend selection.
+
+It is responsible for:
+
+- launch files and cross-package startup composition
+- selecting exactly one real or simulated execution backend
+- propagating `use_hardware`, `execution_mode`, and `use_sim_time`
+- safe launch defaults and mutually exclusive node conditions
+
+It must not implement motor control, motion planning, perception, or calibration
+algorithms inside launch files.
+
 ### Calibration ownership
 
 `rebotarm_calibration` is the intended owner for calibration tools.
@@ -172,6 +203,8 @@ rebotarm_dashboard
 rebotarm_teach -> rebotarm_motion
 rebotarm_teleop -> rebotarm_motion when using legacy interactive preview helpers
 rebotarm_vision -> rebotarm_motion / MoveIt interfaces for validation and execution
+rebotarm_bringup -> package launch entry points and configuration only
+rebotarm_simulation -> ROS messages / simulated execution libraries only
 ```
 
 Forbidden dependency direction:
@@ -190,6 +223,9 @@ rebotarm_teleop -> rebotarm_interactive_control
 
 rebotarm_dashboard -> motor SDK
 rebotarm_vision -> motor SDK
+rebotarm_simulation -> motor SDK
+rebotarm_simulation -> rebotarmcontroller implementation
+rebotarm_bringup -> package implementation internals
 ```
 
 ## Authority Matrix
@@ -203,6 +239,8 @@ rebotarm_vision -> motor SDK
 | `rebotarm_dashboard` | no | yes | no direct planning logic | dashboard assets only | via teleop adapters |
 | `rebotarm_moveit_config` | no | no | configuration only | model/config files only | no |
 | `rebotarm_vision` | no | only through planned execution interfaces | yes, for validation/execution gates | perception assets/models only | no |
+| `rebotarm_simulation` | simulated backend only | owns simulated equivalents | no direct planning policy | generated simulation artifacts only | no |
+| `rebotarm_bringup` | no | no business logic | no business logic | launch/config only | no |
 | `rebotarm_calibration` | no | no, except explicit validation tools | no, except validation tools | calibration outputs only | no |
 | `rebotarm_interactive_control` | no | no new logic | no new logic | compatibility only | no new logic |
 
@@ -277,6 +315,8 @@ Use this table before adding a file:
 | New web panel, route, SSE payload formatting | `rebotarm_dashboard` |
 | New URDF/SRDF/collision/planning group config | `rebotarm_moveit_config` |
 | New detection/depth/grasp candidate logic | `rebotarm_vision` |
+| New MuJoCo model, simulated controller, physics metric, or contact feedback | `rebotarm_simulation` |
+| New launch composition or mutually exclusive backend selection | `rebotarm_bringup` |
 | New hand-eye/TCP/TF check tool | `rebotarm_calibration` |
 | Old import path compatibility only | `rebotarm_interactive_control` |
 
