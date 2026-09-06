@@ -24,6 +24,13 @@ log_*/
 # Existing versioned reports remain available in the repository.
 /Agent/evidence/
 
+# Retired P1 comparison tools and their historical material stay local.
+/scripts/p1_upstream_mujoco/
+/docs/superpowers/plans/2026-08-07-upstream-full-localization-plan.md
+/docs/superpowers/specs/2026-08-07-upstream-full-localization-design.md
+/tests/test_mujoco_baseline_comparison.py
+/tests/test_upstream_runner.py
+
 # Python caches and test artifacts
 __pycache__/
 *.py[cod]

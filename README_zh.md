@@ -166,7 +166,6 @@ rebot_Arm/
 ├── src/                   # 上表13个ROS包
 ├── tests/
 ├── tools/
-├── scripts/
 └── third_party/           # 上游参考快照与本地依赖
 ```
 

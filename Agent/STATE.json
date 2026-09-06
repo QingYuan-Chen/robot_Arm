@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T21:58:31+08:00",
+  "generated_at": "2026-09-06T22:08:35+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "359d9f1",
+    "head": "178b271",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-06T21:58:31+08:00 | actor=Codex | event=complete | note=GitHub PR #1已合并到main，首页与简介更新，开发分支保留；本地主目录切换main，追加发布记录 | verification=PR1 merged 359d9f1; code tree equals tested afb3f9b; 827 passed/8 skipped; compileall/diff; no hardware actions; no newly uploaded local artifacts"
+  "last_event": "- 2026-09-06T22:08:35+08:00 | actor=Codex | event=complete | note=历史P1对比工具、两份对应历史文档和两份专属测试已撤出跟踪并保留本机，README和忽略规则同步；软件验证通过，准备普通提交推送main，不改写历史 | verification=剩余发布范围pytest: 819 passed, 7 skipped；7文件本机内容与HEAD逐字节一致、均已忽略且不再跟踪；diff检查通过"
 }
