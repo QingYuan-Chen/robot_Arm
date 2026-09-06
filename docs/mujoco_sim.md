@@ -7,7 +7,10 @@
 > [启动解释器说明](launch_python_configuration.md) 和
 > [仿真包 README](../src/rebotarm_simulation/README_mujoco.md) 为准。
 
-> 当前状态：本分支已经具有 MuJoCo 模型生成、ROS adapter、metrics、容差判定、step-response 和 viewer 开关。P1 现采用 `huangbinai/robotarm_ros2@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4` 作为 upstream-first 迁移候选；当前仓库自有 Apache-2.0 MJCF/mesh 路径仍是 fallback/对照基线。在来源和差异审计完成前，不直接覆盖默认模型，也不运行无许可证文件的 HJX 资产。完整边界见 [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md) 和 [`mujoco_gap_matrix.md`](mujoco_gap_matrix.md)。
+> 当前正式实现位于 `src/rebotarm_simulation`，基于固定上游
+> `huangbinai/robotarm_ros2@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`。
+> 历史差异报告、旧实现及上游比较副本仅本机保留，不随源码发布。
+> 来源与授权边界见 [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md)。
 
 本文记录本工程的 MuJoCo 仿真落地方式。MuJoCo 在本仓库中定位为
 物理和离线验证层，用于接触、抓取、轨迹跟踪和策略迭代；它不直接拥有
@@ -296,16 +299,7 @@ source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
-如果直接用 Python 模块运行 adapter，本地源码路径要追加到 ROS 的
-`PYTHONPATH`，不能覆盖它：
-
-```bash
-PYTHONPATH=src/rebotarm_simulation:$PYTHONPATH \
-third_party/rebotarm_mujoco_venv/bin/python \
-  -m rebotarm_simulation.mujoco_ros_adapter_node
-```
-
-推荐使用 launch：
+正式 ROS 仿真使用已安装的活动包，推荐使用 launch：
 
 ```bash
 ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py \
@@ -313,20 +307,11 @@ ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py \
   python_executable:=third_party/rebotarm_mujoco_venv/bin/python
 ```
 
-该入口的 `simulation_backend` 默认值为 `upstream`，来源固定为
-`third_party/robotarm_ros2_mujoco_snapshot/`。如需对照旧实现，必须显式选择：
-
-```bash
-ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py \
-  simulation_backend:=current \
-  use_rviz:=false \
-  python_executable:=third_party/rebotarm_mujoco_venv/bin/python
-```
-
-两个 backend 互斥，launch 不会同时启动两个
-`follow_joint_trajectory` action server；上游路径使用 `/clock`，MoveIt
-消费者由 launch 自动设置 `use_sim_time=true`，current fallback 则强制使用
-wall clock。
+该入口只启动 `rebotarm_mujoco_node`，不读取历史比较副本，也不再接受
+`simulation_backend:=current`。仿真使用 `/clock`，MoveIt 消费者由 launch
+设置 `use_sim_time=true`。不得另起第二个同名 `follow_joint_trajectory`
+action server。`python_executable` 应指向本机已安装 MuJoCo 的解释器，
+虚拟环境本身不随仓库发布。
 
 无 RViz 验证：
 

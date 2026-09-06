@@ -166,7 +166,7 @@ rebot_Arm/
 ├── src/                   # 上表13个ROS包
 ├── tests/
 ├── tools/
-└── third_party/           # 上游参考快照与本地依赖
+└── third_party/           # 本机参考快照与依赖，仅保留 COLCON_IGNORE
 ```
 
 ---

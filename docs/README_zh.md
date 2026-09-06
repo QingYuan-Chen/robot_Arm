@@ -55,4 +55,4 @@ P0-P6 已按用户确认的工程范围关闭，等待用户提供新规划，�
 
 ## 历史计划与规格
 
-`superpowers/plans/` 和 `superpowers/specs/` 保存过去功能的 implementation plan / 实施计划与 design spec / 设计规格。它们用于追溯设计理由，不作为当前运行手册。
+历史 implementation plan / 实施计划、design spec / 设计规格和阶段实验报告仅本机留存，不随当前源码发布。过去已提交的版本可从 Git 历史追溯，不作为当前运行手册。

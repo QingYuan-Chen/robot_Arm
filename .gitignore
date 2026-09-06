@@ -21,15 +21,21 @@ log_*/
 /teleop_records/
 
 # Local experiment evidence is retained on disk, not added by routine staging.
-# Existing versioned reports remain available in the repository.
+# Historical reports remain on disk and in Git history.
 /Agent/evidence/
 
 # Retired P1 comparison tools and their historical material stay local.
 /scripts/p1_upstream_mujoco/
-/docs/superpowers/plans/2026-08-07-upstream-full-localization-plan.md
-/docs/superpowers/specs/2026-08-07-upstream-full-localization-design.md
+/docs/superpowers/
+/star_arm_102_rebot_b601_follow/docs/superpowers/
+/docs/mujoco_gap_matrix.md
+/third_party/rebotarm_simulation_current_baseline/
+/third_party/robotarm_ros2_mujoco_snapshot/
 /tests/test_mujoco_baseline_comparison.py
 /tests/test_upstream_runner.py
+/tests/test_mujoco_gap_matrix.py
+/tests/test_upstream_snapshot_provenance.py
+/tests/test_handeye_recalibration_plan.py
 
 # Python caches and test artifacts
 __pycache__/

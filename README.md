@@ -22,7 +22,7 @@
 - `tests/`：软件回归与架构检查。
 - `patches/`：固定版本的 MotorBridge 反馈与校零安全补丁。
 - `Agent/`：实施状态、决策和验收记录；历史完成度不等于新的真机动作授权。
-- `third_party/`：固定上游参考快照；本机 SDK 和虚拟环境不纳入版本管理。
+- `third_party/`：仅本机参考快照、SDK 和虚拟环境；不纳入版本管理。
 - `star_arm_102_rebot_b601_follow/`：独立 Star Arm 跟随工具，按其自身说明使用。
 
 标准本机构建目录为 `build/`、`install/`、`log/`，不提交到 Git。

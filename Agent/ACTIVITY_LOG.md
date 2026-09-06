@@ -580,3 +580,5 @@
 - 2026-09-06T21:58:31+08:00 | actor=Codex | event=complete | note=GitHub PR #1已合并到main，首页与简介更新，开发分支保留；本地主目录切换main，追加发布记录 | verification=PR1 merged 359d9f1; code tree equals tested afb3f9b; 827 passed/8 skipped; compileall/diff; no hardware actions; no newly uploaded local artifacts
 - 2026-09-06T22:05:47+08:00 | actor=Codex | event=start | note=按用户要求将P1上游对比工具、两份直接对应历史文档和专属测试撤出Git跟踪；保留本机文件，不回退其他成果 | verification=-
 - 2026-09-06T22:08:35+08:00 | actor=Codex | event=complete | note=历史P1对比工具、两份对应历史文档和两份专属测试已撤出跟踪并保留本机，README和忽略规则同步；软件验证通过，准备普通提交推送main，不改写历史 | verification=剩余发布范围pytest: 819 passed, 7 skipped；7文件本机内容与HEAD逐字节一致、均已忽略且不再跟踪；diff检查通过
+- 2026-09-06T22:12:55+08:00 | actor=Codex | event=start | note=按批准范围撤下历史报告/计划、闲置仿真副本和未引用模型，保留本机及有效回归测试，核验后同步main | verification=-
+- 2026-09-06T22:16:58+08:00 | actor=Codex | event=complete | note=112个历史材料/闲置副本/旧模型文件退出跟踪，本机保留；有效测试和来源授权保留，准备提交同步main | verification=发布副本仅补SDK/install环境：807 passed, 7 skipped；compileall/diff通过；112文件保留且与HEAD逐字节一致
