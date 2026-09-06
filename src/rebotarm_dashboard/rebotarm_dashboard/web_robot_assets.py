@@ -27,7 +27,7 @@ def gripper_opening_to_finger_joint_positions(
 
 
 def rewrite_package_mesh_uris(urdf_text: str, *, mesh_route: str = "meshes") -> str:
-    prefix = "package://rebotarm_bringup/description/meshes/"
+    prefix = "package://rebotarm_moveit_config/meshes/"
     route = mesh_route.rstrip("/")
     return str(urdf_text).replace(prefix, f"{route}/")
 

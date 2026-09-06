@@ -14,6 +14,7 @@ def _read(relative: str) -> str:
         return "\n".join(
             [
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py"),
+                _read_file("src/rebotarm_teach/rebotarm_teach/teach_replay_workflow.py"),
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_page.py"),
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_http.py"),
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html"),
@@ -154,7 +155,6 @@ def test_visual_grasp_strategy_defaults_are_split_into_yaml_profiles():
         "visual_servo.yaml",
         "table_safety.yaml",
         "graspnet_policy.yaml",
-        "visual_ready.yaml",
         "flat_graspnet.yaml",
     ]
 
@@ -207,7 +207,7 @@ def test_visual_grasp_vision_publishes_live_depth_camera_info():
 
 def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
-    node_text = _read("src/rebotarm_vision/rebotarm_vision/visual_ready_node.py")
+    node_text = _read("src/rebotarm_motion/rebotarm_motion/visual_ready_node.py")
 
     assert 'DeclareLaunchArgument("start_visual_ready", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false")' in launch_text
@@ -331,7 +331,9 @@ def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
     assert '"graspnet_source_mode": "in_process"' in launch_text
     assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
     assert "graspnet_local_infer_url" not in launch_text
-    assert 'SetEnvironmentVariable(name="PYTHONPATH", value=_vision_pythonpath())' in launch_text
+    assert '"vision_python_executable": LaunchConfiguration("vision_python_executable")' in launch_text
+    assert '"graspnet_python_executable": LaunchConfiguration("graspnet_python_executable")' in launch_text
+    assert "PYTHONPATH" not in launch_text
     assert '"candidate_ik_input_topic": "/grasp/graspnet_candidates"' in launch_text
     assert '"candidate_pose_policy": "preserve_candidate_pose"' in launch_text
     assert '"candidate_max_candidates_per_frame": "20"' in launch_text
@@ -1301,7 +1303,6 @@ def test_status_panel_uses_workbench_cards_for_teleop_ui():
 def test_teach_recorder_exposes_service_controlled_start_stop():
     recorder_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_recorder_node.py")
     controller_text = _read("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
-    controller_recorder_text = _read("src/rebotarmcontroller/rebotarmcontroller/teach_recorder.py")
     teleop_launch_text = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
     panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
     cmake_text = _read("src/rebotarm_msgs/CMakeLists.txt")
@@ -1318,14 +1319,11 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
     assert '"srv/SetTeachRecordPath.srv"' in cmake_text
     assert "def _handle_start_recording" in recorder_text
     assert "def _handle_stop_recording" in recorder_text
-    assert "InternalTeachRecorder" in controller_text
-    assert 'self.declare_parameter("teach_record_rate_hz", 150.0)' in controller_text
-    assert 'f"/{namespace}/teleop/teach_record/start"' in controller_recorder_text
-    assert 'f"/{namespace}/teleop/teach_record/stop"' in controller_recorder_text
-    assert 'f"/{namespace}/teleop/teach_record/set_path"' in controller_recorder_text
-    assert 'f"/{namespace}/teleop/recording_status"' in controller_recorder_text
-    assert "hardware.get_joint_state()" in controller_recorder_text
-    assert "hardware.get_joint_status_codes()" in controller_recorder_text
+    assert "InternalTeachRecorder" not in controller_text
+    assert not (ROOT / "src/rebotarmcontroller/rebotarmcontroller/teach_recorder.py").exists()
+    hardware_launch = _read("src/rebotarm_bringup/launch/moveit_hardware.launch.py")
+    assert 'package="rebotarm_teach"' in hardware_launch
+    assert 'executable="TeachRecorderNode"' in hardware_launch
     assert '"start_on_launch": False' in teleop_launch_text
     assert "UnlessCondition(use_hardware)" in teleop_launch_text
 
@@ -1373,7 +1371,7 @@ def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
     replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
     panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
     monitor_text = _read("src/rebotarm_motion/rebotarm_motion/replay_runtime_monitor.py")
-    config_text = _read("src/rebotarm_interactive_control/config/teleop_control.yaml")
+    config_text = _read("src/rebotarm_bringup/config/teleop_control.yaml")
 
     assert "evaluate_replay_tracking" in replay_node_text
     assert "evaluate_replay_tracking" in monitor_text
@@ -1383,7 +1381,7 @@ def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
         assert 'self.declare_parameter("replay_monitor_enabled", True)' in text
         assert 'self.declare_parameter("max_tracking_error_rad", 0.25)' in text
         assert 'self.declare_parameter("max_live_velocity_rad_s", 3.0)' in text
-        assert "def _check_active_replay_tracking" in text
+        assert "def _check_active_replay_tracking" in text or "def check_tracking" in text
         assert "self._request_controller_trajectory_stop" in text
     for text in (replay_node_text, monitor_text):
         assert "tracking_error" in text
@@ -1397,10 +1395,10 @@ def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
 def test_status_panel_preserves_runtime_safety_stop_result_reason():
     panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
     result_body = panel_text.split("def _on_teach_replay_result", 1)[1].split(
-        "\n    def _check_active_replay_tracking", 1
+        "\n    def check_tracking", 1
     )[0]
 
-    assert "previous_replay = self._store.snapshot().teleop.get(\"replay\", {})" in result_body
+    assert "previous_replay = self._snapshot().teleop.get(\"replay\", {})" in result_body
     assert "self._replay_runtime_monitor.stop_requested" in result_body
     assert "state = \"safety_stop\"" in result_body
     assert "action canceled after runtime monitor stop" in result_body
@@ -1419,7 +1417,7 @@ def test_teach_trajectory_curve_card_shows_prepared_curve_without_duplicate_chec
     details_body = panel_text.split("const renderTeachTrajectoryDetails = (payload) => {", 1)[1].split(
         "const drawTeachTrajectoryChart = (payload) => {", 1
     )[0]
-    backend_body = panel_text.split("def _teach_trajectory(", 1)[1].split("\n    def _teach_records", 1)[0]
+    backend_body = panel_text.split("def trajectory_preview(", 1)[1].split("\n    def records", 1)[0]
 
     assert "curve_source" in details_body
     assert "preview_samples = load_teach_samples(prepared_path)" in backend_body

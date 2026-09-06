@@ -14,6 +14,8 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import yaml
 
+from .resource_paths import package_resource
+
 
 @dataclass(frozen=True)
 class MotorSpec:
@@ -84,16 +86,16 @@ class GripperCommand:
     finger_force_n: float
 
 
-def load_motor_control_parameters(repo_root: str | Path) -> MotorControlParameters:
-    root = Path(repo_root)
-    arm_yaml = _read_yaml(root / "src/rebotarm_bringup/config/arm.yaml")
-    gripper_yaml = _read_yaml(root / "src/rebotarm_bringup/config/gripper.yaml")
-    calibration = _read_yaml(
-        root / "src/rebotarm_simulation/config/motor_control_calibration.yaml"
-    )
-    urdf_efforts = _load_urdf_efforts(
-        root / "src/rebotarm_moveit_config/config/rebotarm.urdf"
-    )
+def load_motor_control_parameters(
+    *, calibration_path: Path | None = None, urdf_path: Path | None = None,
+) -> MotorControlParameters:
+    calibration = _read_yaml(calibration_path or package_resource(
+        "rebotarm_simulation", "config/motor_control_calibration.yaml",
+    ))
+    reference = calibration["firmware_reference"]
+    urdf_efforts = _load_urdf_efforts(urdf_path or package_resource(
+        "rebotarm_moveit_config", "config/rebotarm.urdf",
+    ))
 
     motor_specs = {
         name: MotorSpec(
@@ -118,12 +120,10 @@ def load_motor_control_parameters(repo_root: str | Path) -> MotorControlParamete
     firmware_to_torque_scale: list[float] = []
     torque_rate_limit_nm_s: list[float] = []
     torque_lowpass_alpha: list[float] = []
-    for joint in arm_yaml["joints"]:
-        name = joint["name"]
+    for name, pos_vel in reference["arm"].items():
         calibration_entry = arm_calibration[name]
         motor_model = str(calibration_entry["motor_model"])
         motor_spec = motor_specs[motor_model]
-        pos_vel = joint["POS_VEL"]
         joint_names.append(str(name))
         motor_models.append(motor_model)
         pos_kp.append(float(pos_vel["pos_kp"]))
@@ -140,12 +140,12 @@ def load_motor_control_parameters(repo_root: str | Path) -> MotorControlParamete
             raise ValueError(f"torque_lowpass_alpha for {name} must be in (0, 1]")
         torque_lowpass_alpha.append(alpha)
 
-    source_gripper = gripper_yaml["gripper"][0]["MIT"]
+    source_gripper = reference["gripper"]
     gripper_calibration = calibration["gripper"]
     modes = gripper_calibration["modes"]
     displacement_range = gripper_calibration["displacement_range_m"]
     return MotorControlParameters(
-        control_rate_hz=float(arm_yaml["rate"]),
+        control_rate_hz=float(reference["rate_hz"]),
         motor_specs=motor_specs,
         arm=ArmControlParameters(
             joint_names=tuple(joint_names),

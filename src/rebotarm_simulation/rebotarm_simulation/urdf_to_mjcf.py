@@ -11,7 +11,7 @@ import mujoco
 import yaml
 
 
-PACKAGE_MESH_PREFIX = "package://rebotarm_bringup/description/meshes/"
+PACKAGE_MESH_PREFIX = "package://rebotarm_moveit_config/meshes/"
 JOINTS = [f"joint{index}" for index in range(1, 7)] + [
     "left_finger_joint",
     "right_finger_joint",

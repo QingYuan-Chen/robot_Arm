@@ -68,7 +68,7 @@ def _module_with_contract(
     *,
     method_present: bool,
     feedback_sequence: bool | None,
-    version: str = "0.4.6+rebotarm.1",
+    version: str = "0.4.6+rebotarm.2",
 ) -> SimpleNamespace:
     motor = type("Motor", (), {})
     if method_present:
@@ -120,7 +120,7 @@ def test_runtime_contract_rejects_unexpected_package_version() -> None:
         version="0.4.6",
     )
 
-    with pytest.raises(RuntimeError, match="0.4.6\\+rebotarm.1"):
+    with pytest.raises(RuntimeError, match="0.4.6\\+rebotarm.2"):
         SETUP.validate_runtime_contract(module)
 
 

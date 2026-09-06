@@ -89,7 +89,7 @@ def generate_launch_description():
                 parameters=[{"use_sim_time": use_sim_time}],
             ),
             Node(
-                package="rebotarm_interactive_control",
+                package="rebotarm_teleop",
                 executable="GripperVisualJointStateNode",
                 name="gripper_visual_joint_state_node",
                 output="screen",

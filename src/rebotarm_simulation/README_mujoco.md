@@ -6,6 +6,10 @@
 
 ## 安装与构建
 
+ROS launch 的解释器可用 `python_executable` 参数或 `REBOTARM_MUJOCO_PYTHON`
+环境变量指定，未设置时使用 `PATH` 中的 `python3`；不会自动寻找仓库中的 venv。
+混合视觉入口的配置见 [启动解释器说明](../../docs/launch_python_configuration.md)。
+
 在 Ubuntu VM 的工作区根目录执行。先 source ROS，确保虚拟环境能看到 Jazzy
 的 `rclpy`；`--system-site-packages` 是必需的。colcon 当前需要兼容版本的
 setuptools，因此限定为 `setuptools>=68,<80`。

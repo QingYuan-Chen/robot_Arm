@@ -83,14 +83,25 @@ def generate_launch_description():
                         "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
                         "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
                         "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
-                        "teach_record_path": teach_record_path,
-                        "teach_record_rate_hz": teach_record_rate_hz,
                         "cmd_arbitration": cmd_arbitration,
                         "arm_namespace": arm_namespace,
                         "frame_id": frame_id,
                         "ee_frame_id": ee_frame_id,
                     }
                 ],
+            ),
+            Node(
+                package="rebotarm_teach",
+                executable="TeachRecorderNode",
+                name="teach_recorder_node",
+                output="screen",
+                parameters=[{
+                    "arm_namespace": arm_namespace,
+                    "record_path": teach_record_path,
+                    "sample_rate_hz": teach_record_rate_hz,
+                    "start_on_launch": False,
+                    "keyboard_quit_enabled": False,
+                }],
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(demo_launch),

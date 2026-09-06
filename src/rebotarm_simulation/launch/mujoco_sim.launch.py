@@ -7,13 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import LaunchConfiguration
-
-
-def _default_python_executable() -> str:
-    workspace_root = Path(__file__).resolve().parents[3]
-    pinned = workspace_root / "third_party" / "rebotarm_mujoco_venv" / "bin" / "python"
-    return str(pinned) if pinned.is_file() else "python3"
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 
 
 def generate_launch_description():
@@ -34,7 +28,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "python_executable",
-                default_value=_default_python_executable(),
+                default_value=EnvironmentVariable("REBOTARM_MUJOCO_PYTHON", default_value="python3"),
                 description="Python interpreter containing MuJoCo and ROS 2 dependencies",
             ),
             DeclareLaunchArgument("mujoco_arm_namespace", default_value="rebotarm"),

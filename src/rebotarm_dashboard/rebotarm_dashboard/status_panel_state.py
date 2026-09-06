@@ -96,7 +96,17 @@ class TeleopStatusStore:
     def snapshot_dict(self) -> dict[str, Any]:
         snapshot = self.snapshot()
         return {
-            "joints": snapshot.joints,
+            # ROS permits NaN for unknown feedback; JSON does not. Keep the
+            # internal raw snapshot but expose unknown numbers as JSON null.
+            "joints": {
+                name: {
+                    key: (
+                        None if isinstance(value, float) and not math.isfinite(value) else value
+                    )
+                    for key, value in joint.items()
+                }
+                for name, joint in snapshot.joints.items()
+            },
             "arm": snapshot.arm,
             "teleop": snapshot.teleop,
         }

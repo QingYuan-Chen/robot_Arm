@@ -83,7 +83,7 @@ python3 -m pip install --user --break-system-packages -r requirements-runtime.tx
 
 原始 `motorbridge==0.4.6` 不包含控制器所需的逐电机反馈 sequence，因此单独安装
 PyPI 包不够。必须从仓库根目录构建并显式安装已审查的
-`0.4.6+rebotarm.1` source patch，再通过启动前检查：
+`0.4.6+rebotarm.2` source patch，再通过启动前检查：
 
 ```bash
 python3 tools/setup_motorbridge_fresh_feedback.py --build-only

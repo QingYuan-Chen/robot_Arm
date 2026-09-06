@@ -84,7 +84,7 @@ def test_replay_profiles_keep_safe_defaults_in_config() -> None:
 
 def test_teach_recording_uses_higher_sampling_defaults() -> None:
     teleop_config = yaml.safe_load(
-        _read("src/rebotarm_interactive_control/config/teleop_control.yaml")
+        _read("src/rebotarm_bringup/config/teleop_control.yaml")
     )
     params = teleop_config["/**"]["ros__parameters"]
 

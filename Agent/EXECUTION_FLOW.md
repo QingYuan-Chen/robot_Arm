@@ -98,7 +98,9 @@
 
 91. [gripper zero calibration] 用户重新安装夹爪并确认机械闭合，要求校准当前闭合位为零。只读预检：controller `CONNECTED_DISABLED`、arm 六轴 status0/no error；gripper feedback `position=0.0`、velocity/torque `0`、status0。原 `/rebotarm/set_zero` 只支持 arm motor，新增 `HardwareManager.set_zero("gripper")` 显式分支：disabled-only、停止 gripper loop、验证 status0、调用 gripper motor `set_zero_position()`，不调用 arm-wide zero。实际服务调用成功；post-check gripper position0/status0，arm disabled/IDLE/status0/no error，无 arm motion。focused safety tests `21 passed`、controller symlink build通过；runtime/tty清理。该结果仅证明 gripper encoder zero calibration，不证明指宽或抓取成功。证据：`Agent/evidence/P6/2026-08-12-gripper-zero-calibration.{md,json}`。
 92. [已完成、software-only] GraspNet backend已从Ubuntu生产链的独立localhost HTTP/`8081`迁入视觉抓取链：统一launch用`.venv-graspnet`启动独立ROS进程，直接接收时间匹配RGB-D/CameraInfo/detections并调用完整runner。候选timestamp/frame_id、完整场景与目标mask语义、确定性采样、projection/jaw门和fail-closed保持；真实Gemini 2 + TensorRT YOLO只读对照发布了`ubuntu_inprocess_graspnet` bottle candidate，8081无listener。Windows/network兼容入口保留，旧service仅作回退测试；无MoveIt/controller/trajectory。证据：`Agent/evidence/P6/2026-09-03-graspnet-inprocess-integration.md`。
-93. [待测试] 针对当前 active TCP 中心可能存在的小幅偏差设计受控残差测试；先固定 hand-eye、depth、目标姿态和测量基准，量化位置/方向误差后再决定是否修改当前 `[-0.04,0,0] m`。任何真机接触或运动须另行明确授权，P5 checkbox 暂不改变。
+93. [范围收口、未执行] 针对当前 active TCP 中心可能存在的小幅偏差的受控残差测试未执行；随 P6 关闭退出当前队列。若后续新规划重新纳入，仍须先固定 hand-eye、depth、目标姿态和测量基准，并为任何真机接触或运动另行取得明确授权；当前不修改 `[-0.04,0,0] m` 或 P5 checkbox。
+94. [已完成、P6范围关闭] 2026-09-06 operator 决定关闭当前 P6，后续另行加入新规划。未完成的 `yolo26s-seg.pt` bottle→active MuJoCo 正向复验和 lift/retreat 等分级实机动作以“范围收口”退出当前计分，不冒充验收通过；P6 由 `4/6` 收口为 `4/4`。历史证据、失败事实和安全规则全部保留。
+95. [已完成、关闭前plan-only验证] operator 授权的真实视觉测试中，机械臂全程 `disabled/IDLE/status0`；fresh valid bottle plan confidence `0.9310057`、jaw `0.0749830 m`、age `2.946 s`，MoveIt `execute=false` 对 pregrasp/grasp 分别生成 `55/82` 点轨迹。未启动 VisualGraspExecutor、未 enable、未发送 trajectory 或夹爪命令；清理后 runtime、ROS daemon、8081/8088、串口占用均为空。当前队列停止，等待 operator 提供下一份规划，不自行创建 P7。
 
 ## 每次任务开始
 

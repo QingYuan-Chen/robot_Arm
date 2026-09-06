@@ -19,7 +19,7 @@ def generate_launch_description():
     teleop_config = LaunchConfiguration("teleop_config")
     keyboard_prefix = LaunchConfiguration("keyboard_prefix")
     bringup_share = FindPackageShare("rebotarm_bringup")
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
 
     return LaunchDescription(
         [
@@ -38,7 +38,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "teleop_config",
                 default_value=PathJoinSubstitution(
-                    [interactive_share, "config", "teleop_control.yaml"]
+                    [config_share, "config", "teleop_control.yaml"]
                 ),
             ),
             IncludeLaunchDescription(
@@ -68,6 +68,7 @@ def generate_launch_description():
                         "record_path": record_path,
                         "start_on_launch": False,
                         "keyboard_quit_enabled": False,
+                        "require_motor_status": False,
                     },
                 ],
             ),

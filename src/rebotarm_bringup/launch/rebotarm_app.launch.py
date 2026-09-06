@@ -149,9 +149,9 @@ def _launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
     teleop_config = PathJoinSubstitution(
-        [interactive_share, "config", "teleop_control.yaml"]
+        [config_share, "config", "teleop_control.yaml"]
     )
 
     return LaunchDescription(

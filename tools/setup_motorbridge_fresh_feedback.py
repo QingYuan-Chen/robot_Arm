@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and validate the pinned MotorBridge feedback-sequence patch.
+"""Build and validate the pinned MotorBridge feedback and zeroing safety patch.
 
 This tool never constructs a MotorBridge Controller or Motor. Installation is
 available only through the explicit ``--install-user`` mode.
@@ -23,8 +23,8 @@ import venv
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_URL = "https://github.com/motorbridge/motorbridge.git"
 UPSTREAM_COMMIT = "38b8a5681887514b301dbcab96e01a473cbd7173"
-PATCHED_VERSION = "0.4.6+rebotarm.1"
-PATCH_SHA256 = "e04d1dacce15eaee4713517f4ea1a4b20ed3299be124f0e7e8df0e2bf5de23a5"
+PATCHED_VERSION = "0.4.6+rebotarm.2"
+PATCH_SHA256 = "e95b910c86f295e748c37fd16e83c38d9519eab151c089afb31049f392c0b663"
 PATCH_PATH = ROOT / "patches/motorbridge/0001-add-feedback-sequence-api.patch"
 BUILD_ROOT = ROOT / "build_motorbridge_fresh_feedback"
 SOURCE_DIR = BUILD_ROOT / "source"
@@ -280,8 +280,6 @@ def _build_rust_artifacts() -> tuple[Path, Path]:
 
 def _build_wheel(abi_path: Path, gateway_path: Path) -> Path:
     WHEEL_DIR.mkdir(parents=True, exist_ok=True)
-    for previous in WHEEL_DIR.glob("motorbridge-*.whl"):
-        previous.unlink()
 
     with tempfile.TemporaryDirectory(
         prefix=".motorbridge-wheel-source-",
@@ -307,7 +305,7 @@ def _build_wheel(abi_path: Path, gateway_path: Path) -> Path:
             env=env,
         )
 
-    wheels = sorted(WHEEL_DIR.glob("motorbridge-*.whl"))
+    wheels = sorted(WHEEL_DIR.glob(f"motorbridge-{PATCHED_VERSION}-*.whl"))
     if len(wheels) != 1:
         raise RuntimeError(
             f"Expected exactly one MotorBridge wheel in {WHEEL_DIR}, found {len(wheels)}"

@@ -22,6 +22,13 @@ _G_MAX_DIST_M = 0.09
 # refusing to command beyond this real-hardware limit.
 _G_VERIFIED_OPEN_LIMIT_M = 0.085
 _G_ANGLE_OPEN = -5.0
+# DM4310 feedback spans +/-12.5 rad in 16 bits. Allow two quantization
+# steps for the open endpoint and zero verification, not motion arrival tolerance.
+_G_COORDINATE_TOL_RAD = 2.0 * 25.0 / 65535.0
+# Operator-approved 1 mm closed feedback tolerance, not a command or zeroing margin.
+_G_CLOSED_FEEDBACK_TOL_RAD = 0.001 * abs(_G_ANGLE_OPEN) / _G_MAX_DIST_M
+_G_ZERO_VERIFY_TIMEOUT_SEC = 0.5
+_G_ZERO_VERIFY_SAMPLES = 3
 _G_OPEN_SOFT_LIMIT = -4.9
 _G_ARRIVE_TOL = 0.12
 _G_TAU_MAX = 1.5
@@ -254,6 +261,7 @@ class HardwareManager:
         self._gripper_status_code = 255
         self._gripper_feedback_updated_monotonic: float | None = None
         self._gripper_feedback_error: str | None = "gripper feedback not received"
+        self._gripper_zero_error: str | None = None
         self._gripper_command_error: str | None = None
         self._gripper_position_result = "idle"
         self._gripper_neutral_pending: tuple[float, str, bool] | None = None
@@ -950,6 +958,22 @@ class HardwareManager:
                 "gripper feedback stale: "
                 f"age={age:.3f}s limit={self._gripper_feedback_stale_timeout_sec:.3f}s"
             )
+        return self._gripper_coordinate_failure_reason_locked()
+
+    def _gripper_coordinate_failure_reason_locked(self) -> str | None:
+        if self._gripper_zero_error is not None:
+            return self._gripper_zero_error
+        position = self._gripper_pos
+        if not np.isfinite(position) or not (
+            _G_ANGLE_OPEN - _G_COORDINATE_TOL_RAD
+            <= position <= _G_CLOSED_FEEDBACK_TOL_RAD
+        ):
+            return (
+                f"gripper coordinate invalid: raw={position:.6f} rad outside "
+                f"[{_G_ANGLE_OPEN:.6f}, 0.000000] rad "
+                f"(open_tolerance={_G_COORDINATE_TOL_RAD:.6f}, "
+                f"closed_tolerance={_G_CLOSED_FEEDBACK_TOL_RAD:.6f}); verify closed zero"
+            )
         return None
 
     def _refresh_gripper_feedback(self):
@@ -1131,6 +1155,17 @@ class HardwareManager:
             )
             return positions, velocities, torques
 
+    def get_cached_joint_sample(self):
+        """Return validated values and their receive identity in one atomic read."""
+        with self._motor_lifecycle_lock, self._feedback_lock:
+            values = self._validated_joint_feedback(
+                expected_status=1 if self._enabled else 0, refresh=False,
+            )
+            sequences = tuple(
+                sample.sequence for sample in self._verified_feedback_samples(self.joint_names)
+            )
+            return (*values, sequences)
+
     def hold_current_position(self) -> np.ndarray:
         q, _, _ = self.get_joint_state()
         current = np.array(q, dtype=np.float64, copy=True)
@@ -1247,6 +1282,11 @@ class HardwareManager:
                     self._validated_joint_feedback(expected_status=0)
                 )
                 self._validated_gripper_status(expected_status=0)
+                if self._gripper_mot is not None:
+                    with self._gripper_lock:
+                        coordinate_failure = self._gripper_coordinate_failure_reason_locked()
+                    if coordinate_failure is not None:
+                        raise RuntimeError(coordinate_failure)
                 self._endpos_ctrl._q_target[:] = positions
                 if self._arm.mode_pos_vel() is False:
                     raise RuntimeError("failed to enter position-velocity control mode")
@@ -1351,31 +1391,73 @@ class HardwareManager:
         return bool(ok)
 
     def set_zero(self, joint_name: str = "") -> bool:
-        self._require_connected()
-        if self._enabled:
-            raise RuntimeError("set_zero requires CONNECTED_DISABLED state")
-        self._stop_control_loop()
-        joint_name = str(joint_name).strip()
-        if joint_name == "gripper":
-            if self._gripper_mot is None:
-                raise RuntimeError("gripper is not initialized")
-            self._stop_gripper_loop()
-            self._validated_gripper_status(expected_status=0)
-            try:
-                self._gripper_mot.set_zero_position()
-            except Exception as exc:
-                raise RuntimeError(f"gripper set_zero failed: {exc}") from exc
+        # Serialize calibration against enable/disable. Keep acquiring raw
+        # feedback even for an invalid coordinate so explicit zero can repair it.
+        with self._motor_lifecycle_lock:
+            self._require_connected()
+            if self._enabled:
+                raise RuntimeError("set_zero requires CONNECTED_DISABLED state")
+            self._stop_control_loop()
+            joint_name = str(joint_name).strip()
+            if joint_name == "gripper":
+                return self._set_gripper_zero()
+            if joint_name:
+                ok = self._arm.set_zero_single(joint_name)
+            else:
+                self._arm.set_zero()
+                ok = True
             self._enabled = False
             self.set_state_machine("IDLE")
-            return True
-        if joint_name:
-            ok = self._arm.set_zero_single(joint_name)
-        else:
-            self._arm.set_zero()
-            ok = True
-        self._enabled = False
-        self.set_state_machine("IDLE")
-        return bool(ok)
+            return bool(ok)
+
+    def _set_gripper_zero(self) -> bool:
+        if self._gripper_mot is None:
+            raise RuntimeError("gripper is not initialized")
+        self._stop_gripper_loop()
+        with self._feedback_lock:
+            self._validated_gripper_status(expected_status=0)
+            with self._gripper_lock:
+                self._gripper_zero_error = "gripper zero verification pending"
+            try:
+                self._gripper_mot.set_zero_position()
+                deadline = time.monotonic() + _G_ZERO_VERIFY_TIMEOUT_SEC
+                consecutive = 0
+                position = float("nan")
+                while time.monotonic() < deadline:
+                    # Force refresh captures a new receive-sequence baseline;
+                    # a pre-zero cached sample cannot satisfy this request.
+                    state = self._refresh_gripper_feedback()
+                    position, _velocity, _torque, status = (
+                        self._validated_gripper_feedback_values(state)
+                    )
+                    if status != 0:
+                        raise RuntimeError(
+                            f"gripper status_code={status}, expected 0 after zero"
+                        )
+                    if time.monotonic() >= deadline:
+                        break
+                    consecutive = (
+                        consecutive + 1 if abs(position) <= _G_COORDINATE_TOL_RAD else 0
+                    )
+                    if consecutive >= _G_ZERO_VERIFY_SAMPLES:
+                        with self._gripper_lock:
+                            self._gripper_zero_error = None
+                        self._enabled = False
+                        self.set_state_machine("IDLE")
+                        return True
+                    time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+                raise RuntimeError(
+                    f"zero verification timed out: raw={position:.6f} rad; "
+                    f"need {_G_ZERO_VERIFY_SAMPLES} fresh disabled samples within "
+                    f"+/-{_G_COORDINATE_TOL_RAD:.6f} rad"
+                )
+            except Exception as exc:
+                message = f"gripper set_zero failed: {exc}"
+                with self._gripper_lock:
+                    # New frames alone do not prove an unsuccessful calibration.
+                    # Retain the failure until explicit zero is verified.
+                    self._gripper_zero_error = message
+                raise RuntimeError(message) from exc
 
     def ensure_pos_vel_control(self) -> None:
         self._require_enabled()
@@ -1869,10 +1951,17 @@ class HardwareManager:
             except Exception as exc:
                 self._record_gripper_feedback_error(str(exc))
                 status = 255
+        with self._gripper_lock:
+            if self._gripper_coordinate_failure_reason_locked() is not None:
+                status = 255
         return position, velocity, torque, status
 
     def gripper_position_m(self) -> float:
-        distance = (self._gripper_pos / _G_ANGLE_OPEN) * _G_MAX_DIST_M
+        with self._gripper_lock:
+            if self._gripper_coordinate_failure_reason_locked() is not None:
+                return float("nan")
+            distance = (self._gripper_pos / _G_ANGLE_OPEN) * _G_MAX_DIST_M
+        # Only endpoint excursions within the verified feedback tolerances reach this clamp.
         return float(np.clip(distance, 0.0, _G_MAX_DIST_M))
 
     def gripper_reached_target(self) -> bool:

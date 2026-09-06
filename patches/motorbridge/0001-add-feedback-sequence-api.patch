@@ -1,12 +1,12 @@
 diff --git a/bindings/python/src/motorbridge/_version.py b/bindings/python/src/motorbridge/_version.py
-index 3daf705389c23c70349f6d90ee92148a1cbfc700..d238d24619d01f0698f1dbaec48e72793b2ab834 100644
+index 3daf705..d1da6f6 100644
 --- a/bindings/python/src/motorbridge/_version.py
 +++ b/bindings/python/src/motorbridge/_version.py
 @@ -1 +1 @@
 -VERSION = "0.4.6"
-+VERSION = "0.4.6+rebotarm.1"
++VERSION = "0.4.6+rebotarm.2"
 diff --git a/bindings/python/src/motorbridge/abi.py b/bindings/python/src/motorbridge/abi.py
-index 1a68f08a3ea020fc2e7fd02f50e46ee99ef5ba49..905dce178ec13a2d043406eff61bd19f80de9b6c 100644
+index 1a68f08..905dce1 100644
 --- a/bindings/python/src/motorbridge/abi.py
 +++ b/bindings/python/src/motorbridge/abi.py
 @@ -3,7 +3,7 @@ import ctypes.util
@@ -30,7 +30,7 @@ index 1a68f08a3ea020fc2e7fd02f50e46ee99ef5ba49..905dce178ec13a2d043406eff61bd19f
          lib.motor_handle_damiao_get_param_f32.argtypes = [c_void_p, c_uint16, c_uint32, POINTER(c_float)]
          lib.motor_handle_damiao_get_param_f32.restype = c_int32
 diff --git a/bindings/python/src/motorbridge/core.py b/bindings/python/src/motorbridge/core.py
-index b83243e8cb6dadba2fd13329072b0cee2de6fe3c..56d6e801e85b16fabffcd64c68ed299ad51249a7 100644
+index b83243e..56d6e80 100644
 --- a/bindings/python/src/motorbridge/core.py
 +++ b/bindings/python/src/motorbridge/core.py
 @@ -1,7 +1,7 @@
@@ -69,83 +69,8 @@ index b83243e8cb6dadba2fd13329072b0cee2de6fe3c..56d6e801e85b16fabffcd64c68ed299a
 +                t_rotor=float(st.t_rotor),
 +            )
 +        return state, int(sequence.value)
-diff --git a/bindings/python/tests/test_feedback_sequence.py b/bindings/python/tests/test_feedback_sequence.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f832faf0980c0006abb34ce046069a611de5536b
---- /dev/null
-+++ b/bindings/python/tests/test_feedback_sequence.py
-@@ -0,0 +1,69 @@
-+from __future__ import annotations
-+
-+import ctypes
-+from types import SimpleNamespace
-+
-+from motorbridge.abi import Abi, CState
-+from motorbridge.core import Motor
-+
-+
-+class FakeAbiLibrary:
-+    def motor_handle_get_state_with_sequence(
-+        self,
-+        motor: int,
-+        out_state: object,
-+        out_sequence: object,
-+    ) -> int:
-+        assert motor == 123
-+        state = ctypes.cast(out_state, ctypes.POINTER(CState)).contents
-+        state.has_value = 1
-+        state.can_id = 1
-+        state.arbitration_id = 0x11
-+        state.status_code = 1
-+        state.pos = 1.25
-+        state.vel = 2.5
-+        state.torq = 0.75
-+        state.t_mos = 35.0
-+        state.t_rotor = 34.0
-+        sequence = ctypes.cast(out_sequence, ctypes.POINTER(ctypes.c_uint64)).contents
-+        sequence.value = ctypes.c_uint64(7).value
-+        return 0
-+
-+
-+class FakeBindingFunction:
-+    argtypes: list[object] | None = None
-+    restype: object | None = None
-+
-+
-+class FakeBindingLibrary:
-+    def __getattr__(self, name: str) -> FakeBindingFunction:
-+        function = FakeBindingFunction()
-+        setattr(self, name, function)
-+        return function
-+
-+
-+def test_get_state_with_sequence_returns_state_and_receive_identity() -> None:
-+    motor = Motor.__new__(Motor)
-+    motor._abi = SimpleNamespace(lib=FakeAbiLibrary())
-+    motor._ptr = 123
-+
-+    state, sequence = motor.get_state_with_sequence()
-+
-+    assert state is not None
-+    assert state.pos == 1.25
-+    assert sequence == 7
-+
-+
-+def test_abi_bind_types_feedback_sequence_symbol() -> None:
-+    abi = Abi.__new__(Abi)
-+    abi.lib = FakeBindingLibrary()
-+
-+    abi._bind()
-+
-+    symbol = abi.lib.motor_handle_get_state_with_sequence
-+    assert symbol.argtypes == [
-+        ctypes.c_void_p,
-+        ctypes.POINTER(CState),
-+        ctypes.POINTER(ctypes.c_uint64),
-+    ]
-+    assert symbol.restype is ctypes.c_int32
 diff --git a/motor_abi/include/motor_abi.h b/motor_abi/include/motor_abi.h
-index 5abe0f8e8310e307559ad23ebcf211e0589d8701..04f9313bbbc650f8055fee96293b3edd4fcb0017 100644
+index 5abe0f8..04f9313 100644
 --- a/motor_abi/include/motor_abi.h
 +++ b/motor_abi/include/motor_abi.h
 @@ -115,6 +115,7 @@ int32_t motor_handle_robstride_get_param_u32(MotorHandle* motor, uint16_t param_
@@ -157,7 +82,7 @@ index 5abe0f8e8310e307559ad23ebcf211e0589d8701..04f9313bbbc650f8055fee96293b3edd
  int32_t motor_handle_damiao_get_param_f32(MotorHandle* motor, uint16_t param_id, uint32_t timeout_ms, float* out_value);
  int32_t motor_handle_damiao_get_param_u32(MotorHandle* motor, uint16_t param_id, uint32_t timeout_ms, uint32_t* out_value);
 diff --git a/motor_abi/src/lib.rs b/motor_abi/src/lib.rs
-index abca5f7623de079b36e27d599d21680f398b53d7..ffe74ce86809ab4029fb55df9e5e57a004a36710 100644
+index abca5f7..ffe74ce 100644
 --- a/motor_abi/src/lib.rs
 +++ b/motor_abi/src/lib.rs
 @@ -34,6 +34,7 @@ const ABI_CAPABILITIES: &str = r#"{
@@ -169,7 +94,7 @@ index abca5f7623de079b36e27d599d21680f398b53d7..ffe74ce86809ab4029fb55df9e5e57a0
      "control_modes": ["mit", "pos-vel", "vel", "force-pos", "robstride-pos-vel-pp", "robstride-pos-vel-csp"],
      "damiao": ["dm-serial", "dm-device", "register_u32", "register_f32", "param_u32", "param_f32", "set_can_timeout_ms"],
 diff --git a/motor_abi/src/state_ffi.rs b/motor_abi/src/state_ffi.rs
-index 3565cdc9c4f7cf7f906dc2b639e9feacb7fb82de..77ffae785dcc8a615057eaab3d8ad824195483a1 100644
+index 3565cdc..77ffae7 100644
 --- a/motor_abi/src/state_ffi.rs
 +++ b/motor_abi/src/state_ffi.rs
 @@ -121,3 +121,162 @@ pub extern "C" fn motor_handle_get_state(
@@ -335,20 +260,143 @@ index 3565cdc9c4f7cf7f906dc2b639e9feacb7fb82de..77ffae785dcc8a615057eaab3d8ad824
 +        );
 +    }
 +}
+diff --git a/motor_core/src/dm_serial.rs b/motor_core/src/dm_serial.rs
+index 058e2ec..d59cafc 100644
+--- a/motor_core/src/dm_serial.rs
++++ b/motor_core/src/dm_serial.rs
+@@ -96,6 +96,9 @@ impl DmSerialBus {
+             }
+             let flags = raw[2];
+             let dlc = flags & 0x3F;
++            if dlc > 8 {
++                continue;
++            }
+             let is_extended = (flags & 0x40) != 0;
+             let is_rtr = (flags & 0x80) != 0;
+             if is_rtr {
+@@ -140,6 +143,27 @@ impl DmSerialBus {
+     }
+ }
+
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn invalid_dlc_is_dropped_without_losing_next_frame() {
++        let valid = [
++            0xaa, 0x11, 8, 0x17, 0, 0, 0, 7, 0x7f, 0xff, 0x7f, 0xf7, 0xff, 32, 30, 0x55,
++        ];
++        for dlc in [9, 16, 63] {
++            let mut invalid = valid;
++            invalid[2] = dlc;
++            let mut buffer: VecDeque<_> = invalid.into_iter().chain(valid).collect();
++            let frame = DmSerialBus::try_parse_rx(&mut buffer).unwrap();
++            assert_eq!(frame.dlc, 8);
++            assert_eq!(frame.arbitration_id, 0x17);
++            assert!(buffer.is_empty());
++        }
++    }
++}
++
+ impl CanBus for DmSerialBus {
+     fn send(&self, frame: CanFrame) -> Result<()> {
+         let raw = Self::encode_tx(frame)?;
 diff --git a/motor_vendors/damiao/src/motor.rs b/motor_vendors/damiao/src/motor.rs
-index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa115897d3d 100644
+index a0d956a..b4d7fe9 100644
 --- a/motor_vendors/damiao/src/motor.rs
 +++ b/motor_vendors/damiao/src/motor.rs
-@@ -234,7 +234,7 @@ pub struct DamiaoMotor {
+@@ -1,16 +1,15 @@
+ use crate::protocol::{
+-    decode_register_value, decode_sensor_feedback, encode_clear_error_cmd, encode_disable_cmd,
+-    encode_enable_cmd, encode_feedback_request_cmd, encode_force_pos_cmd, encode_mit_cmd,
+-    encode_pos_vel_cmd, encode_register_read_cmd, encode_register_write_cmd, encode_set_zero_cmd,
+-    encode_store_params_cmd, encode_vel_cmd, is_register_reply, status_name, Limits,
++    Limits, decode_register_value, decode_sensor_feedback, encode_clear_error_cmd,
++    encode_disable_cmd, encode_enable_cmd, encode_feedback_request_cmd, encode_force_pos_cmd,
++    encode_mit_cmd, encode_pos_vel_cmd, encode_register_read_cmd, encode_register_write_cmd,
++    encode_set_zero_cmd, encode_store_params_cmd, encode_vel_cmd, is_register_reply, status_name,
+ };
+-use crate::registers::{register_info, RegisterAccess, RegisterDataType};
++use crate::registers::{RegisterAccess, RegisterDataType, register_info};
+ use motor_core::bus::{CanBus, CanFrame};
+ use motor_core::device::MotorDevice;
+ use motor_core::error::{MotorError, Result};
+ use motor_core::model::{ModelCatalog, MotorModelSpec, PvTLimits, StaticModelCatalog};
+ use std::collections::HashMap;
+-use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::{Arc, Mutex};
+ use std::time::{Duration, Instant};
+
+@@ -234,10 +233,8 @@ pub struct DamiaoMotor {
      pub model: String,
      bus: Arc<dyn CanBus>,
      limits: PvTLimits,
 -    state: Mutex<Option<(MotorFeedbackState, Instant)>>,
+-    // Software-side guard for set-zero sequencing:
+-    // set_zero_position() is allowed only after disable() was issued.
+-    disabled_hint: AtomicBool,
 +    state: Mutex<Option<(MotorFeedbackState, Instant, u64)>>,
-     // Software-side guard for set-zero sequencing:
-     // set_zero_position() is allowed only after disable() was issued.
-     disabled_hint: AtomicBool,
-@@ -538,7 +538,14 @@ impl DamiaoMotor {
++    lifecycle: Mutex<()>,
+     register_cache: Mutex<RegisterCache>,
+ }
+
+@@ -260,7 +257,7 @@ impl DamiaoMotor {
+             bus,
+             limits: PvTLimits::from_spec(spec),
+             state: Mutex::new(None),
+-            disabled_hint: AtomicBool::new(true),
++            lifecycle: Mutex::new(()),
+             register_cache: Mutex::new(RegisterCache::default()),
+         })
+     }
+@@ -276,14 +273,20 @@ impl DamiaoMotor {
+     }
+
+     pub fn enable(&self) -> Result<()> {
++        let _guard = self
++            .lifecycle
++            .lock()
++            .map_err(|_| MotorError::Io("lifecycle lock poisoned".to_string()))?;
+         self.send_raw(self.motor_id.into(), encode_enable_cmd())?;
+-        self.disabled_hint.store(false, Ordering::Release);
+         Ok(())
+     }
+
+     pub fn disable(&self) -> Result<()> {
++        let _guard = self
++            .lifecycle
++            .lock()
++            .map_err(|_| MotorError::Io("lifecycle lock poisoned".to_string()))?;
+         self.send_raw(self.motor_id.into(), encode_disable_cmd())?;
+-        self.disabled_hint.store(true, Ordering::Release);
+         Ok(())
+     }
+
+@@ -292,10 +295,19 @@ impl DamiaoMotor {
+     }
+
+     pub fn set_zero_position(&self) -> Result<()> {
+-        if !self.disabled_hint.load(Ordering::Acquire) {
++        let _guard = self
++            .lifecycle
++            .lock()
++            .map_err(|_| MotorError::Io("lifecycle lock poisoned".to_string()))?;
++        let state = self
++            .request_fresh_state(Duration::from_millis(200))?
++            .ok_or_else(|| {
++                MotorError::Timeout("set_zero requires fresh disabled feedback".to_string())
++            })?;
++        if state.status_code != 0 {
+             return Err(MotorError::InvalidArgument(format!(
+-                "motor 0x{:X} is not disabled; set_zero_position skipped. call disable() first",
+-                self.motor_id
++                "motor 0x{:X} status {} is not disabled; set_zero_position skipped",
++                self.motor_id, state.status_code
+             )));
+         }
+         self.send_raw(self.motor_id.into(), encode_set_zero_cmd())?;
+@@ -538,7 +550,14 @@ impl DamiaoMotor {
          self.state
              .lock()
              .ok()
@@ -364,7 +412,7 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
      }
 
      pub fn request_fresh_state(&self, timeout: Duration) -> Result<Option<MotorFeedbackState>> {
-@@ -546,7 +553,7 @@ impl DamiaoMotor {
+@@ -546,7 +565,7 @@ impl DamiaoMotor {
          self.request_motor_feedback()?;
          let deadline = request_at + timeout;
          loop {
@@ -373,7 +421,17 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
                  .state
                  .lock()
                  .map_err(|_| MotorError::Io("state lock poisoned".to_string()))?
-@@ -604,10 +611,16 @@ impl DamiaoMotor {
+@@ -565,6 +584,9 @@ impl DamiaoMotor {
+     }
+
+     fn process_feedback_frame_impl(&self, frame: CanFrame) -> Result<()> {
++        if !self.accepts_frame(&frame) {
++            return Ok(());
++        }
+         if is_register_reply(&frame.data) {
+             let (rid, raw) = decode_register_value(frame.data)?;
+             let info = register_info(rid)
+@@ -604,10 +626,16 @@ impl DamiaoMotor {
              t_mos: decoded.t_mos,
              t_rotor: decoded.t_rotor,
          };
@@ -393,7 +451,158 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
          Ok(())
      }
  }
-@@ -812,4 +825,91 @@ mod tests {
+@@ -638,11 +666,18 @@ impl MotorDevice for DamiaoMotor {
+     }
+
+     fn accepts_frame(&self, frame: &CanFrame) -> bool {
+-        if frame.is_extended {
++        if !frame.is_rx
++            || frame.is_extended
++            || frame.dlc != 8
++            || frame.arbitration_id != u32::from(self.feedback_id)
++        {
+             return false;
+         }
+-        frame.arbitration_id == u32::from(self.feedback_id)
+-            || (frame.dlc > 0 && (frame.data[0] & 0x0F) == (self.motor_id as u8 & 0x0F))
++        if is_register_reply(&frame.data) {
++            u16::from_le_bytes([frame.data[0], frame.data[1]]) == self.motor_id
++        } else {
++            (frame.data[0] & 0x0F) == (self.motor_id as u8 & 0x0F)
++        }
+     }
+
+     fn process_feedback_frame(&self, frame: CanFrame) -> Result<()> {
+@@ -737,7 +772,7 @@ mod tests {
+                     responder
+                         .process_feedback_frame_impl(CanFrame {
+                             arbitration_id: 0x11,
+-                            data: [0x01, 0x01, 0x33, 10, 2, 0, 0, 0],
++                            data: [0x01, 0x00, 0x33, 10, 2, 0, 0, 0],
+                             dlc: 8,
+                             is_extended: false,
+                             is_rx: true,
+@@ -758,37 +793,96 @@ mod tests {
+         handle.join().expect("responder thread");
+
+         let sent = bus_impl.sent.lock().expect("sent lock");
+-        assert!(sent
+-            .iter()
+-            .any(|f| f.data == encode_register_write_cmd(0x01, 10, 2u32.to_le_bytes())));
++        assert!(
++            sent.iter()
++                .any(|f| f.data == encode_register_write_cmd(0x01, 10, 2u32.to_le_bytes()))
++        );
+     }
+
+     #[test]
+-    fn set_zero_requires_disable_first() {
+-        let bus: Arc<dyn CanBus> = Arc::new(MockBus::new());
+-        let motor = DamiaoMotor::new(0x01, 0x11, "4340P", bus).expect("create motor");
++    fn set_zero_rejects_unverified_new_handle_and_old_disabled_cache() {
++        let bus = Arc::new(MockBus::new());
++        let motor = DamiaoMotor::new(7, 0x17, "4310", bus.clone()).unwrap();
++        assert!(motor.set_zero_position().is_err());
++        motor.process_feedback_frame_impl(sensor_frame(0)).unwrap();
++        motor.disable().unwrap();
++        assert!(motor.set_zero_position().is_err());
++        assert!(
++            !bus.sent
++                .lock()
++                .unwrap()
++                .iter()
++                .any(|f| f.data == encode_set_zero_cmd())
++        );
++    }
+
+-        motor.enable().expect("enable");
+-        let err = motor
+-            .set_zero_position()
+-            .expect_err("set_zero must fail when motor is not disabled");
+-        assert!(matches!(err, MotorError::InvalidArgument(_)));
++    fn sensor_frame(status: u8) -> CanFrame {
++        CanFrame {
++            arbitration_id: 0x17,
++            dlc: 8,
++            is_extended: false,
++            is_rx: true,
++            data: [(status << 4) | 7, 0x7f, 0xff, 0x7f, 0xf7, 0xff, 32, 30],
++        }
+     }
+
+     #[test]
+-    fn set_zero_sends_command_after_disable() {
+-        let bus_impl = Arc::new(MockBus::new());
+-        let bus: Arc<dyn CanBus> = bus_impl.clone();
+-        let motor = DamiaoMotor::new(0x04, 0x14, "4310", bus).expect("create motor");
+-
+-        motor.disable().expect("disable");
+-        motor.set_zero_position().expect("set_zero");
++    fn set_zero_uses_requested_device_status_not_constructor_hint() {
++        for status in [0, 1, 8, 13] {
++            let bus = Arc::new(MockBus::new());
++            let motor = Arc::new(DamiaoMotor::new(7, 0x17, "4310", bus.clone()).unwrap());
++            let responding_motor = motor.clone();
++            let responding_bus = bus.clone();
++            let responder = std::thread::spawn(move || {
++                let deadline = Instant::now() + Duration::from_millis(500);
++                while Instant::now() < deadline {
++                    if !responding_bus.sent.lock().unwrap().is_empty() {
++                        responding_motor
++                            .process_feedback_frame_impl(sensor_frame(status))
++                            .unwrap();
++                        return;
++                    }
++                    std::thread::sleep(Duration::from_millis(1));
++                }
++            });
++            assert_eq!(motor.set_zero_position().is_ok(), status == 0);
++            responder.join().unwrap();
++            let zeros = bus
++                .sent
++                .lock()
++                .unwrap()
++                .iter()
++                .filter(|f| f.data == encode_set_zero_cmd())
++                .count();
++            assert_eq!(zeros, usize::from(status == 0));
++        }
++    }
+
+-        let sent = bus_impl.sent.lock().expect("sent lock");
+-        let has_set_zero = sent.iter().any(|f| {
+-            f.arbitration_id == 0x04 && f.data == [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE]
+-        });
+-        assert!(has_set_zero, "set_zero command frame should be sent");
++    #[test]
++    fn invalid_frames_cannot_replace_state_or_advance_sequence() {
++        let bus = Arc::new(MockBus::new());
++        let motor = DamiaoMotor::new(7, 0x17, "4310", bus).unwrap();
++        motor.process_feedback_frame_impl(sensor_frame(0)).unwrap();
++        let baseline = motor.latest_state_with_sequence().unwrap();
++        let mut wrong_can = sensor_frame(0);
++        wrong_can.arbitration_id = 0x123;
++        let mut short = sensor_frame(0);
++        short.dlc = 1;
++        let mut wrong_motor = sensor_frame(0);
++        wrong_motor.data[0] = 6;
++        let mut extended = sensor_frame(0);
++        extended.is_extended = true;
++        let mut tx = sensor_frame(0);
++        tx.is_rx = false;
++        let mut wrong_register = sensor_frame(0);
++        wrong_register.data = [6, 0, 0x33, 10, 1, 0, 0, 0];
++        for frame in [wrong_can, short, wrong_motor, extended, tx, wrong_register] {
++            assert!(!motor.accepts_frame(&frame));
++            motor.process_feedback_frame_impl(frame).unwrap();
++            let after = motor.latest_state_with_sequence().unwrap();
++            assert_eq!(after.1, baseline.1);
++            assert_eq!(after.0.pos, baseline.0.pos);
++        }
+     }
+
+     #[test]
+@@ -812,4 +906,91 @@ mod tests {
              "unexpected error: {u32_err}"
          );
      }
@@ -472,7 +681,7 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
 +        motor
 +            .process_feedback_frame_impl(CanFrame {
 +                arbitration_id: 0x11,
-+                data: [0x01, 0x01, 0x33, 10, 2, 0, 0, 0],
++                data: [0x01, 0x00, 0x33, 10, 2, 0, 0, 0],
 +                dlc: 8,
 +                is_extended: false,
 +                is_rx: true,
@@ -485,3 +694,78 @@ index a0d956aacd1034b1e8f6fc68809a19e55aff002a..f3bc5b8fb7b98b9f971a5b6fd61d9fa1
 +        assert_eq!(after_register_sequence, 1);
 +    }
  }
+diff --git a/bindings/python/tests/test_feedback_sequence.py b/bindings/python/tests/test_feedback_sequence.py
+new file mode 100644
+index 0000000..f832faf
+--- /dev/null
++++ b/bindings/python/tests/test_feedback_sequence.py
+@@ -0,0 +1,69 @@
++from __future__ import annotations
++
++import ctypes
++from types import SimpleNamespace
++
++from motorbridge.abi import Abi, CState
++from motorbridge.core import Motor
++
++
++class FakeAbiLibrary:
++    def motor_handle_get_state_with_sequence(
++        self,
++        motor: int,
++        out_state: object,
++        out_sequence: object,
++    ) -> int:
++        assert motor == 123
++        state = ctypes.cast(out_state, ctypes.POINTER(CState)).contents
++        state.has_value = 1
++        state.can_id = 1
++        state.arbitration_id = 0x11
++        state.status_code = 1
++        state.pos = 1.25
++        state.vel = 2.5
++        state.torq = 0.75
++        state.t_mos = 35.0
++        state.t_rotor = 34.0
++        sequence = ctypes.cast(out_sequence, ctypes.POINTER(ctypes.c_uint64)).contents
++        sequence.value = ctypes.c_uint64(7).value
++        return 0
++
++
++class FakeBindingFunction:
++    argtypes: list[object] | None = None
++    restype: object | None = None
++
++
++class FakeBindingLibrary:
++    def __getattr__(self, name: str) -> FakeBindingFunction:
++        function = FakeBindingFunction()
++        setattr(self, name, function)
++        return function
++
++
++def test_get_state_with_sequence_returns_state_and_receive_identity() -> None:
++    motor = Motor.__new__(Motor)
++    motor._abi = SimpleNamespace(lib=FakeAbiLibrary())
++    motor._ptr = 123
++
++    state, sequence = motor.get_state_with_sequence()
++
++    assert state is not None
++    assert state.pos == 1.25
++    assert sequence == 7
++
++
++def test_abi_bind_types_feedback_sequence_symbol() -> None:
++    abi = Abi.__new__(Abi)
++    abi.lib = FakeBindingLibrary()
++
++    abi._bind()
++
++    symbol = abi.lib.motor_handle_get_state_with_sequence
++    assert symbol.argtypes == [
++        ctypes.c_void_p,
++        ctypes.POINTER(CState),
++        ctypes.POINTER(ctypes.c_uint64),
++    ]
++    assert symbol.restype is ctypes.c_int32

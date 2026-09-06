@@ -4,29 +4,16 @@ from dataclasses import dataclass
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from .resource_paths import package_resource
 
-ROOT = Path(__file__).resolve().parents[3]
+
 ASSET_DIR = Path(__file__).resolve().parent / "assets"
 DEFAULT_GRIPPER_XML = ASSET_DIR / "rebotarm_base.xml"
 DEFAULT_GRASP_SCENE_XML = ASSET_DIR / "rebotarm_grasp_scene.xml"
 
 
 def _default_mesh_dir() -> Path:
-    source_meshes = (
-        ROOT / "src" / "rebotarm_bringup" / "description" / "meshes"
-    )
-    if source_meshes.is_dir():
-        return source_meshes
-    try:
-        from ament_index_python.packages import get_package_share_directory
-
-        return (
-            Path(get_package_share_directory("rebotarm_bringup"))
-            / "description"
-            / "meshes"
-        )
-    except Exception:
-        return source_meshes
+    return package_resource("rebotarm_moveit_config", "meshes")
 
 
 @dataclass(frozen=True)

@@ -16,6 +16,24 @@ def healthy_enabled_hold(status: object | None) -> bool:
     )
 
 
+def _attempt_protective_disable(
+    *,
+    node: Any,
+    recovery: MutableMapping[str, Any],
+    services: list[Any],
+    outcome: str,
+) -> bool:
+    """Attempt a critical-condition disable and record an unverifiable failure."""
+    recovery["outcome"] = outcome
+    try:
+        services.append(node.call_trigger(node.disable_client, "disable"))
+    except Exception as exc:
+        recovery["disable_failure"] = f"{type(exc).__name__}: {exc}"
+        recovery["outcome"] = f"{outcome}_failed"
+        return True
+    return False
+
+
 def recover_real_failure(
     *,
     node: Any,
@@ -39,9 +57,11 @@ def recover_real_failure(
     report["failure_recovery"] = recovery
     services = report.setdefault("services", [])
     legs = report.setdefault(legs_key, [])
+    stop_failed = False
     try:
         services.append(node.call_trigger(node.stop_client, "trajectory_stop"))
     except Exception as exc:
+        stop_failed = True
         recovery["stop_failure"] = f"{type(exc).__name__}: {exc}"
     node.hold_and_collect(0.3)
     status = node.latest_status
@@ -53,9 +73,22 @@ def recover_real_failure(
         recovery["outcome"] = "controller_not_in_enabled_hold"
         return False
     if not healthy_enabled_hold(status):
-        recovery["outcome"] = "critical_status_protective_disable"
-        services.append(node.call_trigger(node.disable_client, "disable"))
-        return False
+        outcome = (
+            "stop_failure_critical_status_protective_disable"
+            if stop_failed
+            else "critical_status_protective_disable"
+        )
+        return _attempt_protective_disable(
+            node=node,
+            recovery=recovery,
+            services=services,
+            outcome=outcome,
+        )
+    if stop_failed:
+        recovery["outcome"] = (
+            "stop_failed_healthy_enabled_hold_requires_operator_recovery"
+        )
+        return True
     if not allow_controlled_return:
         recovery["outcome"] = "healthy_enabled_hold_requires_operator_recovery"
         return True
@@ -70,12 +103,59 @@ def recover_real_failure(
         cadence_sec=0.05,
         label=command_label,
     )
-    return_leg = node.execute_leg(command)
+    try:
+        return_leg = node.execute_leg(command)
+    except Exception as exc:
+        recovery["return_failure"] = f"{type(exc).__name__}: {exc}"
+        try:
+            node.hold_and_collect(0.3)
+        except Exception as status_exc:
+            recovery["return_status_collection_failure"] = (
+                f"{type(status_exc).__name__}: {status_exc}"
+            )
+        status = node.latest_status
+        recovery["return_status"] = node._status_payload()
+        if status is None:
+            recovery["outcome"] = "return_exception_status_unavailable_leave_state_unchanged"
+            return True
+        if not bool(status.enabled) or not bool(status.control_loop_active):
+            recovery["outcome"] = "return_exception_controller_not_in_enabled_hold"
+            return False
+        if not healthy_enabled_hold(status):
+            return _attempt_protective_disable(
+                node=node,
+                recovery=recovery,
+                services=services,
+                outcome="return_exception_critical_status_protective_disable",
+            )
+        recovery["outcome"] = "return_exception_healthy_enabled_hold"
+        return True
     return_leg["recovery_leg"] = True
     legs.append(return_leg)
     if not bool(return_leg["success"]):
-        recovery["outcome"] = "return_failed_healthy_enabled_hold"
         recovery["return_result"] = return_leg["result"]
+        try:
+            node.hold_and_collect(0.3)
+        except Exception as status_exc:
+            recovery["return_status_collection_failure"] = (
+                f"{type(status_exc).__name__}: {status_exc}"
+            )
+        status = node.latest_status
+        recovery["return_status"] = node._status_payload()
+        if status is None:
+            recovery["outcome"] = "return_failed_status_unavailable_leave_state_unchanged"
+            return True
+        if not bool(status.enabled) or not bool(status.control_loop_active):
+            recovery["outcome"] = "return_failed_controller_not_in_enabled_hold"
+            return False
+        if not healthy_enabled_hold(status):
+            return _attempt_protective_disable(
+                node=node,
+                recovery=recovery,
+                services=services,
+                outcome="return_failed_critical_status_protective_disable",
+            )
+        recovery["outcome"] = "return_failed_healthy_enabled_hold"
         return True
     node.hold_and_collect(0.5)
     final = tuple(float(value) for value in node.canonical_positions())

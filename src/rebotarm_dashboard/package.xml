@@ -15,6 +15,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>rebotarm_msgs</exec_depend>
   <exec_depend>rebotarm_motion</exec_depend>
+  <exec_depend>rebotarm_moveit_config</exec_depend>
   <exec_depend>rebotarm_teach</exec_depend>
   <exec_depend>rebotarm_teleop</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

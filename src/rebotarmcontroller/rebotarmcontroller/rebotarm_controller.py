@@ -13,7 +13,6 @@ from .motor_passthrough import MotorPassthrough
 from .ros_actions import ArmActions
 from .ros_publishers import JointStatePublisher
 from .ros_services import ArmServices
-from .teach_recorder import InternalTeachRecorder
 
 
 _WEB_SAFE_HOME_JOINT_POSITIONS = (
@@ -60,9 +59,6 @@ class reBotArmController(Node):
         self.declare_parameter(
             "safe_home_joint_positions", list(_WEB_SAFE_HOME_JOINT_POSITIONS)
         )
-        self.declare_parameter("teach_record_path", "teleop_records/teach_record.jsonl")
-        self.declare_parameter("teach_record_rate_hz", 150.0)
-        self.declare_parameter("teach_record_require_gravity_comp", True)
 
         arm_config = self.get_parameter("arm_config").value or None
         gripper_config = self.get_parameter("gripper_config").value or None
@@ -87,11 +83,6 @@ class reBotArmController(Node):
         grasp_hold_timeout_sec = float(
             self.get_parameter("grasp_hold_timeout_sec").value
         )
-        teach_record_path = str(self.get_parameter("teach_record_path").value)
-        teach_record_rate_hz = float(self.get_parameter("teach_record_rate_hz").value)
-        teach_record_require_gravity_comp = bool(
-            self.get_parameter("teach_record_require_gravity_comp").value
-        )
         cmd_arbitration = str(self.get_parameter("cmd_arbitration").value or "reject")
         if cmd_arbitration not in ("reject", "preempt"):
             self.get_logger().warn(
@@ -102,7 +93,6 @@ class reBotArmController(Node):
         self.hardware = None
         self.joint_state_publisher = None
         self.arm_services = None
-        self.teach_recorder = None
         self.arm_actions = None
         self.motor_passthrough = None
         self.hardware = HardwareManager(
@@ -128,14 +118,6 @@ class reBotArmController(Node):
             joint_state_rate,
         )
         self.arm_services = ArmServices(self, self.hardware, self.arm_namespace)
-        self.teach_recorder = InternalTeachRecorder(
-            self,
-            self.hardware,
-            self.arm_namespace,
-            record_path=teach_record_path,
-            rate_hz=teach_record_rate_hz,
-            require_gravity_comp=teach_record_require_gravity_comp,
-        )
         self.arm_actions = ArmActions(self, self.hardware, self.arm_namespace)
         self.motor_passthrough = MotorPassthrough(
             self,
@@ -154,8 +136,6 @@ class reBotArmController(Node):
         self.joint_state_publisher.publish_status()
 
     def shutdown(self) -> None:
-        if self.teach_recorder is not None:
-            self.teach_recorder.shutdown()
         if self.hardware is None:
             return
         if bool(self.get_parameter("shutdown_safe_home").value):

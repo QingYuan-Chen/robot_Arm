@@ -5,7 +5,7 @@ import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -65,6 +65,7 @@ def _launch_setup(context):
         Node(
             package="rebotarm_vision",
             executable="rebotarm_vision_node",
+            prefix=LaunchConfiguration("vision_python_executable"),
             name="rebotarm_vision_node",
             output="screen",
             parameters=[vision_parameters],
@@ -73,6 +74,7 @@ def _launch_setup(context):
         Node(
             package="rebotarm_vision",
             executable="rebotarm_ordinary_grasp_node",
+            prefix=LaunchConfiguration("vision_python_executable"),
             name="rebotarm_ordinary_grasp_node",
             output="screen",
             condition=IfCondition(LaunchConfiguration("start_ordinary_grasp")),
@@ -82,6 +84,7 @@ def _launch_setup(context):
         Node(
             package="rebotarm_vision",
             executable="rebotarm_grasp_tcp_frame",
+            prefix=LaunchConfiguration("vision_python_executable"),
             name="rebotarm_grasp_tcp_frame",
             output="screen",
             parameters=[tcp_parameters],
@@ -104,6 +107,10 @@ def generate_launch_description():
                 default_value=str(vision_share / "config" / "handeye.yaml"),
             ),
             DeclareLaunchArgument("ordinary_grasp_root", default_value=""),
+            DeclareLaunchArgument(
+                "vision_python_executable",
+                default_value=EnvironmentVariable("REBOTARM_VISION_PYTHON", default_value="python3"),
+            ),
             DeclareLaunchArgument("start_ordinary_grasp", default_value="false"),
             DeclareLaunchArgument("ordinary_depth_quality_enabled", default_value="true"),
             DeclareLaunchArgument("yolo_model_path", default_value=""),

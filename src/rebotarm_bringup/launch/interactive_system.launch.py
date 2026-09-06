@@ -24,7 +24,7 @@ def load_yaml(package_name, relative_path):
 def generate_launch_description():
     arm_namespace = LaunchConfiguration("arm_namespace")
     bringup_share = FindPackageShare("rebotarm_bringup")
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
     moveit_share = FindPackageShare("rebotarm_moveit_config")
     arm_config = LaunchConfiguration("arm_config")
     gripper_config = LaunchConfiguration("gripper_config")
@@ -49,7 +49,7 @@ def generate_launch_description():
     rviz_config = LaunchConfiguration("rviz_config")
 
     urdf_file = PathJoinSubstitution(
-        [bringup_share, "description", "urdf", "reBot-DevArm_fixend.urdf"]
+        [FindPackageShare("rebotarm_moveit_config"), "config", "rebotarm.urdf"]
     )
     robot_description = ParameterValue(Command(["cat ", urdf_file]), value_type=str)
     moveit_config = (
@@ -113,7 +113,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "interactive_config",
                 default_value=PathJoinSubstitution(
-                    [interactive_share, "config", "interactive_control.yaml"]
+                    [config_share, "config", "interactive_control.yaml"]
                 ),
             ),
             IncludeLaunchDescription(

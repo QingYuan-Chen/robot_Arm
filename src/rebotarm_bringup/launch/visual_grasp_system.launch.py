@@ -6,7 +6,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -23,10 +23,6 @@ def _workspace_path(environment_name: str, relative_path: str) -> str:
     return ""
 
 
-def _graspnet_python_executable() -> str:
-    return _workspace_path("GRASPNET_PYTHON", ".venv-graspnet/bin/python") or "python3"
-
-
 def generate_launch_description():
     bringup_share = FindPackageShare("rebotarm_bringup")
     vision_share = FindPackageShare("rebotarm_vision")
@@ -38,7 +34,7 @@ def generate_launch_description():
     table_safety_params = PathJoinSubstitution([vision_share, "config", "table_safety.yaml"])
     graspnet_policy_params = PathJoinSubstitution([vision_share, "config", "graspnet_policy.yaml"])
     graspnet_ubuntu_params = PathJoinSubstitution([vision_share, "config", "graspnet_ubuntu.yaml"])
-    visual_ready_params = PathJoinSubstitution([vision_share, "config", "visual_ready.yaml"])
+    visual_ready_params = PathJoinSubstitution([FindPackageShare("rebotarm_motion"), "config", "visual_ready.yaml"])
     flat_graspnet_params = PathJoinSubstitution([vision_share, "config", "flat_graspnet.yaml"])
 
     arm_namespace = LaunchConfiguration("arm_namespace")
@@ -54,6 +50,7 @@ def generate_launch_description():
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     execution_mode = LaunchConfiguration("execution_mode")
     start_vision = LaunchConfiguration("start_vision")
+    vision_python_executable = LaunchConfiguration("vision_python_executable")
     vision_profile = LaunchConfiguration("vision_profile")
     vision_camera_config = LaunchConfiguration("vision_camera_config")
     vision_handeye_config = LaunchConfiguration("vision_handeye_config")
@@ -203,7 +200,7 @@ def generate_launch_description():
         }.items(),
     )
     visual_ready_startup = Node(
-        package="rebotarm_vision",
+        package="rebotarm_motion",
         executable="rebotarm_visual_ready",
         name="rebotarm_visual_ready_startup",
         output="screen",
@@ -224,7 +221,7 @@ def generate_launch_description():
     )
     post_visual_ready_actions = [
         Node(
-            package="rebotarm_vision",
+            package="rebotarm_motion",
             executable="rebotarm_visual_ready",
             name="rebotarm_visual_ready",
             output="screen",
@@ -257,6 +254,7 @@ def generate_launch_description():
             ),
             launch_arguments={
                 "camera_config": vision_camera_config,
+                "vision_python_executable": vision_python_executable,
                 "handeye_config": vision_handeye_config,
                 "start_ordinary_grasp": start_ordinary_grasp,
                 "ordinary_grasp_root": ordinary_grasp_root,
@@ -284,6 +282,7 @@ def generate_launch_description():
                 ),
                 "handeye_config": vision_handeye_config,
                 "yolo_model_path": vision_yolo_model_path,
+                "vision_python_executable": vision_python_executable,
                 "yolo_device": "0",
                 "start_ordinary_grasp": start_ordinary_grasp,
                 "ordinary_grasp_root": ordinary_grasp_root,
@@ -597,7 +596,11 @@ def generate_launch_description():
             DeclareLaunchArgument("graspnet_max_input_skew_ms", default_value="100"),
             DeclareLaunchArgument(
                 "graspnet_python_executable",
-                default_value=_graspnet_python_executable(),
+                default_value=EnvironmentVariable("GRASPNET_PYTHON", default_value="python3"),
+            ),
+            DeclareLaunchArgument(
+                "vision_python_executable",
+                default_value=EnvironmentVariable("REBOTARM_VISION_PYTHON", default_value="python3"),
             ),
             DeclareLaunchArgument(
                 "graspnet_model_root",

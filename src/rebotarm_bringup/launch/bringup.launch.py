@@ -21,7 +21,7 @@ def generate_launch_description():
     ee_frame_id = LaunchConfiguration("ee_frame_id")
 
     urdf_file = PathJoinSubstitution(
-        [bringup_share, "description", "urdf", "reBot-DevArm_fixend.urdf"]
+        [FindPackageShare("rebotarm_moveit_config"), "config", "rebotarm.urdf"]
     )
     rviz_config = PathJoinSubstitution([bringup_share, "rviz", "rebotarm.rviz"])
     robot_description = ParameterValue(Command(["cat ", urdf_file]), value_type=str)

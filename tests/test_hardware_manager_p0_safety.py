@@ -183,6 +183,7 @@ def make_manager(
     manager._gripper_status_code = 255
     manager._gripper_feedback_updated_monotonic = None
     manager._gripper_feedback_error = "gripper feedback not received"
+    manager._gripper_zero_error = None
     manager._gripper_command_error = None
     manager._gripper_position_result = "idle"
     manager._gripper_neutral_pending = None
@@ -370,6 +371,19 @@ def test_joint_status_codes_use_verified_cache_only() -> None:
     forbid_raw_feedback_reads(manager)
 
     assert manager.get_joint_status_codes() == [1] * 6
+    assert_verified_feedback_unchanged(manager, before)
+
+
+def test_cached_joint_sample_exposes_verified_identity_without_serial_reads() -> None:
+    manager = make_manager()
+    manager._connected = True
+    manager._enabled = True
+    before = seed_verified_feedback(manager, arm_status=1)
+    forbid_raw_feedback_reads(manager)
+    positions, velocities, torques, statuses, identity = manager.get_cached_joint_sample()
+    assert len(positions) == len(velocities) == len(torques) == 6
+    assert statuses == [1] * 6
+    assert identity == tuple(manager._verified_feedback_sample(name).sequence for name in JOINT_NAMES)
     assert_verified_feedback_unchanged(manager, before)
 
 
@@ -2304,3 +2318,200 @@ def test_set_zero_gripper_rejects_enabled_arm() -> None:
 
     with pytest.raises(RuntimeError, match="CONNECTED_DISABLED"):
         manager.set_zero("gripper")
+
+
+@pytest.mark.parametrize("position", [2 * np.pi, 0.001 * 5 / 0.09 + 1e-6, 0.074, -5.02])
+def test_invalid_gripper_coordinate_preserves_raw_but_reports_unknown(position) -> None:
+    manager = make_manager()
+    gripper = FakeMotor(position=position)
+    manager._gripper_mot = gripper
+    manager._gripper_ctrl = FakeController([gripper])
+    manager.connect()
+
+    assert manager.get_gripper_state()[0] == pytest.approx(position)
+    assert manager.get_gripper_state()[3] == 255
+    assert np.isnan(manager.gripper_position_m())
+    assert any("coordinate invalid" in reason for reason in manager.error_codes)
+    assert manager.arm.disable_calls == 0
+    assert gripper.set_zero_position_calls == 0
+    with pytest.raises(RuntimeError, match="coordinate invalid"):
+        manager.enable()
+    assert manager.arm.enable_calls == 0
+    assert manager.arm.mode_pos_vel_calls == 0
+
+
+@pytest.mark.parametrize(
+    "position,width",
+    [(0.000190735, 0.0), (0.00743866, 0.0), (0.01, 0.0),
+     (0.01583099365234375, 0.0), (0.001 * 5 / 0.09, 0.0),
+     (-0.000190735, 0.00000343323),
+     (-5.000190735, 0.09), (-4.8, 0.0864)],
+)
+def test_gripper_width_allows_closed_tolerance_and_open_quantization(position, width) -> None:
+    manager = make_manager()
+    manager._gripper_pos = position
+    assert manager.gripper_position_m() == pytest.approx(width)
+
+
+@pytest.mark.parametrize("mode", ["position", "grasp_closing", "grasp_holding"])
+def test_coordinate_jump_stops_gripper_without_disabling_healthy_arm(mode) -> None:
+    manager = make_manager()
+    manager.connect()
+    manager.enable()
+    commands = _configure_gripper_position_move(manager, position=-1.0, goal=-2.0, mode=mode)
+    state = SimpleNamespace(pos=2 * np.pi, vel=0.0, torq=0.0, status_code=1)
+    seed_verified_feedback(manager, arm_status=1, gripper_state=state)
+    manager._feedback_next_refresh_monotonic = time.monotonic() + 1.0
+    arm_ticks = []
+    manager._gripper_cfg = SimpleNamespace()
+
+    manager._hardware_control_tick(manager.arm, 0.002, lambda *_: arm_ticks.append(True))
+
+    assert arm_ticks == [True]
+    assert manager.enabled is True
+    assert manager.control_loop_active is True
+    assert manager.arm.disable_calls == 0
+    assert manager.gripper_active is False
+    assert manager.gripper_mode == "idle"
+    assert manager.gripper_reached_target() is False
+    assert commands == [(0.0, 0.0, 0.0, 0.0, 0.0)]
+    for command in [
+        lambda: manager.set_gripper_target(0.01),
+        manager.grasp_gripper,
+        lambda: manager.send_gripper_motor_cmd(SimpleNamespace()),
+    ]:
+        with pytest.raises(RuntimeError, match="coordinate invalid"):
+            command()
+
+
+def _manager_for_zero_verification(position=0.0):
+    manager = make_manager()
+    gripper = FakeMotor(position=position)
+    manager._gripper_mot = gripper
+    manager._gripper_ctrl = FakeController([gripper])
+    manager.connect()
+    return manager, gripper
+
+
+def test_zero_verifies_new_frames_and_repairs_invalid_coordinate() -> None:
+    manager, gripper = _manager_for_zero_verification(2 * np.pi)
+
+    def zero():
+        gripper.set_zero_position_calls += 1
+        gripper.state = SimpleNamespace(pos=-0.000190735, vel=0.0, torq=0.0, status_code=0)
+
+    gripper.set_zero_position = zero
+    before = gripper.feedback_sequence
+    assert manager.set_zero("gripper") is True
+    assert gripper.set_zero_position_calls == 1
+    assert gripper.feedback_sequence >= before + 4  # preflight plus three post-zero frames
+    assert manager.get_gripper_state()[3] == 0
+    assert manager.gripper_position_m() == pytest.approx(0.00000343323)
+    assert manager.arm.enable_calls == manager.arm.disable_calls == 0
+
+
+def test_zero_rejects_old_zero_cache_and_retains_failure_until_verified() -> None:
+    manager, gripper = _manager_for_zero_verification()
+
+    def no_new_frames():
+        gripper.set_zero_position_calls += 1
+        gripper.advance_feedback_on_poll = False
+
+    gripper.set_zero_position = no_new_frames
+    with pytest.raises(RuntimeError, match="set_zero failed"):
+        manager.set_zero("gripper")
+    assert gripper.set_zero_position_calls == 1
+    assert np.isnan(manager.gripper_position_m())
+    gripper.advance_feedback_on_poll = True
+    manager.refresh_feedback_if_due(force=True)
+    assert np.isnan(manager.gripper_position_m())  # acquisition alone is not calibration
+    assert manager.get_gripper_state()[3] == 255
+    gripper.set_zero_position = lambda: None
+    assert manager.set_zero("gripper") is True
+    assert manager.gripper_position_m() == 0.0
+
+
+@pytest.mark.parametrize("result", ["nonzero", "closed_tolerance", "enabled", "nonfinite", "write_error"])
+def test_zero_failure_never_returns_success_or_retries_write(result, monkeypatch) -> None:
+    manager, gripper = _manager_for_zero_verification(-1.0)
+    monkeypatch.setattr(hardware_manager_module, "_G_ZERO_VERIFY_TIMEOUT_SEC", 0.03)
+
+    def zero():
+        gripper.set_zero_position_calls += 1
+        if result == "enabled":
+            gripper.state.status_code = 1
+        elif result == "closed_tolerance":
+            gripper.state.pos = 0.00743866
+        elif result == "nonfinite":
+            gripper.state.pos = float("nan")
+        elif result == "write_error":
+            raise RuntimeError("serial write failed")
+
+    gripper.set_zero_position = zero
+    with pytest.raises(RuntimeError, match="set_zero failed"):
+        manager.set_zero("gripper")
+    assert gripper.set_zero_position_calls == 1
+    assert np.isnan(manager.gripper_position_m())
+    assert manager.arm.enable_calls == manager.arm.disable_calls == 0
+
+
+def test_zero_requires_consecutive_near_zero_samples(monkeypatch) -> None:
+    manager, gripper = _manager_for_zero_verification(-1.0)
+    monkeypatch.setattr(hardware_manager_module, "_G_ZERO_VERIFY_TIMEOUT_SEC", 0.04)
+    deliver = gripper.deliver_requested_feedback
+    samples = iter([0.0, 0.0, -1.0])
+
+    def intermittent_zero():
+        gripper.state.pos = next(samples, -1.0)
+        deliver()
+
+    def zero():
+        gripper.set_zero_position_calls += 1
+        gripper.deliver_requested_feedback = intermittent_zero
+
+    gripper.set_zero_position = zero
+    with pytest.raises(RuntimeError, match="zero verification timed out"):
+        manager.set_zero("gripper")
+    assert gripper.set_zero_position_calls == 1
+    assert np.isnan(manager.gripper_position_m())
+
+
+def test_invalid_coordinate_publishes_unknown_without_losing_arm_feedback() -> None:
+    from builtin_interfaces.msg import Time
+    from rebotarmcontroller.ros_publishers import JointStatePublisher
+    from rebotarm_dashboard.status_panel_state import TeleopStatusStore
+
+    manager, _gripper = _manager_for_zero_verification(2 * np.pi)
+    messages = {}
+
+    def publisher(key):
+        return SimpleNamespace(publish=lambda msg: messages.setdefault(key, []).append(msg))
+
+    node = SimpleNamespace(
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=Time)),
+    )
+    output = JointStatePublisher.__new__(JointStatePublisher)
+    output._publish_lock = threading.Lock()
+    output._last_feedback_identity = None
+    output._node = node
+    output._hardware = manager
+    output._publisher = publisher("joints")
+    output._status_publisher = publisher("status")
+    output._joint_state_publishers = {name: publisher(name) for name in JOINT_NAMES}
+    output._gripper_state_publisher = publisher("gripper")
+
+    output.publish()
+    output.publish_status()
+
+    gripper = messages["gripper"][-1]
+    assert np.isnan(gripper.position)
+    assert gripper.status_code == 255
+    assert len(messages["joints"][-1].position) == 6
+    assert list(messages["status"][-1].per_joint_status_code) == [0] * 6
+    assert any("coordinate invalid" in reason for reason in messages["status"][-1].error_codes)
+    store = TeleopStatusStore()
+    store.update_motor_state(
+        joint_name=gripper.joint_name, position=gripper.position,
+        velocity=gripper.velocity, torque=gripper.torque, status_code=gripper.status_code,
+    )
+    assert store.snapshot_dict()["joints"]["gripper"]["position"] is None
