@@ -207,11 +207,15 @@ P6-D final cleanup随后将仓库内`.pytest_cache`及20个project `__pycache__`
 - [x] 已有真实感知 + 仿真执行的历史 launch/benchmark 基础。
 - [x] 使用当前 Ubuntu native 感知完成真实视觉 + MuJoCo 验收；同轮真实Gemini 2/YOLO/local GraspNet/MoveIt/active MuJoCo无运动runtime通过，证据：`Agent/evidence/P6/2026-08-11-ubuntu-native-mujoco-runtime.md`。
 - [x] 增加并验收 MuJoCo 虚拟 RGB-D、CameraInfo 和物体标注；默认关闭、显式EGL启用，RGB/depth/intrinsics/ground-truth mask同simulation stamp，证据：`Agent/evidence/P6/2026-08-11-mujoco-virtual-rgbd-annotations.md`。
-- [ ] 以 `tools/yolo26s-seg.pt` 重新完成 bottle 的 YOLO/GraspNet/MoveIt/MuJoCo software-only positive loop；历史 YOLO-World `test_cube` loop 与旧模型证据保留，当前 canonical scene 已切为 `bottle` proxy。新模型已由 `rebotarm_vision` 安装到 package share，但尚未用新模型重新形成 bottle 正向 detection/plan 证据。`candidate_pose_policy=base_axis`、top-down quaternion和`candidate_grasp_z_offsets_m=[0.08]`仍只是场景profile workaround，未宣称 bottle trajectory、夹爪、pickup 或 contact 通过。夹持结果分类不纳入当前P6范围。
+- [范围收口] 不再要求以 `tools/yolo26s-seg.pt` 重新完成 bottle 的 YOLO/GraspNet/MoveIt/MuJoCo software-only positive loop。该项未通过；2026-09-06 operator 关闭当前 P6 并决定后续另建规划，因此从当前计分范围移除。历史 YOLO-World、bottle proxy、TensorRT 与 plan-only 证据继续保留。
 - [x] 完成安全实机 plan-only 验收；真实 driver 保持 disabled，真实 Gemini 2/YOLO/GraspNet 候选从真实 joint start state 完成 MoveIt `SUCCESS(1)` 规划，规划后 joint delta `0.0 rad`，未发送 action goal。证据：`Agent/evidence/P5/2026-08-08-real-disabled-start-state-plan-only.md`。
-- [ ] 逐级完成单关节、安全姿态、pre-grasp、approach、gripper、lift 和 retreat 低速验收。
+- [范围收口] 分级实机验收不再要求继续完成当前 P6 的全部 lift/retreat 等剩余动作。该组合项未通过；single-joint、safe-posture、pre-grasp、approach 及既有夹爪动作只保留各自历史证据，不把未执行的 lift/retreat 或抓取结果补记为成功。
 - [范围外] 无力反馈条件下不建立空抓、滑落、未抬起和成功的非显式自动分类；仅记录实际动作、反馈和安全门结果。
 - [范围外] 不建立统一失败矩阵；现有各单点 `fail-closed / 失败即安全停止` 安全门继续保留。
+
+2026-09-06 P6 closeout / 阶段收口：operator 明确关闭当前 P6，后续另行加入新的规划。上面两项由未完成改为“范围收口”，不是验收通过；当前计分项因此由 `4/6` 调整为 `4/4`。这只关闭阶段，不产生任何新的硬件动作授权。
+
+同日完成 operator 授权的真实视觉 plan-only 测试。独立 `codex/gripper-unified-bus-fix` worktree 中，真实 controller 保持 `disabled/IDLE`，Ubuntu-native Gemini 2、TensorRT YOLO、in-process GraspNet 与 MoveIt 产生 fresh `valid=true` bottle plan（confidence `0.9310057`、jaw `0.0749830 m`、frame `base_link`、capture age `2.946 s`）；MoveIt `execute=false` 的 pregrasp/grasp 分别成功生成 `55` 点/`5.33271924 s` 和 `82` 点/`8.086942298 s` 轨迹。调用前后六轴 status 全 0、无 error，gripper status0 且 position 均为 `0.0013012104 rad`。未启动 VisualGraspExecutor、未 enable、未发送 trajectory 或夹爪命令；退出后项目进程、ROS daemon、8081/8088 与 `/dev/ttyACM0` 占用均为空。该测试是关闭前的运行态确认，不把范围收口项改写为通过。
 
 2026-08-11 P6 bottle target验证后的现场已按用户要求清理：无项目runtime、无8081 listener、`/dev/ttyACM0`无人占用、无旧`rebotarm_sim_trajectory_controller`。源码/测试范围内21个`__pycache__/.pytest_cache`目录、10个P6临时文件和491个ROS `launch_params_*`均可恢复移入`/home/a/.local/share/Trash/files/rebotarm-cache-p6-clean-20260811-Pjqfpk`；`.local-models`、weights、`build/install/log`、证据和用户修改保留。下一步准备staged hardware acceptance / 分级实机验收，只做只读预检，不新增硬件动作授权。
 

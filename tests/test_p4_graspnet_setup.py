@@ -41,10 +41,10 @@ def test_graspnet_setup_uses_independent_venv_and_no_model_download() -> None:
 def test_visual_grasp_launch_uses_isolated_graspnet_python_without_http() -> None:
     launch = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert ".venv-graspnet" in launch
+    assert ".venv-graspnet" not in launch
     assert 'prefix=graspnet_python_executable' in launch
     assert '"graspnet_python_executable"' in launch
-    assert "default_value=_graspnet_python_executable()" in launch
+    assert 'EnvironmentVariable("GRASPNET_PYTHON", default_value="python3")' in launch
     assert '"vision_yolo_model_path"' in launch
     assert '"yolo_model_path": vision_yolo_model_path' in launch
 

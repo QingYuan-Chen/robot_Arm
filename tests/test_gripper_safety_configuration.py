@@ -5,11 +5,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAFETY_DEFAULTS = {
+LAUNCH_SAFETY_DEFAULTS = {
+    "hardware_feedback_rate_hz": 50.0,
     "gripper_position_torque_cap_nm": 1.0,
-    "gripper_position_max_speed_rad_s": 0.5,
+    "gripper_position_max_speed_rad_s": 1.5,
     "gripper_position_timeout_margin_sec": 1.5,
-    "gripper_feedback_stale_timeout_sec": 0.25,
+    "gripper_feedback_stale_timeout_sec": 0.15,
+}
+CONTROLLER_SAFETY_DEFAULTS = {
+    **LAUNCH_SAFETY_DEFAULTS,
+    "gripper_position_max_speed_rad_s": 0.5,
 }
 
 
@@ -49,13 +54,15 @@ def test_real_hardware_launches_expose_and_forward_gripper_safety_defaults() -> 
     for relative_path in (
         "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
+        "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
+        "src/rebotarm_bringup/launch/rebotarm_app.launch.py",
         "src/rebotarm_bringup/launch/visual_grasp_system.launch.py",
     ):
         tree = _tree(relative_path)
         defaults = _declared_launch_defaults(tree)
         parameter_keys = _dict_string_keys(tree)
 
-        for name, expected in SAFETY_DEFAULTS.items():
+        for name, expected in LAUNCH_SAFETY_DEFAULTS.items():
             assert float(defaults[name]) == expected, relative_path
             assert name in parameter_keys, relative_path
 
@@ -74,4 +81,6 @@ def test_controller_declares_gripper_safety_defaults() -> None:
             except (ValueError, TypeError):
                 pass
 
-    assert {name: declared[name] for name in SAFETY_DEFAULTS} == SAFETY_DEFAULTS
+    assert {
+        name: declared[name] for name in CONTROLLER_SAFETY_DEFAULTS
+    } == CONTROLLER_SAFETY_DEFAULTS

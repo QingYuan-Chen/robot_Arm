@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rebotarm_msgs.msg import ArmStatus, JointMotorState
 from sensor_msgs.msg import JointState
@@ -9,6 +11,9 @@ class JointStatePublisher:
     def __init__(self, node, hardware, namespace: str, rate_hz: float) -> None:
         self._node = node
         self._hardware = hardware
+        self._last_feedback_identity = None
+        self._last_feedback_stamp = None
+        self._publish_lock = threading.Lock()
         self._publisher = node.create_publisher(
             JointState,
             f"/{namespace}/joint_states",
@@ -52,21 +57,40 @@ class JointStatePublisher:
         self.publish_status()
 
     def publish(self) -> None:
+        if not self._publish_lock.acquire(blocking=False):
+            return
         try:
-            pos, vel, effort = self._hardware.get_joint_state()
+            self._publish_feedback()
+        finally:
+            self._publish_lock.release()
+
+    def _publish_feedback(self) -> None:
+        try:
+            # When enabled, the unified 500 Hz hardware loop owns the bus and
+            # this call is a no-op.  When disabled, it performs the same
+            # rate-limited 50 Hz batch because there is no command writer.
+            self._hardware.refresh_feedback_if_due()
+            pos, vel, effort, status_codes, identity = self._hardware.get_cached_joint_sample()
         except Exception as exc:
             self._node.get_logger().warn(f"joint state read failed: {exc}")
+            # Do not restamp stale joint positions as current, but do refresh
+            # the latched status so the web UI reports the communication fault
+            # instead of appearing frozen on a healthy last sample.
+            self.publish_status()
             return
 
         msg = JointState()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
+        if identity != self._last_feedback_identity:
+            self._last_feedback_identity = identity
+            self._last_feedback_stamp = self._node.get_clock().now().to_msg()
+        # Re-publication of one verified batch must not look like a new sample.
+        msg.header.stamp = self._last_feedback_stamp
         msg.name = self._hardware.joint_names
         msg.position = [float(v) for v in pos]
         msg.velocity = [float(v) for v in vel]
         msg.effort = [float(v) for v in effort]
         self._publisher.publish(msg)
 
-        status_codes = self._hardware.get_joint_status_codes()
         for i, name in enumerate(self._hardware.joint_names):
             motor_msg = JointMotorState()
             motor_msg.header = msg.header

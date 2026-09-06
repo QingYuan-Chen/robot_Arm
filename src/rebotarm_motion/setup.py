@@ -1,3 +1,4 @@
+from glob import glob
 from setuptools import find_packages, setup
 
 package_name = "rebotarm_motion"
@@ -9,6 +10,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
+        (f"share/{package_name}/config", glob("config/*.yaml")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -19,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "PoseExecutionNode = rebotarm_motion.pose_execution_node:main",
+            "rebotarm_visual_ready = rebotarm_motion.visual_ready_node:main",
         ],
     },
 )

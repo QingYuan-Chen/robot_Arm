@@ -30,7 +30,7 @@
 - Repository：`https://github.com/QingYuan-Chen/rebot_Arm.git`
 - Baseline commit：`5bd5510`，后续修改由本仓库 Git history 追踪。
 - License：根目录 `LICENSE` 为 Apache-2.0；`rebotarm_bringup`、`rebotarm_moveit_config` 和 `rebotarm_simulation` 的 package metadata 均声明 Apache-2.0。
-- Inputs：`rebotarm_moveit_config/config/rebotarm.urdf` 与 `rebotarm_bringup/description/meshes/`。
+- Inputs：`rebotarm_moveit_config/config/rebotarm.urdf` 与 `rebotarm_moveit_config/meshes/`。
 - Generated model：`rebotarm_simulation/assets/rebotarm_base.xml`，由本仓库 URDF 使用 MuJoCo 3.3.0 编译后整理。
 
 ### 官方机器人资料参考
@@ -56,5 +56,5 @@
 
 - `mujoco_model_profile.py` 的默认 XML 必须位于 `rebotarm_simulation/assets`。
 - 默认模型不得包含 `reBotArm_develop_hjx` 路径。
-- build 生成物的 mesh 路径必须解析到 `rebotarm_bringup/description/meshes`。
+- build 生成物的 mesh 路径必须解析到 `rebotarm_moveit_config/meshes`。
 - 引入新上游文件前必须补充 URL、branch/tag、commit、license file 和目标文件清单。

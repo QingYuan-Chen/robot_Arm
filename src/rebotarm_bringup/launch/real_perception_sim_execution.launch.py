@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -7,33 +6,12 @@ from launch.actions import (
     DeclareLaunchArgument,
     GroupAction,
     IncludeLaunchDescription,
-    SetEnvironmentVariable,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
 import yaml
-
-
-def _vision_pythonpath() -> str:
-    source = Path(__file__).resolve()
-    for parent in source.parents:
-        candidates = sorted((parent / ".venv-vision" / "lib").glob("python*/site-packages"))
-        if not candidates:
-            continue
-        current = os.environ.get("PYTHONPATH", "")
-        return os.pathsep.join([str(candidates[0]), current]) if current else str(candidates[0])
-    return os.environ.get("PYTHONPATH", "")
-
-
-def _mujoco_python_executable() -> str:
-    source = Path(__file__).resolve()
-    for parent in source.parents:
-        candidate = parent / "third_party" / "rebotarm_mujoco_venv" / "bin" / "python"
-        if candidate.is_file():
-            return str(candidate)
-    return "python3"
 
 
 def _mujoco_parameters() -> dict:
@@ -79,11 +57,18 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "mujoco_python_executable",
-                default_value=_mujoco_python_executable(),
+                default_value=EnvironmentVariable("REBOTARM_MUJOCO_PYTHON", default_value="python3"),
+            ),
+            DeclareLaunchArgument(
+                "vision_python_executable",
+                default_value=EnvironmentVariable("REBOTARM_VISION_PYTHON", default_value="python3"),
+            ),
+            DeclareLaunchArgument(
+                "graspnet_python_executable",
+                default_value=EnvironmentVariable("GRASPNET_PYTHON", default_value="python3"),
             ),
             GroupAction(
                 [
-                    SetEnvironmentVariable(name="PYTHONPATH", value=_vision_pythonpath()),
                     SetParameter(name="use_sim_time", value=use_sim_time),
                     Node(
                         package="rebotarm_simulation",
@@ -101,6 +86,8 @@ def generate_launch_description():
                         ),
                         launch_arguments={
                             "arm_namespace": sim_arm_namespace,
+                            "vision_python_executable": LaunchConfiguration("vision_python_executable"),
+                            "graspnet_python_executable": LaunchConfiguration("graspnet_python_executable"),
                             "use_hardware": "false",
                             "start_sim_trajectory_controller": "false",
                             "use_local_rviz": use_local_rviz,

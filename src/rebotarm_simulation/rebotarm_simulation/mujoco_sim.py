@@ -67,7 +67,7 @@ class RebotArmMujoco:
         self._data = self._mj.MjData(self._model)
         self._closed = False
         self._rng = np.random.default_rng()
-        motor_parameters = load_motor_control_parameters(Path(__file__).resolve().parents[3])
+        motor_parameters = load_motor_control_parameters()
         self._motor_parameters = motor_parameters
         self._arm_controller = PosVelController(motor_parameters.arm)
         self._gripper_controller = GripperMitController(motor_parameters.gripper)

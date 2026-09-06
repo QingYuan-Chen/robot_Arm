@@ -7,6 +7,9 @@ build_*/
 install_*/
 log_*/
 
+# Reproducible patched MotorBridge checkout, toolchain, target, and wheel
+/build_motorbridge_fresh_feedback/
+
 # Python caches and test artifacts
 __pycache__/
 *.py[cod]

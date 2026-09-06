@@ -21,7 +21,7 @@ def generate_launch_description():
     ee_frame_id = LaunchConfiguration("ee_frame_id")
 
     urdf_file = PathJoinSubstitution(
-        [bringup_share, "description", "urdf", "reBot-DevArm_fixend.urdf"]
+        [FindPackageShare("rebotarm_moveit_config"), "config", "rebotarm.urdf"]
     )
     rviz_config = PathJoinSubstitution([bringup_share, "rviz", "rebotarm.rviz"])
     robot_description = ParameterValue(Command(["cat ", urdf_file]), value_type=str)
@@ -37,7 +37,7 @@ def generate_launch_description():
                 default_value=PathJoinSubstitution([bringup_share, "config", "gripper.yaml"]),
             ),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("use_rviz", default_value="false"),

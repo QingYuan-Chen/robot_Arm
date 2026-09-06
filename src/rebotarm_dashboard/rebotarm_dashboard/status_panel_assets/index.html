@@ -890,6 +890,8 @@
     const FAST_RENDER_INTERVAL_MS = 250;
     const replayEvents = [];
     const motorRowsByName = new Map();
+    // JSON null denotes unavailable feedback; Number(null) would fake zero.
+    const motorPosition = (joint) => Number.isFinite(joint?.position) ? joint.position : NaN;
     const fmt = (value, digits = 4) => Number.isFinite(value) ? Number(value).toFixed(digits) : '-';
     const deg = (value) => Number.isFinite(value) ? (Number(value) * 180 / Math.PI).toFixed(1) : '-';
     const text = (value) => value === undefined || value === null || value === '' ? '-' : String(value);
@@ -1560,12 +1562,12 @@
       armJointNames.forEach((name) => {
         const state = joints[name];
         const joint = robotViewer.robot?.joints?.[name];
-        const position = state && Number.isFinite(Number(state.position)) ? Number(state.position) : NaN;
+        const position = motorPosition(state);
         if (!joint || !Number.isFinite(position)) return;
         joint.setJointValue(position);
       });
       const gripper = joints.gripper;
-      const gripperPosition = gripper && Number.isFinite(Number(gripper.position)) ? Number(gripper.position) : NaN;
+      const gripperPosition = motorPosition(gripper);
       if (Number.isFinite(gripperPosition) && robotViewer.gripperVisuals) {
         const [closed, open] = jointLimits.gripper || [0.0, 0.09];
         const opening = clamp(gripperPosition, closed, open) - Number(closed);
@@ -1593,7 +1595,7 @@
       const slider = document.getElementById(`${prefix}-${name}`);
       const radLabel = document.getElementById(`${prefix}-rad-${name}`);
       const degLabel = document.getElementById(`${prefix}-deg-${name}`);
-      const position = joint && Number.isFinite(Number(joint.position)) ? Number(joint.position) : NaN;
+      const position = motorPosition(joint);
       if (!Number.isFinite(position)) {
         radLabel.textContent = '-';
         if (degLabel) degLabel.textContent = '-';
@@ -1609,7 +1611,12 @@
     const syncPreviewFromLive = () => {
       sliderNames.forEach((name) => {
         const joint = previewState.latestJoints[name];
-        const position = joint && Number.isFinite(Number(joint.position)) ? Number(joint.position) : 0;
+        const position = motorPosition(joint);
+        if (!Number.isFinite(position)) {
+          delete previewState.targets[name];
+          updateSlider(name, joint, 'preview');
+          return;
+        }
         const [min, max] = jointLimits[name] || [-3.1416, 3.1416];
         previewState.targets[name] = clamp(position, min, max);
         updateSlider(name, { position: previewState.targets[name] }, 'preview');
@@ -1686,7 +1693,7 @@
       const missing = [];
       armJointNames.forEach((name) => {
         const target = Number(previewState.targets[name]);
-        const live = Number(previewState.latestJoints[name]?.position);
+        const live = motorPosition(previewState.latestJoints[name]);
         if (Number.isFinite(target)) {
           result[name] = target;
         } else if (Number.isFinite(live)) {
@@ -1715,7 +1722,7 @@
     const speedCheck = () => {
       let worst = { name: '', speed: 0, limit: executeSettings.maxSpeed, minDuration: 0 };
       armJointNames.forEach((name) => {
-        const live = Number(previewState.latestJoints[name]?.position);
+        const live = motorPosition(previewState.latestJoints[name]);
         const target = Number(previewState.targets[name]);
         if (!Number.isFinite(live) || !Number.isFinite(target)) return;
         const limit = speedLimitForJoint(name);
@@ -1815,11 +1822,11 @@
     };
     const setGripper = async (options = {}) => {
       const target = Number(previewState.targets.gripper);
-      const live = Number(previewState.latestJoints.gripper?.position);
+      const live = motorPosition(previewState.latestJoints.gripper);
       const position = Number.isFinite(target) ? target : live;
-      if (!Number.isFinite(position)) {
-        document.getElementById('execute-status').textContent = '无法设置夹爪：缺少夹爪状态';
-        return { accepted: false, message: '缺少夹爪状态' };
+      if (!Number.isFinite(live) || !Number.isFinite(position)) {
+        document.getElementById('execute-status').textContent = '无法设置夹爪：夹爪位置未知，请检查反馈或零位';
+        return { accepted: false, message: '夹爪位置未知' };
       }
       if (options.confirm !== false) {
         const confirmed = window.confirm(`设置夹爪目标？\n位置: ${fmt(position)} m`);
@@ -1853,7 +1860,7 @@
     };
     const executePreviewAndGripper = async () => {
       const gripperTarget = Number(previewState.targets.gripper);
-      const gripperLive = Number(previewState.latestJoints.gripper?.position);
+      const gripperLive = motorPosition(previewState.latestJoints.gripper);
       const gripperPosition = Number.isFinite(gripperTarget) ? gripperTarget : gripperLive;
       const armDelta = maxPreviewDelta();
       const confirmed = window.confirm(

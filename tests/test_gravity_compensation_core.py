@@ -7,18 +7,15 @@ from pathlib import Path
 
 import numpy as np
 
-geometry_msgs = types.ModuleType("geometry_msgs")
-geometry_msgs_msg = types.ModuleType("geometry_msgs.msg")
-
-
-class _Pose:
-    pass
-
-
-geometry_msgs_msg.Pose = _Pose
-geometry_msgs.msg = geometry_msgs_msg
-sys.modules.setdefault("geometry_msgs", geometry_msgs)
-sys.modules.setdefault("geometry_msgs.msg", geometry_msgs_msg)
+try:
+    import geometry_msgs.msg
+except ImportError:
+    geometry_msgs = types.ModuleType("geometry_msgs")
+    geometry_msgs_msg = types.ModuleType("geometry_msgs.msg")
+    geometry_msgs_msg.Pose = type("Pose", (), {})
+    geometry_msgs.msg = geometry_msgs_msg
+    sys.modules.setdefault("geometry_msgs", geometry_msgs)
+    sys.modules.setdefault("geometry_msgs.msg", geometry_msgs_msg)
 
 tf_transformations = types.ModuleType("tf_transformations")
 tf_transformations.euler_from_quaternion = lambda _q: (0.0, 0.0, 0.0)

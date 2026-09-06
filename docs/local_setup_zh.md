@@ -11,6 +11,31 @@ sudo apt install ros-jazzy-moveit ros-jazzy-pinocchio
 python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
 ```
 
+`requirements-runtime.txt` 中固定的 `motorbridge==0.4.6` 只用于 bootstrap /
+基础依赖，原始 PyPI 包没有本控制器所需的逐电机反馈 sequence，不能证明读到的是
+新反馈帧。先安装 Rust/Cargo、Git、Python venv 等构建工具，然后从仓库根目录执行：
+
+```bash
+# 只构建并在临时 venv 验证，不改用户 Python
+python3 tools/setup_motorbridge_fresh_feedback.py --build-only
+
+# 显式安装已验证的 0.4.6+rebotarm.2 用户包
+python3 tools/setup_motorbridge_fresh_feedback.py --install-user
+
+# 启动 controller 前的 fail-closed 检查；不联网、不构建、不访问硬件
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+脚本固定上游 commit
+`38b8a5681887514b301dbcab96e01a473cbd7173`，只接受仓库内已审查的 source patch，
+并同时构建 `motor_abi`、`ws_gateway` 和 wheel。`--check-installed` 必须报告
+`version=0.4.6+rebotarm.2 feedback_sequence=true`；否则不要启动真机 controller。
+此版本还校验达妙反馈的 CAN ID、电机 ID 和完整 DLC，并要求置零前主动查询到
+新的 status0 反馈；调用 disable 或新建句柄都不能代替状态确认。置零 API 不会
+自动失能，调用方仍需完成置零后的新帧验收。构建保留旧版本 wheel 以便回退。
+如需回退用户包，可执行
+`python3 -m pip install --user --break-system-packages --force-reinstall motorbridge==0.4.6`。
+
 厂商 SDK 使用仓库根目录的 `rebotarm_dependencies.repos` 固定版本：
 
 ```bash
@@ -50,6 +75,12 @@ source install/setup.bash
 - `src/rebotarm_moveit_config/config/rebotarm.srdf`：规划组、命名姿态和碰撞矩阵
 
 不要在没有核对电机型号和机械限位时修改或提高控制增益。
+
+夹爪闭合端允许等效 `1 mm` 的反馈偏差：按 `5 rad ↔ 90 mm` 换算为
+`0..0.0555555556 rad`（约3.18°），原始角度保留，显示开口为0；这不是
+软件零点补偿，也不扩大运动目标（仍不大于0）。超过该容差仍拒绝；张开端
+只允许既有量化容差。显式置零验收仍为两个反馈刻度约0.000763rad，不能复用
+1 mm的闭合反馈容差。
 
 ## 4. 视觉配置
 

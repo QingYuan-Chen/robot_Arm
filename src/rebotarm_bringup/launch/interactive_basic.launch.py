@@ -13,7 +13,7 @@ def generate_launch_description():
     # Preferred formal entrypoint: `ros2 launch rebotarm_bringup interactive_system.launch.py`
     arm_namespace = LaunchConfiguration("arm_namespace")
     bringup_share = FindPackageShare("rebotarm_bringup")
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
     arm_config = LaunchConfiguration("arm_config")
     gripper_config = LaunchConfiguration("gripper_config")
     channel = LaunchConfiguration("channel")
@@ -25,7 +25,7 @@ def generate_launch_description():
     interactive_config = LaunchConfiguration("interactive_config")
 
     urdf_file = PathJoinSubstitution(
-        [bringup_share, "description", "urdf", "reBot-DevArm_fixend.urdf"]
+        [FindPackageShare("rebotarm_moveit_config"), "config", "rebotarm.urdf"]
     )
     rviz_config = PathJoinSubstitution([bringup_share, "rviz", "rebotarm.rviz"])
     robot_description = ParameterValue(Command(["cat ", urdf_file]), value_type=str)
@@ -42,7 +42,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("use_rviz", default_value="true"),
             DeclareLaunchArgument("frame_id", default_value="base_link"),
@@ -50,7 +50,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "interactive_config",
                 default_value=PathJoinSubstitution(
-                    [interactive_share, "config", "interactive_control.yaml"]
+                    [config_share, "config", "interactive_control.yaml"]
                 ),
             ),
             Node(

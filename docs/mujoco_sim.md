@@ -1,5 +1,12 @@
 # reBotArm MuJoCo 仿真落地说明
 
+> 2026-09-06 更正：下文保留早期迁移和离线分析记录。正式 ROS 后端已经统一为
+> `mujoco_ros_node.py`，旧 `mujoco_ros_adapter_node.py`、`upstream_backend.py`
+> 已从活动包移除，不再支持 `simulation_backend:=current`。下文涉及旧后端的
+> 命令及指标描述仅供历史追溯。当前入口及解释器配置以
+> [启动解释器说明](launch_python_configuration.md) 和
+> [仿真包 README](../src/rebotarm_simulation/README_mujoco.md) 为准。
+
 > 当前状态：本分支已经具有 MuJoCo 模型生成、ROS adapter、metrics、容差判定、step-response 和 viewer 开关。P1 现采用 `huangbinai/robotarm_ros2@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4` 作为 upstream-first 迁移候选；当前仓库自有 Apache-2.0 MJCF/mesh 路径仍是 fallback/对照基线。在来源和差异审计完成前，不直接覆盖默认模型，也不运行无许可证文件的 HJX 资产。完整边界见 [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md) 和 [`mujoco_gap_matrix.md`](mujoco_gap_matrix.md)。
 
 本文记录本工程的 MuJoCo 仿真落地方式。MuJoCo 在本仓库中定位为
@@ -13,7 +20,7 @@
 ```text
 src/rebotarm_simulation/rebotarm_simulation/assets/rebotarm_base.xml
 src/rebotarm_simulation/rebotarm_simulation/assets/rebotarm_grasp_scene.xml
-src/rebotarm_bringup/description/meshes/
+src/rebotarm_moveit_config/meshes/
 ```
 
 MJCF baseline 由本仓库 Apache-2.0 URDF 使用 MuJoCo 3.3.0 编译并整理，mesh

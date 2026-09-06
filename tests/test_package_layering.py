@@ -1,9 +1,32 @@
 from __future__ import annotations
 
 from pathlib import Path
+import ast
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_simulation_has_no_motion_implementation_or_manifest_dependency() -> None:
+    package = ROOT / "src/rebotarm_simulation"
+    for source in (package / "rebotarm_simulation").rglob("*.py"):
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level:
+                modules = [node.module or ""]
+            else:
+                continue
+            assert all(module.split(".")[0] != "rebotarm_motion" for module in modules), source
+    manifest = ET.parse(package / "package.xml").getroot()
+    assert not any(child.text == "rebotarm_motion" for child in manifest)
+
+
+def test_retired_mujoco_ros_backends_are_absent_from_active_package() -> None:
+    package = ROOT / "src/rebotarm_simulation/rebotarm_simulation"
+    assert not (package / "mujoco_ros_adapter_node.py").exists()
+    assert not (package / "upstream_backend.py").exists()
 
 
 def test_motion_package_exports_core_modules() -> None:

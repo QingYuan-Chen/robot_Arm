@@ -75,11 +75,25 @@ source /opt/ros/jazzy/setup.bash
 
 ### Step 2. 安装 motorbridge
 
-`motorbridge` 从 PyPI 官方源安装：
+先安装固定的 PyPI bootstrap 包：
 
 ```bash
-python3 -m pip install --user --index-url https://pypi.org/simple motorbridge
+python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
 ```
+
+原始 `motorbridge==0.4.6` 不包含控制器所需的逐电机反馈 sequence，因此单独安装
+PyPI 包不够。必须从仓库根目录构建并显式安装已审查的
+`0.4.6+rebotarm.2` source patch，再通过启动前检查：
+
+```bash
+python3 tools/setup_motorbridge_fresh_feedback.py --build-only
+python3 tools/setup_motorbridge_fresh_feedback.py --install-user
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+`--build-only` 只在临时 venv 验证 wheel，不修改用户 Python；
+`--check-installed` 不联网、不构建且不访问硬件。详细构建、检查和回退说明见
+[`docs/local_setup_zh.md`](docs/local_setup_zh.md)。
 
 ### Step 3. 获取底层 SDK
 

@@ -18,9 +18,9 @@ class MoveItStartAlignPrecheckConfig:
 class MoveItStartAlignPrechecker:
     """Summarize whether MoveIt start alignment is ready for teach replay."""
 
-    def __init__(self, *, planner: Any, service_client: Any) -> None:
+    def __init__(self, *, planner: Any, service_client: Any = None) -> None:
         self._planner = planner
-        self._service_client = service_client
+        self._service_client = planner if service_client is None else service_client
 
     def summary(
         self,

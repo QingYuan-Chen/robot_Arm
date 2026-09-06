@@ -8,7 +8,6 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     bringup_share = FindPackageShare("rebotarm_bringup")
-    vision_share = FindPackageShare("rebotarm_vision")
 
     arm_config = LaunchConfiguration("arm_config")
     gripper_config = LaunchConfiguration("gripper_config")
@@ -22,7 +21,7 @@ def generate_launch_description():
     visual_ready_wait_timeout_sec = LaunchConfiguration("visual_ready_wait_timeout_sec")
     visual_ready_max_start_delta_rad = LaunchConfiguration("visual_ready_max_start_delta_rad")
     visual_ready_startup_delay_sec = LaunchConfiguration("visual_ready_startup_delay_sec")
-    visual_ready_params = PathJoinSubstitution([vision_share, "config", "visual_ready.yaml"])
+    visual_ready_params = PathJoinSubstitution([FindPackageShare("rebotarm_motion"), "config", "visual_ready.yaml"])
 
     controller = Node(
         package="rebotarmcontroller",
@@ -42,7 +41,7 @@ def generate_launch_description():
         ],
     )
     visual_ready_startup = Node(
-        package="rebotarm_vision",
+        package="rebotarm_motion",
         executable="rebotarm_visual_ready",
         name="rebotarm_visual_ready_startup",
         output="screen",
@@ -61,7 +60,7 @@ def generate_launch_description():
         ],
     )
     visual_ready_service = Node(
-        package="rebotarm_vision",
+        package="rebotarm_motion",
         executable="rebotarm_visual_ready",
         name="rebotarm_visual_ready",
         output="screen",
@@ -90,7 +89,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("channel", default_value="auto"),
             DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument(

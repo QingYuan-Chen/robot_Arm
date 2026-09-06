@@ -48,10 +48,16 @@ def test_generated_agent_state_has_required_live_fields() -> None:
     assert 0.0 <= state["overall_completion_percent"] <= 100.0
     assert len(state["phases"]) == 7
     first_incomplete = next(
-        phase for phase in state["phases"] if phase["completion_percent"] < 100.0
+        (phase for phase in state["phases"] if phase["completion_percent"] < 100.0),
+        None,
     )
-    assert state["active_phase"].startswith(first_incomplete["id"])
-    assert state["blockers"]
+    if first_incomplete is not None:
+        assert state["active_phase"].startswith(first_incomplete["id"])
+    else:
+        assert state["overall_completion_percent"] == 100.0
+    module = _load_module()
+    assert state["active_phase"] == module.parse_active_phase()
+    assert state["blockers"] == module.parse_section_bullets(module.MEMORY, "## 当前阻塞")
     assert state["next_actions"]
     assert state["git"]["branch"]
     assert state["git"]["head"]

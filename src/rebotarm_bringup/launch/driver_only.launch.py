@@ -13,6 +13,7 @@ def generate_launch_description():
     gripper_config = LaunchConfiguration("gripper_config")
     channel = LaunchConfiguration("channel")
     joint_state_rate = LaunchConfiguration("joint_state_rate")
+    hardware_feedback_rate_hz = LaunchConfiguration("hardware_feedback_rate_hz")
     gripper_position_torque_cap_nm = LaunchConfiguration("gripper_position_torque_cap_nm")
     gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s")
     gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec")
@@ -32,11 +33,12 @@ def generate_launch_description():
                 default_value=PathJoinSubstitution([bringup_share, "config", "gripper.yaml"]),
             ),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
+            DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
-            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="0.5"),
+            DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="1.5"),
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
-            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.25"),
+            DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
             DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
@@ -51,6 +53,7 @@ def generate_launch_description():
                         "gripper_config": gripper_config,
                         "channel": channel,
                         "joint_state_rate": joint_state_rate,
+                        "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
                         "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
                         "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
                         "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,

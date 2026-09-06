@@ -20,9 +20,9 @@ def generate_launch_description():
     teleop_config = LaunchConfiguration("teleop_config")
     keyboard_prefix = LaunchConfiguration("keyboard_prefix")
     bringup_share = FindPackageShare("rebotarm_bringup")
-    interactive_share = FindPackageShare("rebotarm_interactive_control")
+    config_share = FindPackageShare("rebotarm_bringup")
     urdf_file = PathJoinSubstitution(
-        [bringup_share, "description", "urdf", "reBot-DevArm_fixend.urdf"]
+        [FindPackageShare("rebotarm_moveit_config"), "config", "rebotarm.urdf"]
     )
     rviz_config = PathJoinSubstitution([bringup_share, "rviz", "rebotarm.rviz"])
     robot_description = ParameterValue(Command(["cat ", urdf_file]), value_type=str)
@@ -33,7 +33,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_hardware", default_value="false"),
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
             DeclareLaunchArgument("channel", default_value=""),
-            DeclareLaunchArgument("joint_state_rate", default_value="200.0"),
+            DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("teach_record_path", default_value="teleop_records/teach_record.jsonl"),
             DeclareLaunchArgument("teach_record_rate_hz", default_value="150.0"),
             DeclareLaunchArgument(
@@ -51,7 +51,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "teleop_config",
                 default_value=PathJoinSubstitution(
-                    [interactive_share, "config", "teleop_control.yaml"]
+                    [config_share, "config", "teleop_control.yaml"]
                 ),
             ),
             Node(
@@ -66,8 +66,6 @@ def generate_launch_description():
                         "gripper_config": gripper_config,
                         "channel": channel,
                         "joint_state_rate": joint_state_rate,
-                        "teach_record_path": teach_record_path,
-                        "teach_record_rate_hz": teach_record_rate_hz,
                         "arm_namespace": arm_namespace,
                     }
                 ],
@@ -78,6 +76,20 @@ def generate_launch_description():
                 name="gripper_visual_joint_state_node",
                 output="screen",
                 parameters=[teleop_config, {"arm_namespace": arm_namespace}],
+            ),
+            Node(
+                package="rebotarm_teach",
+                executable="TeachRecorderNode",
+                name="teach_recorder_node",
+                output="screen",
+                condition=IfCondition(use_hardware),
+                parameters=[teleop_config, {
+                    "arm_namespace": arm_namespace,
+                    "record_path": teach_record_path,
+                    "sample_rate_hz": teach_record_rate_hz,
+                    "start_on_launch": False,
+                    "keyboard_quit_enabled": False,
+                }],
             ),
             Node(
                 package="robot_state_publisher",

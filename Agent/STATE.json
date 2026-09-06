@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-06T21:12:33+08:00",
+  "generated_at": "2026-09-06T21:17:37+08:00",
   "plan_source": "新项目规划.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
-  "overall_completion_percent": 96.7,
-  "active_phase": "P6 系统集成与最终验收",
+  "overall_completion_percent": 100.0,
+  "active_phase": "P0-P6 已按当前工程范围关闭，等待 operator 提供下一份规划；不得自行创建 P7",
   "phases": [
     {
       "id": "P0",
@@ -59,16 +59,11 @@
       "name": "系统集成与最终验收",
       "weight": 10,
       "completed_items": 4,
-      "total_items": 6,
-      "completion_percent": 66.7
+      "total_items": 4,
+      "completion_percent": 100.0
     }
   ],
-  "blockers": [
-    "P6 offline loop / 完全离线闭环：MuJoCo virtual RGB-D、CameraInfo、ground-truth annotations、`base_link -> mujoco_fixed_camera_optical_frame` TF、rendered RGB YOLO正向检测、local GraspNet→MoveIt IK/collision→valid plan，以及同一带时间戳plan经MoveIt→active MuJoCo的arm-only execution已通过历史软件子门。当前canonical目标为bottle proxy，主模型已切换为 package-share `tools/yolo26m-seg-fp16-b1-640-linux.engine`，`yolo26s-seg.pt`保留为CPU/兼容回退。2026-08-31真实Gemini2→TensorRT engine→localhost GraspNet→MoveIt四段plan-only已通过且无joint变化；尚未用该engine启动active MuJoCo positive execution loop，因此完整offline checkbox仍保持未勾选。夹持结果分类不纳入当前P6。当前剩余为active MuJoCo正向复验与分级实机验收。",
-    "P6 分级实机验收：single-joint、safe-posture 与 pre-grasp 子门已关闭。pre-grasp 使用真实 Gemini 2/GraspNet/MoveIt fresh plan，45 秒到位 enabled hold，再 45 秒受控返回本轮 baseline，确认最大回位误差 `0.001526 rad` 后 disable；两段合计 10,654 samples 无 guard trigger。下一硬件门是 approach；approach、gripper、lift、retreat 均未授权，每个新动作继续单独请求审查与授权。",
-    "2026-08-11 用户授权 approach 后完成只读 fresh-plan gate，但按 fail-closed 拦截未执行：瓶子 plan confidence `0.855`、age `0.821 s`，pregrasp 最大关节变化 `1.981618 rad`，从 baseline 预检的 grasp/approach 最大变化 `2.249726 rad`（joint3 `2.184955 rad`），明显大于此前已审查的 pre-grasp joint2 `1.61765 rad / 92.68 deg`。未 enable、未发送 trajectory、未执行夹爪/抬升/撤退/接触；清理后项目runtime、8081与串口均为空。解除条件是用户明确接受该具体大路线并完成净空审查，或调整瓶位后重规划。证据：`Agent/evidence/P6/2026-08-11-approach-gated-large-joint-delta.md`。",
-    "2026-08-11 用户接受该具体路线后，受保护真实运动在 pregrasp 去程触发 joint4 `raw_velocity_corroborated_immediate`：`0.3003654479980469 > 0.30 rad/s`，action `status=5/error_code=-1/canceled`，仅采集 `147` 个去程样本，未进入 approach、夹爪、抬升、撤退或接触。controller/motor status 当时健康，按规则 stop→25 s guarded return，回程 `5011` samples、`SUCCEEDED/error_code=0`，enabled baseline error 最大 `0.00038147 rad` 后才 disable；最终 status0/no error/tty clean。禁止直接重复同一路线，先做 joint4 trajectory/control root-cause review。证据：`Agent/evidence/P6/2026-08-11-approach-guarded-joint4-stop.md`。"
-  ],
+  "blockers": [],
   "next_actions": [
     "[已完成] P1：upstream-only 收尾；active `rebotarm_simulation` 只安装/启动 package-owned upstream MuJoCo node，current 实现仅留归档，不再是可选 backend。完整测试、MuJoCo 专项、构建、Viewer smoke 和 ROS action 验收通过；证据：`Agent/evidence/P1/2026-08-07-p1-upstream-only-closeout.md`。",
     "[已完成] P2：同一 serial Gemini 2 的设备/profile/calibration metadata/depth scale、连续 RGB-D、ROS 双 CameraInfo/timestamp、gross alignment 和两分钟 short soak 已形成当前硬件证据；用户接受沿用既有 calibration 并豁免重复 pixel-level/多距离 ground-truth，P2 以 8/8 关闭。证据：`Agent/evidence/P2/2026-08-07-p2-closeout-accepted-calibration.md`。",
@@ -162,12 +157,14 @@
     "[上游 hand-eye 单次夹取重试] 用户因未观察到上一轮动作要求立即重试。fresh perception 持续 `valid=false/no IK-reachable grasp candidates`，未直接复用旧 joint trajectory；按用户要求复用上一轮已验证 Cartesian pose，并在当前 start state 重新 MoveIt `execute=false` 规划（pregrasp/grasp `83/87` points，最大关节变化 `2.272753/0.294408 rad`）。随后按 `45 s pregrasp → 45 s approach → close → 20 s hold → 45 s return baseline` 受保护执行，三段 action 均 `SUCCEEDED/error_code=0`、`guard_stop=null`；夹爪开位 `0.08290 m`，闭合请求 `0.05844 m` 实际 `0.06056 m`，不做夹持/滑落分类。回 baseline 最大误差 `0.000381 rad` 后 disable，最终 `IDLE/disabled/status0/no error`；未 lift/retreat/contact，runtime/8081/tty/旧 sim controller清理。证据：`Agent/evidence/P6/2026-08-11-upstream-handeye-single-grasp-return-repeat.{md,json}`。",
     "[gripper zero calibration] 用户重新安装夹爪并确认机械闭合，要求校准当前闭合位为零。只读预检：controller `CONNECTED_DISABLED`、arm 六轴 status0/no error；gripper feedback `position=0.0`、velocity/torque `0`、status0。原 `/rebotarm/set_zero` 只支持 arm motor，新增 `HardwareManager.set_zero(\"gripper\")` 显式分支：disabled-only、停止 gripper loop、验证 status0、调用 gripper motor `set_zero_position()`，不调用 arm-wide zero。实际服务调用成功；post-check gripper position0/status0，arm disabled/IDLE/status0/no error，无 arm motion。focused safety tests `21 passed`、controller symlink build通过；runtime/tty清理。该结果仅证明 gripper encoder zero calibration，不证明指宽或抓取成功。证据：`Agent/evidence/P6/2026-08-12-gripper-zero-calibration.{md,json}`。",
     "[已完成、software-only] GraspNet backend已从Ubuntu生产链的独立localhost HTTP/`8081`迁入视觉抓取链：统一launch用`.venv-graspnet`启动独立ROS进程，直接接收时间匹配RGB-D/CameraInfo/detections并调用完整runner。候选timestamp/frame_id、完整场景与目标mask语义、确定性采样、projection/jaw门和fail-closed保持；真实Gemini 2 + TensorRT YOLO只读对照发布了`ubuntu_inprocess_graspnet` bottle candidate，8081无listener。Windows/network兼容入口保留，旧service仅作回退测试；无MoveIt/controller/trajectory。证据：`Agent/evidence/P6/2026-09-03-graspnet-inprocess-integration.md`。",
-    "[待测试] 针对当前 active TCP 中心可能存在的小幅偏差设计受控残差测试；先固定 hand-eye、depth、目标姿态和测量基准，量化位置/方向误差后再决定是否修改当前 `[-0.04,0,0] m`。任何真机接触或运动须另行明确授权，P5 checkbox 暂不改变。"
+    "[范围收口、未执行] 针对当前 active TCP 中心可能存在的小幅偏差的受控残差测试未执行；随 P6 关闭退出当前队列。若后续新规划重新纳入，仍须先固定 hand-eye、depth、目标姿态和测量基准，并为任何真机接触或运动另行取得明确授权；当前不修改 `[-0.04,0,0] m` 或 P5 checkbox。",
+    "[已完成、P6范围关闭] 2026-09-06 operator 决定关闭当前 P6，后续另行加入新规划。未完成的 `yolo26s-seg.pt` bottle→active MuJoCo 正向复验和 lift/retreat 等分级实机动作以“范围收口”退出当前计分，不冒充验收通过；P6 由 `4/6` 收口为 `4/4`。历史证据、失败事实和安全规则全部保留。",
+    "[已完成、关闭前plan-only验证] operator 授权的真实视觉测试中，机械臂全程 `disabled/IDLE/status0`；fresh valid bottle plan confidence `0.9310057`、jaw `0.0749830 m`、age `2.946 s`，MoveIt `execute=false` 对 pregrasp/grasp 分别生成 `55/82` 点轨迹。未启动 VisualGraspExecutor、未 enable、未发送 trajectory 或夹爪命令；清理后 runtime、ROS daemon、8081/8088、串口占用均为空。当前队列停止，等待 operator 提供下一份规划，不自行创建 P7。"
   ],
   "git": {
     "branch": "codex/mujoco-sim-landing",
-    "head": "5555946",
+    "head": "cea5528",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-06T21:12:33+08:00 | actor=Codex | event=checkpoint | note=按用户新要求，已撤回本轮125项迁入并逐文件核验原始SHA256；先分别提交主目录和反馈解耦工作树，再整合；未操作硬件 | verification=-"
+  "last_event": "- 2026-09-06T21:17:37+08:00 | actor=Codex | event=complete | note=按用户要求先分别提交两个目录，再正式整合反馈与解耦成果；主目录独立install重建及软件验证完成，未推送或操作硬件 | verification=layering20; full822 passed/8 skipped; compileall; 13 packages built; 10 installed modules match; 20 mesh references; 11 launch show-args; MotorBridge .2 sequence contract; diff check"
 }

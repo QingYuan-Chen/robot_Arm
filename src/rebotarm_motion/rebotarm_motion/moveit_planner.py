@@ -50,6 +50,12 @@ class MoveItMotionPlanner:
         self._goal_orientation_tolerance = float(goal_orientation_tolerance)
         self._client = node.create_client(GetMotionPlan, planning_service)
 
+    def service_is_ready(self) -> bool:
+        return bool(self._client.service_is_ready())
+
+    def wait_for_service(self, *, timeout_sec: float) -> bool:
+        return bool(self._client.wait_for_service(timeout_sec=timeout_sec))
+
     def plan_joint_positions(
         self,
         *,

@@ -38,7 +38,6 @@ setup(
                 "config/retry_policy.yaml",
                 "config/retreat_policy.yaml",
                 "config/table_safety.yaml",
-                "config/visual_ready.yaml",
                 "config/visual_servo.yaml",
             ],
         ),

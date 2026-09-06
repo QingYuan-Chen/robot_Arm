@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -20,10 +20,6 @@ def _workspace_path(environment_name: str, relative_path: str) -> str:
         if candidate.exists():
             return str(candidate)
     return ""
-
-
-def _graspnet_python_executable() -> str:
-    return _workspace_path("GRASPNET_PYTHON", ".venv-graspnet/bin/python") or "python3"
 
 
 def generate_launch_description():
@@ -134,7 +130,11 @@ def generate_launch_description():
             DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
             DeclareLaunchArgument(
                 "graspnet_python_executable",
-                default_value=_graspnet_python_executable(),
+                default_value=EnvironmentVariable("GRASPNET_PYTHON", default_value="python3"),
+            ),
+            DeclareLaunchArgument(
+                "vision_python_executable",
+                default_value=EnvironmentVariable("REBOTARM_VISION_PYTHON", default_value="python3"),
             ),
             DeclareLaunchArgument(
                 "graspnet_model_root",
@@ -201,6 +201,7 @@ def generate_launch_description():
                 condition=IfCondition(start_vision),
                 launch_arguments={
                     "camera_config": vision_camera_config,
+                    "vision_python_executable": LaunchConfiguration("vision_python_executable"),
                     "handeye_config": vision_handeye_config,
                     "yolo_model_path": vision_yolo_model_path,
                     "start_ordinary_grasp": start_ordinary_grasp,
