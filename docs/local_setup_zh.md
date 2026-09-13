@@ -33,12 +33,86 @@ GraspNet 与 MuJoCo 的 PyYAML 固定版本分别为6.0.1和6.0.3；直接合并
 sudo apt update
 sudo apt install build-essential git python3-venv python3-pip \
   python3-colcon-common-extensions python3-vcstool python3-rosdep python3-pytest \
-  ros-jazzy-moveit ros-jazzy-pinocchio ros-jazzy-cv-bridge
+  ros-jazzy-moveit ros-jazzy-moveit-simple-controller-manager \
+  ros-jazzy-pinocchio ros-jazzy-cv-bridge
 source /opt/ros/jazzy/setup.bash
 # 仅在本机从未初始化rosdep时执行 sudo rosdep init
 rosdep update
 rosdep install --from-paths src --ignore-src --rosdistro jazzy -r -y
 ```
+
+### MoveIt 执行插件：能 Plan 但不能 Execute
+
+`src/rebotarm_moveit_config/config/moveit_controllers.yaml` 指定
+`moveit_simple_controller_manager/MoveItSimpleControllerManager`，由它把
+MoveIt 轨迹交给 `/rebotarm/follow_joint_trajectory`。仿真和真机的 MoveIt
+执行链都需要这个插件；它不是机械臂 SDK，也不要求额外启动 ros2_control
+的 controller_manager。只安装部分 MoveIt 组件可能遗漏它。
+当前 `rebotarm_moveit_config/package.xml` 尚未显式声明该插件依赖，
+不能仅依靠现有 manifest 的 rosdep 安装来保证它存在；本次仅补文档。
+
+典型日志组合：
+
+```text
+Exception while loading controller manager 'moveit_simple_controller_manager/MoveItSimpleControllerManager'
+... class ... does not exist. Declared types are
+Failed to reload controllers: `controller_manager_` does not exist.
+Unable to identify any set of controllers that can actuate the specified joints
+CONTROL_FAILED
+```
+
+先确认启动日志中的插件加载错误，不要只凭最后一行 `CONTROL_FAILED`
+推断原因。`base_link` 根惯量的 KDL 警告不是上述插件缺失的原因，
+不应为解决这类 Execute 错误而先改 URDF。
+
+只读检查（ROS 命令需先加载当前环境）：
+
+```bash
+dpkg-query -W ros-jazzy-moveit-simple-controller-manager
+ros2 pkg prefix moveit_simple_controller_manager
+ros2 param get /move_group moveit_controller_manager
+ros2 action info /rebotarm/follow_joint_trajectory
+```
+
+检查终端与启动终端必须使用相同的 `ROS_DOMAIN_ID`。如果 MuJoCo Action
+server 为 1，但插件类不存在、MoveIt 的 Known controllers 为空，故障在
+MoveIt 插件加载侧，而非仅因模拟器未启动。若包已安装仍报错，继续检查
+当前 ROS 环境、插件发现与启动日志，不通过禁用安全检查来绕过故障。
+
+### 启动时反馈分批到达
+
+控制器启动会为每个电机保存独立的反馈 sequence；六个 sequence 不要求相等。
+串口桥可能在不同轮询中返回不同电机的帧。控制器会跨轮询收集这些帧，只要每个
+电机自己的 sequence 在响应窗口内推进且状态/数值有效，就会进入健康反馈状态。
+不要为了“对齐”而修改电机 ID、sequence 或放宽 `status_code` 检查。
+
+若仍看到 `verified feedback pending: ...`，先用 SDK 只读测试确认每个电机的
+`get_state_with_sequence()` 都推进，再重新启动 ROS 控制器；两者不能同时占用串口。
+只有某个电机 sequence 长时间不变、持续 `NO_FEEDBACK` 或 `status_code != 0` 时，
+才按底层电机反馈链路排查。
+
+缺包时手动安装：
+
+```bash
+sudo apt update
+sudo apt install ros-jazzy-moveit-simple-controller-manager
+```
+
+安装后需重新启动 `move_group`，已运行的进程不会自动恢复插件实例。
+以下重启流程仅用于仿真：在原仿真启动终端 `Ctrl+C` 退出，再从新终端执行：
+
+```bash
+cd /home/huangbin/robotarm_ros2
+source tools/source_local_environment.bash
+export ROS_DOMAIN_ID=173
+ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py
+```
+
+应不再出现插件加载失败或空控制器列表；确认唯一 Action server 后，
+重新 Plan 并检查小目标轨迹，再手动 Execute，以实际执行结果和关节反馈验收。
+包安装成功、源码 build、pytest 或 `--show-args` 通过都不能替代该运行验证。
+真机不能直接套用上述 Ctrl+C 重启流程：先按本轮已验证基线受控停机，
+确认可安全失能后再退出；健康但回位失败时保持 enabled hold、等待人工处置。
 
 ### 控制器依赖（真机或完整软件回归需要）
 

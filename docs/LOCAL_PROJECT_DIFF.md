@@ -269,6 +269,21 @@ OLD 的严格架构 checker、自有 ROS perception/viewer、RViz execute workfl
 
 ## 20. 问题与下一阶段建议
 
+2026-09-13 后续运行验证补充：用户启动 MuJoCo + MoveIt 后，Plan 成功但
+Execute 失败。启动日志确认 `MoveItSimpleControllerManager` 插件类不存在，
+当时系统未安装 `ros-jazzy-moveit-simple-controller-manager`，而 MuJoCo 的
+trajectory Action server 已存在且为 1。此前 build/pytest/参数解析通过不代表
+该执行链通过；此项是迁移时遗漏的运行依赖。本次仅补充
+[安装与排查说明](local_setup_zh.md#moveit-执行插件能-plan-但不能-execute)，
+未安装依赖、未执行轨迹，不将问题标为修复复测通过。manifest 依赖声明仍待补齐。
+
+2026-09-13 反馈启动误报修复：SDK 只读样本证明六个电机的 sequence 独立推进、
+状态码均为 0，但初始强制刷新窗口可能在分批反馈尚未收齐时记录
+`verified feedback pending`。`hardware_manager.py` 将反馈重试间隔由 5 ms 调整为
+50 ms，并加入分批反馈回归测试；不要求六个 sequence 数值相等，也不改变失能/使能
+安全门。控制器安全测试 124 项、分层/资源/启动检查 34 项、完整软件回归 812 项
+通过；未连接真机，需现场重新启动 `driver_only` 验证实际日志。
+
 依赖和软件回归已完成本轮收口；下一阶段首先建立最小 CI（根 pytest、分层/资源、compileall、独立 build）。
 处理 `colcon test` 与根测试集的集成，但应在新任务中独立修改，不把本次基线替换变成隐式重构。
 随后评审 A 类中架构门禁、模型可复现和只读查看器，明确是否需要 Real2Sim/RL/voice 支线。

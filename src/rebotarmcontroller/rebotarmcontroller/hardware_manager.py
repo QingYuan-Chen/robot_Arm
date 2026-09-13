@@ -99,7 +99,10 @@ _GC_KP = 7.0
 _GC_KD = 0.8
 _GC_TAU_SCALE = np.ones(6, dtype=np.float64)
 _FEEDBACK_REFRESH_RETRIES = 3
-_FEEDBACK_RETRY_INTERVAL_SEC = 0.005
+# A DM serial bridge can return the six motor frames over multiple polling
+# cycles. Five milliseconds is shorter than the observed frame cadence and
+# can reject healthy joints whose first response arrives after joint1/joint2.
+_FEEDBACK_RETRY_INTERVAL_SEC = 0.05
 _UINT64_MAX = (1 << 64) - 1
 _UINT64_HALF_RANGE = 1 << 63
 
