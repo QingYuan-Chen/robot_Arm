@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-13T18:03:06+08:00",
+  "generated_at": "2026-09-13T18:08:31+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "3278b82",
+    "head": "c4dd970",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-13T18:03:06+08:00 | actor=Codex | event=complete | note=Retired Windows tools and refreshed docs to Ubuntu-native vision route | verification=full pytest 768 passed 7 skipped; visual/network focused 75 passed; docs/tool references checked; no hardware operation"
+  "last_event": "- 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit"
 }

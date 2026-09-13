@@ -71,20 +71,6 @@ def load_grasp_group(model_root: str):
     return GraspGroup
 
 
-def add_windows_dll_directories() -> None:
-    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
-        return
-    candidates = [
-        Path(sys.prefix) / "Lib" / "site-packages" / "torch" / "lib",
-        Path(os.environ.get("CUDA_PATH", "")) / "bin",
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin"),
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1\bin"),
-    ]
-    for path in candidates:
-        if path.is_dir():
-            os.add_dll_directory(str(path))
-
-
 def _build_cloud(
     *,
     color_bgr: np.ndarray,
@@ -370,7 +356,7 @@ def graspnet_array_to_candidates(
         translation = row[13:16]
         candidates.append(
             {
-                "source": "windows_graspnet_baseline",
+                "source": "graspnet_baseline",
                 "class_name": str(class_name),
                 "score": float(row[0]),
                 "width_m": float(row[1]),
@@ -527,7 +513,6 @@ class GraspNetBaselineInference:
         return ""
 
     def _load_network(self):
-        add_windows_dll_directories()
         root = Path(self.model_root)
         for child in ("models", "dataset", "utils"):
             path = str(root / child)

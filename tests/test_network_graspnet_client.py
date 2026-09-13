@@ -10,7 +10,7 @@ def test_network_graspnet_client_fetches_json_payload():
 
     payload = {
         "frame_id": "camera_depth_frame",
-        "source": "windows_graspnet_baseline",
+        "source": "graspnet_baseline",
         "backend_configured": True,
         "candidates": [],
     }
@@ -40,7 +40,7 @@ def test_network_graspnet_client_fetches_json_payload():
 
         result = client.fetch()
 
-        assert result["source"] == "windows_graspnet_baseline"
+        assert result["source"] == "graspnet_baseline"
         assert client.last_debug_message == "ok candidates=0"
     finally:
         server.shutdown()

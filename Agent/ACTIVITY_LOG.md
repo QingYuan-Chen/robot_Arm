@@ -595,3 +595,4 @@
 - 2026-09-13T17:40:52+08:00 | actor=Codex | event=start | note=Update docs and remove obsolete Windows tools per user request | verification=-
 - 2026-09-13T17:53:39+08:00 | actor=Codex | event=checkpoint | note=Windows-specific tools and docs retired; Ubuntu native vision docs are canonical | verification=-
 - 2026-09-13T18:03:06+08:00 | actor=Codex | event=complete | note=Retired Windows tools and refreshed docs to Ubuntu-native vision route | verification=full pytest 768 passed 7 skipped; visual/network focused 75 passed; docs/tool references checked; no hardware operation
+- 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit

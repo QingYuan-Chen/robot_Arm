@@ -112,7 +112,7 @@ def test_network_graspnet_payload_converts_to_candidates():
 
     payload = {
         "frame_id": "camera_depth_frame",
-        "source": "windows_graspnet_baseline",
+        "source": "graspnet_baseline",
         "backend_configured": True,
         "timestamp_ns": 1_700_000_000_123_456_789,
         "candidates": [
@@ -132,7 +132,7 @@ def test_network_graspnet_payload_converts_to_candidates():
     assert candidates.best_index == 0
     assert candidates.header.frame_id == "camera_depth_frame"
     assert len(candidates.candidates) == 1
-    assert candidates.candidates[0].source == "windows_graspnet_baseline"
+    assert candidates.candidates[0].source == "graspnet_baseline"
     assert candidates.candidates[0].confidence == pytest.approx(0.88)
     assert candidates.candidates[0].pose.position.x == pytest.approx(0.12)
     assert candidates.candidates[0].jaw_width == pytest.approx(0.042)

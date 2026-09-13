@@ -144,7 +144,7 @@ def payload_to_candidate_array(
             class_names.append(str(item.get("class_name", payload.get("class_name", ""))))
         except Exception:
             continue
-    source = str(payload.get("source", "windows_graspnet_baseline"))
+    source = str(payload.get("source", "graspnet_baseline"))
     frame_id = str(payload.get("frame_id", fallback_frame_id) or fallback_frame_id)
     class_name = class_names[0] if class_names else str(payload.get("class_name", ""))
     candidates = predictions_to_candidate_array(
