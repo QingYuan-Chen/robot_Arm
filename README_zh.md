@@ -22,7 +22,7 @@
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
 作为二次开发、上层规划、可视化和单电机调试的统一入口。
 
-当前工作空间包含13个 ROS2 包：
+当前工作空间包含12个 ROS2 包：
 
 | 包 | 作用 |
 |---|---|
@@ -41,6 +41,24 @@
 | `rebotarm_interactive_control` | 旧导入路径与脚本兼容层 |
 
 ---
+
+## 当前路线与安全边界
+
+视觉只维护 Ubuntu 原生 Gemini 2、YOLO、ROS RGB-D/CameraInfo/detections、本机
+GraspNet、MoveIt 和 MuJoCo/真机后端。Windows、HTTP、MJPEG、远端 JSON 和独立
+GraspNet service 已删除。Dashboard HTTP 仅用于本机网页界面。
+
+真机启动后默认保持失能，确认反馈和现场安全后显式执行：
+
+```bash
+ros2 service call /rebotarm/enable std_srvs/srv/Trigger "{}"
+```
+
+每次重启控制器都需要重新 Enable；连接不等于使能。MoveIt Execute 需要：
+
+```bash
+sudo apt install ros-jazzy-moveit-simple-controller-manager
+```
 
 ## 核心功能
 
@@ -70,6 +88,7 @@
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+source tools/source_local_environment.bash
 ```
 
 ---
@@ -81,7 +100,8 @@ source /opt/ros/jazzy/setup.bash
 
 ### Step 1. 安装 ROS2 依赖
 
-请参考[ROS官方下载文档](https://www.ros.org/blog/getting-started/)选择适合的版本进行安装。
+请参考[ROS 2 Jazzy 安装文档](https://docs.ros.org/en/jazzy/Installation.html)。
+MoveIt Execute 还需要 `ros-jazzy-moveit-simple-controller-manager`。
 
 ### Step 2. 安装 motorbridge
 
@@ -237,7 +257,7 @@ source install/setup.bash
 1. 使能机械臂：
 
 ```bash
-ros2 service call /rebotarm/enable std_srvs/srv/Trigger
+ros2 service call /rebotarm/enable std_srvs/srv/Trigger "{}"
 ```
 
 2. 移动末端到目标 pose：
@@ -253,13 +273,13 @@ ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
 3. 回到安全零位：
 
 ```bash
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
+ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger "{}"
 ```
 
 4. 失能并退出：
 
 ```bash
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebotarm/disable std_srvs/srv/Trigger "{}"
 ```
 
 ---
@@ -343,11 +363,11 @@ ros2 run rebotarmcontroller GravityCompensation
 对应底层服务：
 
 ```bash
-ros2 service call /rebotarm/enable std_srvs/srv/Trigger
-ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger
-ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebotarm/enable std_srvs/srv/Trigger "{}"
+ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger "{}"
+ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger "{}"
+ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger "{}"
+ros2 service call /rebotarm/disable std_srvs/srv/Trigger "{}"
 ```
 
 该示例只是这些服务的薄客户端，不会绕过 ROS 节点直接连接硬件。硬件访问仍由
@@ -392,11 +412,11 @@ q / quit    退出
 
 | API | 类型 | 说明 | 简要使用 |
 |---|---|---|---|
-| `/rebotarm/enable` | `std_srvs/srv/Trigger` | 使能机械臂和夹爪 | `ros2 service call /rebotarm/enable std_srvs/srv/Trigger` |
-| `/rebotarm/disable` | `std_srvs/srv/Trigger` | 停止控制循环并失能机械臂 | `ros2 service call /rebotarm/disable std_srvs/srv/Trigger` |
-| `/rebotarm/safe_home` | `std_srvs/srv/Trigger` | 以安全速度回零 | `ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger` |
-| `/rebotarm/gravity_compensation/start` | `std_srvs/srv/Trigger` | 启动 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger` |
-| `/rebotarm/gravity_compensation/stop` | `std_srvs/srv/Trigger` | 停止 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger` |
+| `/rebotarm/enable` | `std_srvs/srv/Trigger` | 使能机械臂和夹爪 | `ros2 service call /rebotarm/enable std_srvs/srv/Trigger "{}"` |
+| `/rebotarm/disable` | `std_srvs/srv/Trigger` | 停止控制循环并失能机械臂 | `ros2 service call /rebotarm/disable std_srvs/srv/Trigger "{}"` |
+| `/rebotarm/safe_home` | `std_srvs/srv/Trigger` | 以安全速度回安全姿态 | `ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger "{}"` |
+| `/rebotarm/gravity_compensation/start` | `std_srvs/srv/Trigger` | 启动 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger "{}"` |
+| `/rebotarm/gravity_compensation/stop` | `std_srvs/srv/Trigger` | 停止 controller 内部重力补偿闭环 | `ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger "{}"` |
 | `/rebotarm/set_mode` | `rebotarm_msgs/srv/SetMode` | 切换 `mit`、`pos_vel`、`vel` | `ros2 service call /rebotarm/set_mode rebotarm_msgs/srv/SetMode "{mode: 'pos_vel'}"` |
 | `/rebotarm/set_zero` | `rebotarm_msgs/srv/SetZero` | 设置全部或指定关节零点，空 `joint_name` 表示全部 | `ros2 service call /rebotarm/set_zero rebotarm_msgs/srv/SetZero "{joint_name: ''}"` |
 | `/rebotarm/move_to_pose_ik` | `rebotarm_msgs/srv/MoveToPoseIK` | 只做 IK 求解并更新目标关节角，适合小步位姿调整 | 见下方预留 API |

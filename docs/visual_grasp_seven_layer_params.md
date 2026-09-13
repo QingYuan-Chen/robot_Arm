@@ -1,5 +1,8 @@
 # 视觉抓取七层参数设计
 
+> 当前唯一支持的部署是 Ubuntu 原生 Gemini 2 -> YOLO -> ROS -> 本机 GraspNet。
+> Windows、HTTP、MJPEG、远端 JSON 和独立 GraspNet service 已移除；以下参数只适用于本机 ROS 链。
+
 > 文档状态：参数分层仍有效，但当前工程处于网络过渡链路向单 Ubuntu 链路迁移阶段。下列参数是设计基线，不代表已经完成 Gemini 2、GraspNet、hand-eye、TCP 或真机安全验收。
 
 当前目标是通用抓取，不限制物体只能平躺或竖放。候选来源统一使用 GraspNet candidates，YOLO 仍可用于目标检测、mask、深度质量辅助，但不再生成规则物体候选，也不再合并两路候选。
@@ -38,7 +41,7 @@ graspnet_max_input_skew_ms: 100
 candidate_max_candidates_per_frame: 20
 ```
 
-- Windows HTTP/MJPEG bridge 已移除；不再作为兼容输入或部署前置条件。
+- 旧网络桥接已移除；不再作为兼容输入或部署前置条件。
 - Ubuntu GraspNet仍运行在独立`.venv-graspnet` Python进程中，但RGB-D和detections直接通过ROS订阅进入runner，不再经过localhost HTTP。
 - Ubuntu 侧读取 `/grasp/graspnet_candidates`，最多取 `candidate_max_candidates_per_frame` 个进入 IK filter。
 - Open3D 可视化只用于调试，不作为 Ubuntu 抓取执行链路的一部分。

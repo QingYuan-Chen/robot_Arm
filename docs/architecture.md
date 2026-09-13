@@ -1,5 +1,12 @@
 # reBotArm ROS2 Architecture
 
+## Current Deployment Scope
+
+The supported vision route is Ubuntu 24.04 / ROS 2 Jazzy with native Gemini 2,
+local YOLO, ROS RGB-D/CameraInfo/detections, and local in-process GraspNet.
+Windows, HTTP, MJPEG, remote JSON, and standalone GraspNet service routes have
+been retired and must not be restored.
+
 This repository is organized as layered ROS2 packages. New code must follow
 these ownership boundaries instead of adding more logic to the legacy
 `rebotarm_interactive_control` package.

@@ -598,3 +598,6 @@
 - 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit
 - 2026-09-13T18:14:31+08:00 | actor=Codex | event=start | note=Remove legacy HTTP/MJPEG/JSON network vision compatibility chain after user confirmation | verification=-
 - 2026-09-13T18:48:42+08:00 | actor=Codex | event=complete | note=Retired HTTP vision compatibility; native ROS camera and GraspNet retained | verification=full suite before added regression 762 passed/7 skipped; final focused 82 passed; vision/bringup build passed; compileall and diff check passed; no hardware use
+- 2026-09-13T19:10:26+08:00 | actor=Codex | event=start | note=Normalize root docs and docs directory for Ubuntu-native-only vision route; remove stale network references | verification=-
+- 2026-09-13T19:17:16+08:00 | actor=Codex | event=start | note=Update root and docs for Ubuntu-native-only scope | verification=-
+- 2026-09-13T20:25:19+08:00 | actor=Codex | event=complete | note=Normalized root documentation and Agent rules for Ubuntu-native-only scope | verification=compileall passed; focused docs/architecture/vision tests 100 passed; git diff check passed; no hardware operation

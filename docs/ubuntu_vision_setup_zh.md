@@ -79,7 +79,7 @@ lsusb | grep -i -E "orbbec|2bc5"
   yolo_model_path:=/absolute/path/to/reviewed-model.engine yolo_device:=0
 ```
 
-engine不能用于CPU，也不能假定可跨机器/Windows复用。需要重新导出时，必须使用
+engine不能用于CPU，也不能假定可跨机器复用。需要重新导出时，必须使用
 对应的原始权重及目标环境；不能将YOLO26s导出结果改名冒充YOLO26m。
 仓库不提供YOLO26m源权重的自动下载或engine导出流程，未准备好时使用上面的PT路径。
 旧本机默认仍为包内`models/yolo26m-seg-fp16-b1-640-linux.engine`：构建时
@@ -142,12 +142,8 @@ ros2 run depth_image_proc point_cloud_xyz_node --ros-args \
 CameraInfo 使用相同 QoS，避免 `depth_image_proc` 因 reliability 不兼容而收不到
 同步内参。该路径只读取相机，不启动机械臂控制器。
 
-旧 Windows/Open3D bridge 查看器已删除。如需查看候选，请直接订阅
-`/grasp/graspnet_candidates` 或使用 RViz 的 ROS 可视化节点；该路径不属于
-Ubuntu 抓取执行链路。
-
-Ubuntu 中直接订阅 `/grasp/graspnet_candidates` 或使用 RViz 的 ROS 可视化节点查看候选。
-旧 Windows/Open3D bridge 查看器已经删除，不再提供对应命令。
+如需查看候选，请直接订阅 `/grasp/graspnet_candidates` 或使用 RViz 的 ROS
+可视化节点；该路径不属于 Ubuntu 抓取执行链路。
 
 ## 6. P4 Ubuntu 本地 GraspNet 环境
 
@@ -169,7 +165,7 @@ export GRASPNET_MODEL_ROOT=/path/to/reviewed/graspnet
 export GRASPNET_CHECKPOINT_PATH=/path/to/reviewed/checkpoint.pth
 ```
 
-Ubuntu生产路径不再单独启动localhost HTTP service。相机/YOLO topics 已启动后，可在
+Ubuntu生产路径不再单独启动 HTTP service。相机/YOLO topics 已启动后，可在
 ROS 2环境中单独验证整合后的in-process node：
 
 ```bash
