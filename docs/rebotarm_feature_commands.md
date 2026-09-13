@@ -6,6 +6,11 @@
 
 ## RViz MoveIt 末端拖动
 
+执行前确认已安装 `ros-jazzy-moveit-simple-controller-manager`。
+若 Plan 成功而 Execute 报 `controller_manager_ does not exist` 或插件类不存在，
+参见[执行插件检查与仿真重启步骤](local_setup_zh.md#moveit-执行插件能-plan-但不能-execute)。
+KDL 根惯量警告与这类执行插件缺失不是同一个问题。
+
 这两个入口保留，但路线是 MoveIt 原生 MotionPlanning：
 
 ```text
