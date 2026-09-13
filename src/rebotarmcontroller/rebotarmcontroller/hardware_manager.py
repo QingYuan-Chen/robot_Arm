@@ -284,6 +284,10 @@ class HardwareManager:
         self._feedback_request_baseline_by_label: dict[str, int] = {}
         self._feedback_request_deadline_by_label: dict[str, float] = {}
         self._feedback_error_by_label: dict[str, str] = {}
+        # Startup force-refresh may receive motor frames over several polls;
+        # do not publish an intermediate "pending" error while that bounded
+        # collection window is still active.
+        self._feedback_force_refresh_active = False
         self._arm_feedback_updated_monotonic: float | None = None
         self._arm_feedback_error: str | None = "arm feedback not received"
         self._motor_lifecycle_lock = threading.RLock()
@@ -592,7 +596,7 @@ class HardwareManager:
         ]
         if arm_errors:
             self._record_arm_feedback_error("; ".join(arm_errors))
-        elif missing_arm:
+        elif missing_arm and not getattr(self, "_feedback_force_refresh_active", False):
             self._record_arm_feedback_error(
                 "verified feedback pending: " + ",".join(missing_arm)
             )
@@ -826,23 +830,27 @@ class HardwareManager:
             self._feedback_request_deadline_by_label.pop(label, None)
 
         last_error: Exception | None = None
-        for attempt in range(_FEEDBACK_REFRESH_RETRIES):
-            attempt_error: Exception | None = None
-            try:
-                self._refresh_feedback_batch(
-                    observed_at=time.monotonic(),
-                    inspect_after_poll=True,
-                )
-            except Exception as exc:
-                last_error = exc
-                attempt_error = exc
-            if attempt_error is None and all(
-                forced_sample_satisfies(label, baseline)
-                for label, baseline in required_baselines.items()
-            ):
-                return
-            if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
-                time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+        self._feedback_force_refresh_active = True
+        try:
+            for attempt in range(_FEEDBACK_REFRESH_RETRIES):
+                attempt_error: Exception | None = None
+                try:
+                    self._refresh_feedback_batch(
+                        observed_at=time.monotonic(),
+                        inspect_after_poll=True,
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    attempt_error = exc
+                if attempt_error is None and all(
+                    forced_sample_satisfies(label, baseline)
+                    for label, baseline in required_baselines.items()
+                ):
+                    return
+                if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
+                    time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+        finally:
+            self._feedback_force_refresh_active = False
 
         missing = []
         for label, baseline in required_baselines.items():
