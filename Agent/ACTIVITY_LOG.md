@@ -592,3 +592,6 @@
 - 2026-09-13T15:52:01+08:00 | actor=Codex | event=start | note=Fix startup feedback verification false pending after SDK confirms all six motors | verification=-
 - 2026-09-13T16:04:33+08:00 | actor=Codex | event=verified | note=Startup staggered-feedback fix verified; independent per-motor sequence retained | verification=hardware manager 124; layering/resources/agent 28; full focused total 152 passed; compileall and diff check passed
 - 2026-09-13T16:39:33+08:00 | actor=Codex | event=verified | note=Suppress intermediate startup pending feedback diagnostics while bounded force refresh collects staggered motor frames | verification=hardware manager 124 passed; controller build passed; layering/agent 22 passed
+- 2026-09-13T17:40:52+08:00 | actor=Codex | event=start | note=Update docs and remove obsolete Windows tools per user request | verification=-
+- 2026-09-13T17:53:39+08:00 | actor=Codex | event=checkpoint | note=Windows-specific tools and docs retired; Ubuntu native vision docs are canonical | verification=-
+- 2026-09-13T18:03:06+08:00 | actor=Codex | event=complete | note=Retired Windows tools and refreshed docs to Ubuntu-native vision route | verification=full pytest 768 passed 7 skipped; visual/network focused 75 passed; docs/tool references checked; no hardware operation

@@ -10,6 +10,8 @@
 
 ## 当前事实
 
+- 2026-09-13 按用户要求收口 Windows：删除 tools 下 Windows 启动/服务脚本、Windows GraspNet bridge 及其依赖的旧 Open3D 查看器；删除对应专属测试。`docs/visual_grasp_commands.md` 重写为 Ubuntu 原生相机/YOLO/GraspNet、MuJoCo plan-only/benchmark 和真机安全边界；Ubuntu 视觉安装说明、七层参数和迁移差异报告已同步。通用 `graspnet_baseline_inference.py`、Ubuntu GraspNet service 和 network_mjpeg 输入仍保留，因为可用于 Ubuntu/非 Windows 兼容。完整测试在文档清理后待最终复跑。
+
 - 2026-09-13 反馈启动误报修复：SDK 直读确认六个电机 sequence 独立推进且 status=0；问题不是 sequence 必须同步。控制器强制反馈刷新原先 5 ms 重试间隔可能短于串口桥分批帧到达节奏，已调整为 50 ms，并新增 staggered feedback 回归测试；sequence 仍按每电机独立推进判定。控制器安全测试 124 passed，分层/资源/启动 34 passed，完整软件回归 812 passed/7 skipped。仅软件验证，未重新启动真机；下一步现场验证 driver_only 日志是否进入健康 `CONNECTED_DISABLED`。
 
 - 2026-09-13 MoveIt Execute 排查与文档补充：用户 MuJoCo/MoveIt 日志中 Plan 成功，但启动时 MoveItSimpleControllerManager 类不存在，控制器列表为空并导致 CONTROL_FAILED；此前只读检查确认系统缺少 ros-jazzy-moveit-simple-controller-manager、MuJoCo Action server 为 1。安装说明已显式列出该包，并补充插件/参数/Action 检查、仅仿真的重启与手动复测步骤；操作手册和迁移报告同步提示。构建、pytest、show-args 不替代执行链验证，KDL 根惯量警告不是本次根因。本次仅文档维护，未安装软件、修改 manifest、启动/停止设备或发送运动；插件安装及 Execute 修复复测尚无本轮证据，manifest 显式依赖仍待补齐。

@@ -4,8 +4,8 @@ Generated from tracked files in the actual old/new worktrees, including old unco
 Build/install/log/venv/cache directories are excluded by using the Git tracked-file inventories.
 Path-only additions/removals can be resource moves, not added/removed functionality.
 
-Old tracked files present: 539; new baseline tracked files: 611.
-New-only: 267; old-only: 195; changed: 123; identical: 221.
+Old tracked files present: 539; new baseline tracked files: 604.
+New-only: 260; old-only: 195; changed: 123; identical: 221.
 
 ## NEW Packages / Executables / Launch / Dependencies
 
@@ -982,6 +982,8 @@ New-only: 267; old-only: 195; changed: 123; identical: 221.
 - `README.md`
 - `README_zh.md`
 - `THIRD_PARTY_NOTICES.md`
+- `docs/LOCAL_PROJECT_DIFF.md`
+- `docs/LOCAL_PROJECT_DIFF_INVENTORY.md`
 - `docs/README_zh.md`
 - `docs/architecture.md`
 - `docs/coupling_migration.md`
@@ -1156,7 +1158,6 @@ New-only: 267; old-only: 195; changed: 123; identical: 221.
 - `tests/test_ordinary_grasp_adapter.py`
 - `tests/test_p0_gate_bc_acceptance.py`
 - `tests/test_p3_ubuntu_native_profile.py`
-- `tests/test_p4_graspnet_setup.py`
 - `tests/test_p5_handeye_failure_recovery.py`
 - `tests/test_p6_bottle_candidate_confidence.py`
 - `tests/test_package_layering.py`
@@ -1208,9 +1209,6 @@ New-only: 267; old-only: 195; changed: 123; identical: 221.
 - `tests/test_voice_text_pipeline.py`
 - `tests/test_voice_tool_call_schema.py`
 - `tests/test_voice_tool_cli_pipeline.py`
-- `tests/test_windows_grasp_ai_scripts.py`
-- `tests/test_windows_graspnet_bridge.py`
-- `tests/test_windows_mjpeg_server_defaults.py`
 - `third_party/COLCON_IGNORE`
 - `tools/check_ubuntu_graspnet_env.py`
 - `tools/graspnet_baseline_inference.py`
@@ -1229,13 +1227,8 @@ New-only: 267; old-only: 195; changed: 123; identical: 221.
 - `tools/run_ubuntu_vision.sh`
 - `tools/setup_ubuntu_graspnet.sh`
 - `tools/setup_ubuntu_vision.sh`
+- `tools/source_local_environment.bash`
 - `tools/ubuntu_graspnet_service.py`
-- `tools/view_graspnet_scene_cloud.py`
-- `tools/windows_graspnet_baseline_bridge.py`
-- `tools/windows_mjpeg_server.py`
-- `tools/windows_start_grasp_ai_stack.ps1`
-- `tools/windows_start_graspnet_bridge.ps1`
-- `tools/windows_start_yolo_server.ps1`
 
 ## OLD-only Paths
 

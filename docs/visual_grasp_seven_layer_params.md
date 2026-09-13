@@ -39,7 +39,7 @@ graspnet_max_input_skew_ms: 100
 candidate_max_candidates_per_frame: 20
 ```
 
-- 现有 Windows bridge 可以继续作为兼容输入，但不再是目标主路线。
+- Windows HTTP/MJPEG bridge 已移除；不再作为兼容输入或部署前置条件。
 - Ubuntu GraspNet仍运行在独立`.venv-graspnet` Python进程中，但RGB-D和detections直接通过ROS订阅进入runner，不再经过localhost HTTP。
 - Ubuntu 侧读取 `/grasp/graspnet_candidates`，最多取 `candidate_max_candidates_per_frame` 个进入 IK filter。
 - Open3D 可视化只用于调试，不作为 Ubuntu 抓取执行链路的一部分。

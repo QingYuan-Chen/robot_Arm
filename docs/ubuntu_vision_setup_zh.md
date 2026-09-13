@@ -12,8 +12,9 @@ Gemini2 USB -> pyorbbecsdk -> rebotarm_vision_node
              -> Ultralytics YOLO/CUDA -> ROS 2 topics
 ```
 
-原有 `camera.yaml` 和 Windows 服务仍保留为网络备用链路。Ubuntu 原生链路使用
-`camera_ubuntu.yaml` 和 `vision_ubuntu.launch.py`。
+历史 `camera.yaml` 网络输入配置仍作为通用非 Windows 兼容接口保留；Windows
+服务脚本已删除。Ubuntu 原生链路使用 `camera_ubuntu.yaml` 和
+`vision_ubuntu.launch.py`。
 
 ## 1. 安装
 
@@ -142,38 +143,12 @@ ros2 run depth_image_proc point_cloud_xyz_node --ros-args \
 CameraInfo 使用相同 QoS，避免 `depth_image_proc` 因 reliability 不兼容而收不到
 同步内参。该路径只读取相机，不启动机械臂控制器。
 
-若要在同一个 Open3D 窗口查看 GraspNet 在采样/下采样前内部重建的完整 `XYZ+RGB`
-场景点云和原始抓取位姿，先保持整合后的视觉抓取launch（其中包含
-`rebotarm_graspnet_baseline_node`）运行，再执行：
+旧 Windows/Open3D bridge 查看器已删除。如需查看候选，请直接订阅
+`/grasp/graspnet_candidates` 或使用 RViz 的 ROS 可视化节点；该路径不属于
+Ubuntu 抓取执行链路。
 
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-PYTHONPATH="$PWD/tools:$PWD/src/rebotarm_vision${PYTHONPATH:+:$PYTHONPATH}" \
-  ./.venv-graspnet/bin/python tools/view_graspnet_scene_cloud.py
-```
-
-该查看器不执行 `sample_cloud()`，并把 `build_scene_cloud()` 产生的 points/colors
-直接交给复用的 Open3D renderer，因此背景显示的是
-`0.05-1.5 m` 采样前完整场景，而不是送入网络的 20,000 点确定性采样子集；抓取框来自
-`/grasp/graspnet_candidates`，保持候选原始相机坐标位姿并按消息顺序显示前 10 个。
-可用 `--top-n N` 调整抓取框数量，或用 `--max-points N` 限制仅用于显示的点数；
-默认 `--max-points 0` 保留完整点云。此工具只做可视化，不启动 MoveIt、控制器或
-机械臂执行。
-
-夹爪优先使用可用的 `graspnetAPI` 官方几何；当前隔离环境缺少其非推理可视化重依赖
-时，会自动使用 Open3D 原生实体平行夹爪（掌部 + 两根手指），而不是退化成难以看清
-的细线框。启动日志会明确显示当前模式，例如：
-
-```text
-gripper_renderer=native_open3d_mesh graspnet_api_unavailable=ModuleNotFoundError: No module named 'trimesh'
-```
-
-这不影响 GraspNet 推理结果；原生实体的 position、rotation、jaw width、height 和
-score 仍来自 `/grasp/graspnet_candidates`，消息未携带的 finger depth 继续使用
-`0.04 m` 可视化缺省值。若运行中 renderer 从官方 geometry 降级到原生 mesh 或
-最后一级 wireframe，日志会立即输出新的 mode 和失败原因，不会继续显示过期状态。
+Ubuntu 中直接订阅 `/grasp/graspnet_candidates` 或使用 RViz 的 ROS 可视化节点查看候选。
+旧 Windows/Open3D bridge 查看器已经删除，不再提供对应命令。
 
 ## 6. P4 Ubuntu 本地 GraspNet 环境
 
@@ -213,7 +188,8 @@ timestamp和`camera_depth_frame`交给同进程GraspNet runner，再把结果发
 或推理异常时只发布空候选，不复用旧结果。
 
 `tools/run_ubuntu_graspnet_service.sh`和`tools/ubuntu_graspnet_service.py`仅保留为历史回退/
-contract测试工具，不在Ubuntu生产launch中启动；Windows/network candidates兼容模式不受影响。
+contract测试工具不在 Ubuntu 生产 launch 中启动；通用 network candidates 兼容模式仍可用，
+但不依赖 Windows 专用服务。
 
 仅旧HTTP回退服务的响应原样保留 `timestamp_ns` 与 `frame_id`，并包含 `backend_configured`、`stale`
 和 `candidates`。输入单位、图像尺寸、bbox、intrinsics 或 header 不合法时返回

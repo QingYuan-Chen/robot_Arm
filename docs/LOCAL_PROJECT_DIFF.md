@@ -62,7 +62,7 @@ NEW 的构建、虚拟环境、MotorBridge 编译和本地依赖均重新生成�
 | `rebotarm_moveit_config` | 规范 URDF/mesh、SRDF、IK/OMPL/Pilz/控制器映射、RViz | 规划配置，物理描述另属 description |
 | `rebotarm_description` | 不存在；描述能力并未删除，归 moveit_config | 独立 URDF/mesh 和共用电机配置所有者 |
 | `rebotarm_calibration` | ArUco 位姿、手眼求解/残差 CLI、TCP 标定工具 | geometry/handeye 配置校验和 TCP；节点主要在 vision |
-| `rebotarm_vision` | Ubuntu 相机+YOLO、原生 ROS GraspNet、候选筛选/IK、视觉抓取状态机、标记/预览、离线检测、Windows/网络兼容、ordinary_grasp 适配 | Ubuntu 相机/独立 YOLO/GraspNet ROS 链、独立 ROS Open3D 查看器、候选与抓取状态机；移除了 Windows 链 |
+| `rebotarm_vision` | Ubuntu 相机+YOLO、原生 ROS GraspNet、候选筛选/IK、视觉抓取状态机、标记/预览、离线检测、通用网络兼容、ordinary_grasp 适配 | Ubuntu 相机/独立 YOLO/GraspNet ROS 链、候选与抓取状态机；Windows 专用链已移除 |
 | `rebotarm_simulation` | 唯一活动 MuJoCo ROS 后端、fake trajectory、模型生成、健康检查、Viewer、指标、虚拟相机和离线检测接线 | 同类基础能力，加 Real2Sim、Sim2Real、Reach/Pick、Gym/vector 环境及批处理/验收工具 |
 | `rebotarm_voice_control` | 文本/语音文件/LLM tool-call/Realtime 网关、命令路由、安全门、模板展开和模拟动作执行 | 已从旧当前工作树删除；共享任务消息仍保留 |
 | `rebotarm_bringup` | 场景组合、互斥后端选择、逐进程解释器配置 | 同域，以 core.launch.py 及分离运行/安全配置组织 |
@@ -135,9 +135,9 @@ OLD 有 5 个未提交修改：rviz_real.yaml、core.launch.py、rviz_ee_drag_re
 ## 10. Vision / Grasp
 
 OLD 正式链是相机 -> 独立 YOLO -> 同步 GraspNet -> ROS 查看器；NEW 的 Ubuntu 原生 vision 节点整合相机/检测，GraspNet 独立 ROS 进程直接消费匹配的 RGB-D/CameraInfo/detection。
-NEW 仍保留 network MJPEG/detection/GraspNet 客户端、Windows 辅助脚本和 ordinary_grasp 兼容入口，OLD 已删除这些路径。
+NEW 保留通用 network MJPEG/detection/GraspNet 客户端和 ordinary_grasp 兼容入口；Windows 专用脚本、bridge 和查看器已删除。
 NEW latest-wins 队列、候选前置质量/几何/workspace 门和时间策略与 OLD 实现不同；同名视觉抓取执行器和策略也有变化。
-NEW 有 `view_graspnet_scene_cloud.py` 工具，但不等价于 OLD 可独立部署的 ROS Open3D 节点。
+NEW 不再提供旧的 Windows 依赖 Open3D 查看器，候选查看使用 ROS 原生可视化节点。
 旧模型权重、机器专属 engine、手眼现场记录不回填；新仓库自带 PT 仍在，默认 engine 缺失时应显式选 PT，而非伪装 engine。
 
 ## 11. Web / Teleop / Dashboard
