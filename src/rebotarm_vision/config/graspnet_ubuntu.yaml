@@ -6,7 +6,6 @@ rebotarm_graspnet_baseline_node:
     input_detections_topic: /grasp/detections
     output_candidates_topic: /grasp/graspnet_candidates
     output_frame_id: camera_depth_frame
-    source_mode: in_process
     max_input_skew_ms: 100
     depth_scale_m_per_unit: 0.001
     max_grasps: 10

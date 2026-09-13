@@ -28,7 +28,6 @@ setup(
         (
             f"share/{package_name}/config",
             [
-                "config/camera.yaml",
                 "config/camera_ubuntu.yaml",
                 "config/flat_graspnet.yaml",
                 "config/grasp_pose_policy.yaml",

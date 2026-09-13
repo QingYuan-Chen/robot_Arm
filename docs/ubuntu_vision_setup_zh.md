@@ -12,8 +12,7 @@ Gemini2 USB -> pyorbbecsdk -> rebotarm_vision_node
              -> Ultralytics YOLO/CUDA -> ROS 2 topics
 ```
 
-历史 `camera.yaml` 网络输入配置仍作为通用非 Windows 兼容接口保留；Windows
-服务脚本已删除。Ubuntu 原生链路使用 `camera_ubuntu.yaml` 和
+Windows 服务及远端 HTTP 输入已删除。Ubuntu 原生链路使用 `camera_ubuntu.yaml` 和
 `vision_ubuntu.launch.py`。
 
 ## 1. 安装
@@ -186,14 +185,6 @@ timestamp和`camera_depth_frame`交给同进程GraspNet runner，再把结果发
 `/grasp/graspnet_candidates`。它保留完整场景collision cloud、目标mask/depth分离、
 确定性20,000点采样、projection filter与jaw-width filter。RGB/depth skew超限、模型未配置
 或推理异常时只发布空候选，不复用旧结果。
-
-`tools/run_ubuntu_graspnet_service.sh`和`tools/ubuntu_graspnet_service.py`仅保留为历史回退/
-contract测试工具不在 Ubuntu 生产 launch 中启动；通用 network candidates 兼容模式仍可用，
-但不依赖 Windows 专用服务。
-
-仅旧HTTP回退服务的响应原样保留 `timestamp_ns` 与 `frame_id`，并包含 `backend_configured`、`stale`
-和 `candidates`。输入单位、图像尺寸、bbox、intrinsics 或 header 不合法时返回
-HTTP 400；backend 未配置时返回 HTTP 503。
 
 新部署的依赖导入或旧service liveness通过不等于真实推理通过；必须核实自己的模型资产，
 并验证当前输入下的候选输出。模型代码、pointnet2扩展、graspnetAPI和checkpoint需

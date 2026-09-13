@@ -37,7 +37,7 @@ source tools/source_local_environment.bash
 ## 配置边界
 
 - `config/camera_ubuntu.yaml` 是本机 Gemini 2 配置。
-- `config/camera.yaml` 仅保留通用网络输入兼容接口，不依赖 Windows 专用服务。
+- 视觉配置以 `config/camera_ubuntu.yaml` 为准；不再支持远端 HTTP 输入。
 - `config/graspnet_ubuntu.yaml` 是 Ubuntu GraspNet 配置。
 - 视觉候选必须经过 IK、workspace、碰撞和轨迹安全门，不能直接调用硬件 SDK。
 - 真机执行前必须完成控制器反馈检查、显式 Enable、现场安全确认和单独授权。

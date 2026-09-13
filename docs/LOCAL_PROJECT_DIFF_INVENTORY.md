@@ -1,5 +1,7 @@
 # Local Migration Inventory
 
+> Historical migration inventory: later Windows and HTTP vision removals are recorded in LOCAL_PROJECT_DIFF.md. Paths below are comparison evidence, not a current installation manifest.
+
 Generated from tracked files in the actual old/new worktrees, including old uncommitted edits.
 Build/install/log/venv/cache directories are excluded by using the Git tracked-file inventories.
 Path-only additions/removals can be resource moves, not added/removed functionality.

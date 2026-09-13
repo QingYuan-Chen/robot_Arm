@@ -23,7 +23,6 @@ from .graspnet_baseline_adapter import (
     closest_timestamped_frame,
     payload_to_candidate_array,
 )
-from .network_graspnet_client import NetworkGraspNetClient, NetworkGraspNetConfig
 from .ordinary_grasp_node import depth_image_to_array
 
 
@@ -46,10 +45,6 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("input_detections_topic", "/grasp/detections")
         self.declare_parameter("output_candidates_topic", "/grasp/graspnet_candidates")
         self.declare_parameter("output_frame_id", "camera_depth_frame")
-        self.declare_parameter("source_mode", "network")
-        self.declare_parameter("network_candidates_url", "http://127.0.0.1:8081/graspnet_candidates.json")
-        self.declare_parameter("network_timeout_ms", 1000)
-        self.declare_parameter("network_poll_hz", 5.0)
         self.declare_parameter("max_input_skew_ms", 100)
         self.declare_parameter("depth_scale_m_per_unit", 0.001)
         self.declare_parameter("model_root", os.environ.get("GRASPNET_MODEL_ROOT", ""))
@@ -72,9 +67,7 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("cy", 361.8166198730469)
 
         self.output_frame_id = str(self.get_parameter("output_frame_id").value)
-        self.source_mode = str(self.get_parameter("source_mode").value).strip()
-        if self.source_mode not in {"network", "in_process"}:
-            raise ValueError(f"unsupported source_mode: {self.source_mode}")
+        self.source_mode = "in_process"
         self.latest_color_bgr: np.ndarray | None = None
         self.latest_depth_mm: np.ndarray | None = None
         self.latest_color_timestamp_ns = 0
@@ -86,63 +79,47 @@ class GraspNetBaselineNode(Node):
         self.last_inprocess_detection_timestamp_ns = 0
         self.pending_inprocess_detections: Detection2DArray | None = None
         self._warned_backend = False
-        self.backend = (
-            self._create_inprocess_backend() if self.source_mode == "in_process" else None
-        )
-        self.network_client = self._create_network_client() if self.source_mode == "network" else None
+        self.backend = self._create_inprocess_backend()
 
         self.candidates_pub = self.create_publisher(
             GraspCandidateArray,
             str(self.get_parameter("output_candidates_topic").value),
             10,
         )
-        if self.source_mode == "network":
-            period = 1.0 / max(float(self.get_parameter("network_poll_hz").value), 0.1)
-            self.create_timer(period, self._on_network_timer)
-        else:
-            self.create_subscription(
-                Image,
-                str(self.get_parameter("input_color_topic").value),
-                self._on_color,
-                qos_profile_sensor_data,
-            )
-            self.create_subscription(
-                Image,
-                str(self.get_parameter("input_depth_topic").value),
-                self._on_depth,
-                qos_profile_sensor_data,
-            )
-            if self.source_mode == "in_process":
-                self.create_subscription(
-                    CameraInfo,
-                    str(self.get_parameter("input_camera_info_topic").value),
-                    self._on_camera_info,
-                    qos_profile_sensor_data,
-                )
-            detection_qos = QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=1,
-                reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            )
-            self.create_subscription(
-                Detection2DArray,
-                str(self.get_parameter("input_detections_topic").value),
-                self._on_detections,
-                detection_qos,
-            )
+        self.create_subscription(
+            Image,
+            str(self.get_parameter("input_color_topic").value),
+            self._on_color,
+            qos_profile_sensor_data,
+        )
+        self.create_subscription(
+            Image,
+            str(self.get_parameter("input_depth_topic").value),
+            self._on_depth,
+            qos_profile_sensor_data,
+        )
+        self.create_subscription(
+            CameraInfo,
+            str(self.get_parameter("input_camera_info_topic").value),
+            self._on_camera_info,
+            qos_profile_sensor_data,
+        )
+        detection_qos = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+        )
+        self.create_subscription(
+            Detection2DArray,
+            str(self.get_parameter("input_detections_topic").value),
+            self._on_detections,
+            detection_qos,
+        )
         self.get_logger().info(
             "GraspNet baseline candidate node ready: "
             f"output={str(self.get_parameter('output_candidates_topic').value)}, "
             f"source_mode={self.source_mode}, "
             f"backend_available={self.backend.available if self.backend is not None else 'n/a'}"
-        )
-
-    def _create_network_client(self) -> NetworkGraspNetClient:
-        return NetworkGraspNetClient(
-            NetworkGraspNetConfig(
-                candidates_url=str(self.get_parameter("network_candidates_url").value),
-                timeout_ms=int(self.get_parameter("network_timeout_ms").value),
-            )
         )
 
     def _create_inprocess_backend(self) -> InProcessGraspNetBackend:
@@ -199,27 +176,8 @@ class GraspNetBaselineNode(Node):
         }
         self._try_process_inprocess_detection()
 
-    def _on_network_timer(self) -> None:
-        if self.network_client is None:
-            return
-        payload = self.network_client.fetch()
-        candidates = payload_to_candidate_array(
-            payload,
-            fallback_frame_id=self.output_frame_id,
-            max_candidates=int(self.get_parameter("max_grasps").value),
-        )
-        if not bool(payload.get("backend_configured", False)) and not self._warned_backend:
-            self.get_logger().warn(
-                "Windows GraspNet baseline backend is not configured; "
-                f"network_status={self.network_client.last_debug_message}"
-            )
-            self._warned_backend = True
-        self.candidates_pub.publish(candidates)
-
     def _on_detections(self, msg: Detection2DArray) -> None:
-        if self.source_mode == "in_process":
-            self._on_inprocess_detections(msg)
-            return
+        self._on_inprocess_detections(msg)
 
     def _on_inprocess_detections(self, msg: Detection2DArray) -> None:
         self.pending_inprocess_detections = msg

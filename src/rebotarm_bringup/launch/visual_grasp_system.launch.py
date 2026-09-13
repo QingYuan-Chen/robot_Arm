@@ -61,11 +61,7 @@ def generate_launch_description():
     start_graspnet_baseline = LaunchConfiguration("start_graspnet_baseline")
     graspnet_candidates_topic = LaunchConfiguration("graspnet_candidates_topic")
     graspnet_output_frame_id = LaunchConfiguration("graspnet_output_frame_id")
-    graspnet_source_mode = LaunchConfiguration("graspnet_source_mode")
     graspnet_config = LaunchConfiguration("graspnet_config")
-    graspnet_candidates_url = LaunchConfiguration("graspnet_candidates_url")
-    graspnet_network_timeout_ms = LaunchConfiguration("graspnet_network_timeout_ms")
-    graspnet_network_poll_hz = LaunchConfiguration("graspnet_network_poll_hz")
     graspnet_max_input_skew_ms = LaunchConfiguration("graspnet_max_input_skew_ms")
     graspnet_python_executable = LaunchConfiguration("graspnet_python_executable")
     graspnet_model_root = LaunchConfiguration("graspnet_model_root")
@@ -248,38 +244,12 @@ def generate_launch_description():
                         start_vision,
                         "' == 'true' and '",
                         vision_profile,
-                        "' == 'network'",
-                    ]
-                )
-            ),
-            launch_arguments={
-                "camera_config": vision_camera_config,
-                "vision_python_executable": vision_python_executable,
-                "handeye_config": vision_handeye_config,
-                "start_ordinary_grasp": start_ordinary_grasp,
-                "ordinary_grasp_root": ordinary_grasp_root,
-                "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
-            }.items(),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                PathJoinSubstitution([vision_share, "launch", "vision.launch.py"])
-            ),
-            condition=IfCondition(
-                PythonExpression(
-                    [
-                        "'",
-                        start_vision,
-                        "' == 'true' and '",
-                        vision_profile,
                         "' == 'ubuntu_native'",
                     ]
                 )
             ),
             launch_arguments={
-                "camera_config": PathJoinSubstitution(
-                    [vision_share, "config", "camera_ubuntu.yaml"]
-                ),
+                "camera_config": vision_camera_config,
                 "handeye_config": vision_handeye_config,
                 "yolo_model_path": vision_yolo_model_path,
                 "vision_python_executable": vision_python_executable,
@@ -349,10 +319,6 @@ def generate_launch_description():
                     "input_detections_topic": "/grasp/detections",
                     "output_candidates_topic": graspnet_candidates_topic,
                     "output_frame_id": graspnet_output_frame_id,
-                    "source_mode": graspnet_source_mode,
-                    "network_candidates_url": graspnet_candidates_url,
-                    "network_timeout_ms": graspnet_network_timeout_ms,
-                    "network_poll_hz": graspnet_network_poll_hz,
                     "max_input_skew_ms": graspnet_max_input_skew_ms,
                     "model_root": graspnet_model_root,
                     "checkpoint_path": graspnet_checkpoint_path,
@@ -560,13 +526,13 @@ def generate_launch_description():
             DeclareLaunchArgument("start_vision", default_value="true"),
             DeclareLaunchArgument(
                 "vision_profile",
-                default_value="network",
-                choices=["network", "ubuntu_native"],
-                description="Vision input profile: network bridge or native Ubuntu Gemini 2",
+                default_value="ubuntu_native",
+                choices=["ubuntu_native"],
+                description="Ubuntu native Gemini 2 vision input",
             ),
             DeclareLaunchArgument(
                 "vision_camera_config",
-                default_value=PathJoinSubstitution([vision_share, "config", "camera.yaml"]),
+                default_value=PathJoinSubstitution([vision_share, "config", "camera_ubuntu.yaml"]),
             ),
             DeclareLaunchArgument(
                 "vision_handeye_config",
@@ -588,11 +554,7 @@ def generate_launch_description():
             DeclareLaunchArgument("start_graspnet_baseline", default_value="true"),
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
             DeclareLaunchArgument("graspnet_output_frame_id", default_value="camera_depth_frame"),
-            DeclareLaunchArgument("graspnet_source_mode", default_value="in_process"),
             DeclareLaunchArgument("graspnet_config", default_value=graspnet_ubuntu_params),
-            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
-            DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),
-            DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
             DeclareLaunchArgument("graspnet_max_input_skew_ms", default_value="100"),
             DeclareLaunchArgument(
                 "graspnet_python_executable",

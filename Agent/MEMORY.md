@@ -10,6 +10,8 @@
 
 ## 当前事实
 
+- 2026-09-13：用户进一步确认移除旧跨主机 HTTP/JSON/MJPEG 视觉兼容链。已删除远端相机/检测/GraspNet 客户端、网络 camera 配置、本机 HTTP GraspNet 回退服务与无消费者的 HTTP contract/client；保留本机推理 backend、ROS RGB-D/CameraInfo/detection 同步与候选发布。vision 默认配置改为 camera_ubuntu，主组合默认 ubuntu_native，移除 URL/轮询参数；Dashboard HTTP 与 ROS DDS 不在删除范围。此前 762 passed/7 skipped，新增缺失路径防回归与构建待本轮最终核验；未访问硬件或启动相机。
+
 - 2026-09-13 按用户要求收口 Windows：删除 tools 下 Windows 启动/服务脚本、Windows GraspNet bridge 及其依赖的旧 Open3D 查看器；删除对应专属测试。`docs/visual_grasp_commands.md` 重写为 Ubuntu 原生相机/YOLO/GraspNet、MuJoCo plan-only/benchmark 和真机安全边界；Ubuntu 视觉安装说明、七层参数和迁移差异报告已同步。通用 `graspnet_baseline_inference.py`、Ubuntu GraspNet service 和 network_mjpeg 输入仍保留，因为可用于 Ubuntu/非 Windows 兼容。完整测试在文档清理后待最终复跑。
 
 - 2026-09-13 反馈启动误报修复：SDK 直读确认六个电机 sequence 独立推进且 status=0；问题不是 sequence 必须同步。控制器强制反馈刷新原先 5 ms 重试间隔可能短于串口桥分批帧到达节奏，已调整为 50 ms，并新增 staggered feedback 回归测试；sequence 仍按每电机独立推进判定。控制器安全测试 124 passed，分层/资源/启动 34 passed，完整软件回归 812 passed/7 skipped。仅软件验证，未重新启动真机；下一步现场验证 driver_only 日志是否进入健康 `CONNECTED_DISABLED`。

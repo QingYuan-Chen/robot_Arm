@@ -100,7 +100,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "camera_config",
-                default_value=str(vision_share / "config" / "camera.yaml"),
+                default_value=str(vision_share / "config" / "camera_ubuntu.yaml"),
             ),
             DeclareLaunchArgument(
                 "handeye_config",

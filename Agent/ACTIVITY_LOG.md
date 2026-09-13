@@ -596,3 +596,5 @@
 - 2026-09-13T17:53:39+08:00 | actor=Codex | event=checkpoint | note=Windows-specific tools and docs retired; Ubuntu native vision docs are canonical | verification=-
 - 2026-09-13T18:03:06+08:00 | actor=Codex | event=complete | note=Retired Windows tools and refreshed docs to Ubuntu-native vision route | verification=full pytest 768 passed 7 skipped; visual/network focused 75 passed; docs/tool references checked; no hardware operation
 - 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit
+- 2026-09-13T18:14:31+08:00 | actor=Codex | event=start | note=Remove legacy HTTP/MJPEG/JSON network vision compatibility chain after user confirmation | verification=-
+- 2026-09-13T18:48:42+08:00 | actor=Codex | event=complete | note=Retired HTTP vision compatibility; native ROS camera and GraspNet retained | verification=full suite before added regression 762 passed/7 skipped; final focused 82 passed; vision/bringup build passed; compileall and diff check passed; no hardware use

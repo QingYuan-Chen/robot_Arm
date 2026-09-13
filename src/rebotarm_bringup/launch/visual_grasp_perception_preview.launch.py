@@ -43,10 +43,6 @@ def generate_launch_description():
     start_visual_grasp_markers = LaunchConfiguration("start_visual_grasp_markers")
 
     graspnet_candidates_topic = LaunchConfiguration("graspnet_candidates_topic")
-    graspnet_source_mode = LaunchConfiguration("graspnet_source_mode")
-    graspnet_candidates_url = LaunchConfiguration("graspnet_candidates_url")
-    graspnet_network_timeout_ms = LaunchConfiguration("graspnet_network_timeout_ms")
-    graspnet_network_poll_hz = LaunchConfiguration("graspnet_network_poll_hz")
     graspnet_python_executable = LaunchConfiguration("graspnet_python_executable")
     graspnet_model_root = LaunchConfiguration("graspnet_model_root")
     graspnet_checkpoint_path = LaunchConfiguration("graspnet_checkpoint_path")
@@ -101,7 +97,7 @@ def generate_launch_description():
             DeclareLaunchArgument("start_vision", default_value="true"),
             DeclareLaunchArgument(
                 "vision_camera_config",
-                default_value=PathJoinSubstitution([vision_share, "config", "camera.yaml"]),
+                default_value=PathJoinSubstitution([vision_share, "config", "camera_ubuntu.yaml"]),
             ),
             DeclareLaunchArgument(
                 "vision_handeye_config",
@@ -124,10 +120,6 @@ def generate_launch_description():
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
-            DeclareLaunchArgument("graspnet_source_mode", default_value="in_process"),
-            DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
-            DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),
-            DeclareLaunchArgument("graspnet_network_poll_hz", default_value="0.5"),
             DeclareLaunchArgument(
                 "graspnet_python_executable",
                 default_value=EnvironmentVariable("GRASPNET_PYTHON", default_value="python3"),
@@ -224,10 +216,6 @@ def generate_launch_description():
                         "input_detections_topic": "/grasp/detections",
                         "output_candidates_topic": graspnet_candidates_topic,
                         "output_frame_id": "camera_depth_frame",
-                        "source_mode": graspnet_source_mode,
-                        "network_candidates_url": graspnet_candidates_url,
-                        "network_timeout_ms": graspnet_network_timeout_ms,
-                        "network_poll_hz": graspnet_network_poll_hz,
                         "model_root": graspnet_model_root,
                         "checkpoint_path": graspnet_checkpoint_path,
                         "device": graspnet_device,

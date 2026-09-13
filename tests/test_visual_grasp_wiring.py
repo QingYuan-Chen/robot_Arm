@@ -135,7 +135,6 @@ def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
 def test_real_grasp_profiles_follow_operator_measured_tcp():
     expected = "[-0.04, 0.0, 0.0]"
     for relative in (
-        "src/rebotarm_vision/config/camera.yaml",
         "src/rebotarm_vision/config/camera_ubuntu.yaml",
         "src/rebotarm_vision/config/flat_graspnet.yaml",
     ):
@@ -190,19 +189,6 @@ def test_visual_grasp_system_uses_graspnet_candidates_directly_before_ik():
     assert "/grasp/merged_candidates" not in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
     assert '"input_topic": candidate_ik_input_topic' in launch_text
-
-
-def test_visual_grasp_vision_publishes_live_depth_camera_info():
-    camera_config = _read("src/rebotarm_vision/config/camera.yaml")
-    vision_text = _read("src/rebotarm_vision/rebotarm_vision/vision_node.py")
-    network_driver_text = _read("src/rebotarm_vision/rebotarm_vision/camera/network_mjpeg_driver.py")
-
-    assert "camera.network_camera_info_url: http://127.0.0.1:8081/camera_info.json" in camera_config
-    assert '"/camera/depth/camera_info"' in vision_text
-    assert "CameraInfo" in vision_text
-    assert "camera_info_to_msg" in vision_text
-    assert "network_camera_info_url" in vision_text
-    assert "camera_info_url" in network_driver_text
 
 
 def test_visual_grasp_system_can_move_to_visual_ready_on_start():
@@ -328,7 +314,6 @@ def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
     assert '"start_vision": "true"' in launch_text
     assert '"vision_profile": "ubuntu_native"' in launch_text
     assert '"start_graspnet_baseline": "true"' in launch_text
-    assert '"graspnet_source_mode": "in_process"' in launch_text
     assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
     assert "graspnet_local_infer_url" not in launch_text
     assert '"vision_python_executable": LaunchConfiguration("vision_python_executable")' in launch_text
@@ -481,14 +466,10 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert "rebotarm_graspnet_baseline_node" in setup_scripts
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_source_mode", default_value="in_process")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json")' in launch_text
     assert '"GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"' in launch_text
     assert '"GRASPNET_CHECKPOINT_PATH"' in launch_text
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
-    assert '"source_mode": graspnet_source_mode' in launch_text
-    assert '"network_candidates_url": graspnet_candidates_url' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
     assert 'DeclareLaunchArgument("candidate_ik_input_topic", default_value="/grasp/graspnet_candidates")' in launch_text
     assert '"input_topic": candidate_ik_input_topic' in launch_text
@@ -496,7 +477,6 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert '"scoring_mode"' not in launch_text
     assert 'DeclareLaunchArgument("executor_input_topic", default_value="/grasp/filtered_plan")' in launch_text
     assert "InProcessGraspNetBackend" in node_text
-    assert "NetworkGraspNetClient" in node_text
     assert "GraspCandidateArray" in node_text
     assert "self.candidates_pub.publish(candidates)" in node_text
     assert "MoveIt" not in node_text
@@ -537,7 +517,7 @@ def test_rebotarm_msgs_exports_grasp_gripper_service():
 def test_ordinary_grasp_node_publishes_candidate_array_topic():
     node_text = _read("src/rebotarm_vision/rebotarm_vision/ordinary_grasp_node.py")
     launch_text = _read("src/rebotarm_vision/launch/vision.launch.py")
-    camera_config = _read("src/rebotarm_vision/config/camera.yaml")
+    camera_config = _read("src/rebotarm_vision/config/camera_ubuntu.yaml")
 
     assert "GraspCandidateArray" in node_text
     assert 'ordinary_grasp.candidates_topic", "/grasp/candidates"' in node_text

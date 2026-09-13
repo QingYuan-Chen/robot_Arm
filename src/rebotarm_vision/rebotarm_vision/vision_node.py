@@ -18,11 +18,8 @@ from sensor_msgs.msg import CameraInfo, Image
 from rebotarm_msgs.msg import Detection2DArray
 
 from .camera.gemini2_driver import Gemini2Config, Gemini2Driver
-from .camera.network_mjpeg_driver import NetworkMjpegConfig, NetworkMjpegDriver
 from .converters.detection_msgs import result_to_detection_array_msg
 from .converters.image_msgs import camera_info_to_msg, color_to_msg, depth_to_msg
-from .converters.network_detection_msgs import detection_json_to_msg
-from .detector.network_detection_client import NetworkDetectionClient, NetworkDetectionConfig
 from .detector.yolo_detector import YoloDetector
 from .timestamp_policy import select_frame_timestamp_ns
 from .utils.visualization import draw_detections
@@ -73,16 +70,7 @@ class RebotArmVisionNode(Node):
         self.camera = self._create_camera_driver()
 
         self.detector = None
-        self.network_detection_client = None
-        if self.enable_network_detection:
-            self.network_detection_client = NetworkDetectionClient(
-                NetworkDetectionConfig(
-                    detections_url=self.network_detections_url,
-                    timeout_ms=self.network_detections_timeout_ms,
-                )
-            )
-            self.get_logger().info("network YOLO detections enabled")
-        elif self.enable_detection:
+        if self.enable_detection:
             self.detector = YoloDetector(
                 model_path=self.model_path,
                 device=self.device,
@@ -147,16 +135,6 @@ class RebotArmVisionNode(Node):
                     enable_align=self.enable_align,
                 )
             )
-        if self.camera_type == "network_mjpeg":
-            return NetworkMjpegDriver(
-                NetworkMjpegConfig(
-                    snapshot_url=self.network_snapshot_url,
-                    stream_url=self.network_stream_url,
-                    frame_timeout_ms=self.frame_timeout_ms,
-                    depth_url=self.network_depth_url,
-                    camera_info_url=self.network_camera_info_url,
-                )
-            )
         raise RuntimeError(f"unsupported camera.type: {self.camera_type}")
 
     def _declare_parameters(self) -> None:
@@ -173,12 +151,6 @@ class RebotArmVisionNode(Node):
         self.declare_parameter("camera.warmup_frames", 15)
         self.declare_parameter("camera.frame_timeout_ms", 1000)
         self.declare_parameter("camera.max_empty_frames", 30)
-        self.declare_parameter("camera.network_snapshot_url", "")
-        self.declare_parameter("camera.network_stream_url", "")
-        self.declare_parameter("camera.network_depth_url", "")
-        self.declare_parameter("camera.network_camera_info_url", "")
-        self.declare_parameter("camera.network_detections_url", "")
-        self.declare_parameter("camera.network_detections_timeout_ms", 1000)
         self.declare_parameter("yolo.model_path", "")
         self.declare_parameter("yolo.device", "cpu")
         self.declare_parameter("yolo.conf_threshold", 0.5)
@@ -193,7 +165,6 @@ class RebotArmVisionNode(Node):
         self.declare_parameter("ros.loop_rate_hz", 10.0)
         self.declare_parameter("ros.image_reliability", "best_effort")
         self.declare_parameter("ros.enable_detection", False)
-        self.declare_parameter("ros.enable_network_detection", False)
 
     def _load_parameters(self) -> None:
         self.camera_type = str(self.get_parameter("camera.type").value)
@@ -208,14 +179,6 @@ class RebotArmVisionNode(Node):
         self.warmup_frames = int(self.get_parameter("camera.warmup_frames").value)
         self.frame_timeout_ms = int(self.get_parameter("camera.frame_timeout_ms").value)
         self.max_empty_frames = int(self.get_parameter("camera.max_empty_frames").value)
-        self.network_snapshot_url = str(self.get_parameter("camera.network_snapshot_url").value)
-        self.network_stream_url = str(self.get_parameter("camera.network_stream_url").value)
-        self.network_depth_url = str(self.get_parameter("camera.network_depth_url").value)
-        self.network_camera_info_url = str(self.get_parameter("camera.network_camera_info_url").value)
-        self.network_detections_url = str(self.get_parameter("camera.network_detections_url").value)
-        self.network_detections_timeout_ms = int(
-            self.get_parameter("camera.network_detections_timeout_ms").value
-        )
         self.model_path = str(self.get_parameter("yolo.model_path").value)
         self.device = str(self.get_parameter("yolo.device").value)
         self.conf_threshold = float(self.get_parameter("yolo.conf_threshold").value)
@@ -232,18 +195,14 @@ class RebotArmVisionNode(Node):
             self.get_parameter("ros.image_reliability").value
         ).strip().lower()
         self.enable_detection = bool(self.get_parameter("ros.enable_detection").value)
-        self.enable_network_detection = bool(self.get_parameter("ros.enable_network_detection").value)
         self.ros_use_sim_time = bool(self.get_parameter("use_sim_time").value)
-
-        if self.enable_network_detection and not self.network_detections_url:
-            raise RuntimeError("camera.network_detections_url must not be empty when network detection is enabled")
 
         if self.image_reliability not in {"best_effort", "reliable"}:
             raise RuntimeError(
                 "ros.image_reliability must be 'best_effort' or 'reliable'"
             )
 
-        if self.enable_detection and not self.enable_network_detection:
+        if self.enable_detection:
             if not self.model_path:
                 raise RuntimeError("yolo.model_path must not be empty")
             if not Path(self.model_path).exists():
@@ -314,17 +273,7 @@ class RebotArmVisionNode(Node):
             self._publish_empty_detection(color_stamp)
             return
 
-        if self.network_detection_client is not None and color_bgr is not None:
-            payload = self.network_detection_client.fetch()
-            detection_msg = detection_json_to_msg(payload, color_stamp, self.frame_id_color)
-            self.detection_pub.publish(detection_msg)
-            if self.annotated_pub is not None:
-                annotated = draw_detections(color_bgr, detection_msg)
-                self.annotated_pub.publish(
-                    color_to_msg(annotated, color_stamp, self.frame_id_color)
-                )
-                preview_image = annotated
-        elif self.detector is not None and color_bgr is not None:
+        if self.detector is not None and color_bgr is not None:
             results = self.detector.infer(color_bgr)
             detection_msg = result_to_detection_array_msg(
                 results, color_stamp, self.frame_id_color

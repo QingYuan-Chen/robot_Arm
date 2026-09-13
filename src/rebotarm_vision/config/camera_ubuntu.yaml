@@ -14,12 +14,6 @@ rebotarm_vision_node:
     camera.warmup_frames: 15
     camera.frame_timeout_ms: 1000
     camera.max_empty_frames: 30
-    camera.network_snapshot_url: ""
-    camera.network_stream_url: ""
-    camera.network_depth_url: ""
-    camera.network_camera_info_url: ""
-    camera.network_detections_url: ""
-    camera.network_detections_timeout_ms: 1000
     # The Ubuntu launch file overrides this with the installed model path.
     yolo.model_path: ""
     yolo.device: "0"
@@ -40,7 +34,6 @@ rebotarm_vision_node:
     # BEST_EFFORT on this host; RELIABLE passed the C++ payload control.
     ros.image_reliability: reliable
     ros.enable_detection: true
-    ros.enable_network_detection: false
 
 rebotarm_ordinary_grasp_node:
   ros__parameters:

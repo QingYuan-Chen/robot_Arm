@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-13T18:08:31+08:00",
+  "generated_at": "2026-09-13T18:48:42+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "c4dd970",
+    "head": "90bda87",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit"
+  "last_event": "- 2026-09-13T18:48:42+08:00 | actor=Codex | event=complete | note=Retired HTTP vision compatibility; native ROS camera and GraspNet retained | verification=full suite before added regression 762 passed/7 skipped; final focused 82 passed; vision/bringup build passed; compileall and diff check passed; no hardware use"
 }

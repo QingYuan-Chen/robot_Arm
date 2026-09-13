@@ -18,7 +18,6 @@ def test_offline_perception_launch_uses_only_active_mujoco_and_virtual_sensor():
     assert 'DeclareLaunchArgument(' in text and 'virtual_camera_annotation_topic' in text
     assert 'default_value="/grasp/ground_truth_detections"' in text
     assert '"start_vision": "false"' in text
-    assert '"graspnet_source_mode": "in_process"' in text
     assert "graspnet_local_infer_url" not in text
     assert '"graspnet_output_frame_id": virtual_camera_frame_id' in text
     assert '"start_sim_trajectory_controller": "false"' in text

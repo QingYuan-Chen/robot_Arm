@@ -233,19 +233,8 @@ Ubuntu 物理机直连 Gemini2 并在本机运行 CUDA YOLO 时，使用：
 GraspNet独立环境、模型输入和完整视觉launch见 `docs/ubuntu_vision_setup_zh.md`。
 逐进程解释器设置见 `docs/launch_python_configuration.md`。
 
-网络备用链路仍使用 `src/rebotarm_vision/config/camera.yaml`，默认连接本机：
-
-```text
-http://127.0.0.1:8081
-```
-
-如果相机和 AI 服务运行在另一台机器，将该文件中的 URL 改为对应主机地址，
-或者复制配置文件并在启动时覆盖：
-
-```bash
-ros2 launch rebotarm_vision vision.launch.py \
-  camera_config:=/absolute/path/to/my_camera.yaml
-```
+视觉相机配置使用 `src/rebotarm_vision/config/camera_ubuntu.yaml`，通过本机
+Gemini 2 SDK 获取 RGB-D；不再配置远端 HTTP/MJPEG/JSON 服务。
 
 手眼标定文件也可以独立覆盖：
 

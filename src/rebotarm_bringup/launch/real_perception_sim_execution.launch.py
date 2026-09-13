@@ -97,7 +97,6 @@ def generate_launch_description():
                             "start_visual_ready": "false",
                             "ordinary_depth_quality_enabled": "true",
                             "start_graspnet_baseline": "true",
-                            "graspnet_source_mode": "in_process",
                             "graspnet_config": PathJoinSubstitution(
                                 [vision_share, "config", "graspnet_ubuntu.yaml"]
                             ),

@@ -19,7 +19,6 @@ def test_ubuntu_camera_profile_uses_native_gemini_and_local_yolo() -> None:
     assert "camera.enable_depth: true" in config
     assert "yolo.device: \"0\"" in config
     assert "ros.enable_detection: true" in config
-    assert "ros.enable_network_detection: false" in config
     assert "http://" not in config
     assert "https://" not in config
 

@@ -34,7 +34,6 @@ candidate_ik_input_topic: /grasp/graspnet_candidates
 作用：控制 GraspNet 候选数量和数据来源。
 
 ```yaml
-graspnet_source_mode: in_process
 graspnet_max_input_skew_ms: 100
 candidate_max_candidates_per_frame: 20
 ```
