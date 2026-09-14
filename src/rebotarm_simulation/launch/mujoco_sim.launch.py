@@ -7,7 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import EnvironmentVariable, LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 
 
 def generate_launch_description():
@@ -24,11 +24,17 @@ def generate_launch_description():
         "virtual_camera_parent_frame_id"
     )
     mujoco_gl = LaunchConfiguration("mujoco_gl")
+    default_mujoco_python = PathJoinSubstitution(
+        [EnvironmentVariable("PWD", default_value="."), "third_party", "rebotarm_mujoco_venv", "bin", "python"]
+    )
     return LaunchDescription(
         [
             DeclareLaunchArgument(
                 "python_executable",
-                default_value=EnvironmentVariable("REBOTARM_MUJOCO_PYTHON", default_value="python3"),
+                default_value=EnvironmentVariable(
+                    "REBOTARM_MUJOCO_PYTHON",
+                    default_value=default_mujoco_python,
+                ),
                 description="Python interpreter containing MuJoCo and ROS 2 dependencies",
             ),
             DeclareLaunchArgument("mujoco_arm_namespace", default_value="rebotarm"),

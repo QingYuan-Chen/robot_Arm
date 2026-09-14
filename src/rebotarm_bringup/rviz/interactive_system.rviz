@@ -8,18 +8,6 @@ Panels:
     Tree Height: 138
   - Class: moveit_rviz_plugin/MotionPlanning
     Name: MotionPlanning
-  - Class: rviz_common/Selection
-    Name: Selection
-  - Class: rviz_common/Tool Properties
-    Expanded:
-      - /Interact1
-    Name: Tool Properties
-    Splitter Ratio: 0.5
-  - Class: rviz_common/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
   Displays:
@@ -357,7 +345,6 @@ Visualization Manager:
   Name: root
   Tools:
     - Class: rviz_default_plugins/MoveCamera
-    - Class: rviz_default_plugins/Select
     - Class: rviz_default_plugins/Interact
       Hide Inactive Objects: true
   Transformation:
@@ -398,12 +385,6 @@ Window Geometry:
   MotionPlanning - Trajectory Slider:
     collapsed: false
   QMainWindow State: 000000ff00000000fd00000001000000000000046b0000080ffc0200000007fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000007e00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000070000002db000002ca00fffffffb000000100044006900730070006c0061007900730100000357000001860000018600fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000004e9000000d6000000d600fffffffb0000001200530065006c0065006300740069006f006e01000005cb000000b2000000b200fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000689000000b2000000b200fffffffb0000000a005600690065007700730100000747000001380000013800ffffff00000a050000080f00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Selection:
-    collapsed: false
-  Tool Properties:
-    collapsed: false
-  Views:
-    collapsed: false
   Width: 3708
   X: 174
   Y: 64

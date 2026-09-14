@@ -601,3 +601,7 @@
 - 2026-09-13T19:10:26+08:00 | actor=Codex | event=start | note=Normalize root docs and docs directory for Ubuntu-native-only vision route; remove stale network references | verification=-
 - 2026-09-13T19:17:16+08:00 | actor=Codex | event=start | note=Update root and docs for Ubuntu-native-only scope | verification=-
 - 2026-09-13T20:25:19+08:00 | actor=Codex | event=complete | note=Normalized root documentation and Agent rules for Ubuntu-native-only scope | verification=compileall passed; focused docs/architecture/vision tests 100 passed; git diff check passed; no hardware operation
+- 2026-09-13T20:40:32+08:00 | actor=root | event=start | note=查询当前测试进度、测试顺序和测试指令 | verification=-
+- 2026-09-13T20:43:46+08:00 | actor=codex | event=start | note=查询当前测试进度、测试顺序和测试指令 | verification=-
+- 2026-09-14T12:56:40+08:00 | actor=codex | event=start | note=排查 MuJoCo 无仿真测试 RViz RobotModel 错误 | verification=-
+- 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-

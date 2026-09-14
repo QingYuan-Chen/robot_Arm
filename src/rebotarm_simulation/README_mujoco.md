@@ -7,8 +7,26 @@
 ## 安装与构建
 
 ROS launch 的解释器可用 `python_executable` 参数或 `REBOTARM_MUJOCO_PYTHON`
-环境变量指定，未设置时使用 `PATH` 中的 `python3`；不会自动寻找仓库中的 venv。
+环境变量指定；未设置时，MuJoCo launch 默认使用仓库中的
+`third_party/rebotarm_mujoco_venv/bin/python`，避免误用不含 `mujoco` 的系统
+`python3`。从其他工作目录启动时请传绝对路径或设置环境变量。
 混合视觉入口的配置见 [启动解释器说明](../../docs/launch_python_configuration.md)。
+
+`mujoco_moveit_sim.launch.py` 默认同时打开原生 MuJoCo viewer，便于桌面联调
+观察物理模型；ROS 适配节点仍是独立的 headless 节点，负责 ROS action 和状态
+发布。关闭 viewer 可传 `use_mujoco_viewer:=false`，适用于无图形界面或 CI。
+
+日常桌面联调可直接使用专用入口：
+
+```bash
+ros2 launch rebotarm_simulation mujoco_rviz_viewer.launch.py
+```
+
+服务器、CI 或只做后台物理测试使用：
+
+```bash
+ros2 launch rebotarm_simulation mujoco_headless.launch.py
+```
 
 在当前工作区根目录、未激活venv的新终端执行。系统依赖按
 [安装说明](../../docs/local_setup_zh.md)准备；源码统一由系统Python构建，

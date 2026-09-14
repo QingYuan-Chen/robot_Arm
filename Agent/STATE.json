@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-13T20:25:19+08:00",
+  "generated_at": "2026-09-14T14:24:57+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "bbe9446",
+    "head": "a68eb36",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-13T20:25:19+08:00 | actor=Codex | event=complete | note=Normalized root documentation and Agent rules for Ubuntu-native-only scope | verification=compileall passed; focused docs/architecture/vision tests 100 passed; git diff check passed; no hardware operation"
+  "last_event": "- 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-"
 }

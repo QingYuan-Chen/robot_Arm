@@ -6,17 +6,6 @@ Panels:
       Expanded: ~
       Splitter Ratio: 0.5
     Tree Height: 339
-  - Class: rviz_common/Selection
-    Name: Selection
-  - Class: rviz_common/Tool Properties
-    Expanded: ~
-    Name: Tool Properties
-    Splitter Ratio: 0.5
-  - Class: rviz_common/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
   Displays:
@@ -322,7 +311,6 @@ Visualization Manager:
     - Class: rviz_default_plugins/Interact
       Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
-    - Class: rviz_default_plugins/Select
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
@@ -361,12 +349,6 @@ Window Geometry:
   Hide Left Dock: false
   Hide Right Dock: false
   QMainWindow State: 000000ff00000000fd00000001000000000000046b000007d6fc0200000006fb000000100044006900730070006c0061007900730100000070000001c50000018600fffffffb0000001200530065006c0065006300740069006f006e0100000241000000cf000000b200fffffffb0000001e0054006f006f006c002000500072006f0070006500720074006900650073010000031c000000ce000000b200fffffffb0000000a0056006900650077007301000003f60000016a0000013800fffffffb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000002800000028fbffffffff010000056c000002da000002c900ffffff00000b0d000007d600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Selection:
-    collapsed: false
-  Tool Properties:
-    collapsed: false
-  Views:
-    collapsed: false
   Width: 3972
   X: 124
   Y: 64

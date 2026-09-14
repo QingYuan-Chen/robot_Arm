@@ -113,14 +113,14 @@ def generate_launch_description():
                 name="robot_state_publisher",
                 output="screen",
                 parameters=[moveit_config.robot_description, {"use_sim_time": use_sim_time}],
-                remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
+                remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
             ),
             Node(
                 package="moveit_ros_move_group",
                 executable="move_group",
                 name="move_group",
                 output="screen",
-                remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
+                remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
                 parameters=[
                     moveit_config.to_dict(),
                     ompl_planning_yaml,
@@ -135,7 +135,7 @@ def generate_launch_description():
                 name="rviz2",
                 output="screen",
                 arguments=["-d", rviz_config],
-                remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
+                remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
                 parameters=[
                     moveit_config.robot_description,
                     moveit_config.robot_description_semantic,

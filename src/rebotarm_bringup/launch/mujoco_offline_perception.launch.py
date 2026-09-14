@@ -81,6 +81,9 @@ def generate_launch_description():
         }
     )
 
+    default_mujoco_python = PathJoinSubstitution(
+        [EnvironmentVariable("PWD", default_value="."), "third_party", "rebotarm_mujoco_venv", "bin", "python"]
+    )
     return LaunchDescription(
         [
             DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim"),
@@ -92,7 +95,10 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "mujoco_python_executable",
-                default_value=EnvironmentVariable("REBOTARM_MUJOCO_PYTHON", default_value="python3"),
+                default_value=EnvironmentVariable(
+                    "REBOTARM_MUJOCO_PYTHON",
+                    default_value=default_mujoco_python,
+                ),
             ),
             DeclareLaunchArgument(
                 "vision_python_executable",
