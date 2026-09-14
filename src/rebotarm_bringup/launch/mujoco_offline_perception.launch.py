@@ -126,7 +126,7 @@ def generate_launch_description():
                     [
                         vision_share,
                         "models",
-                        "yolo26m-seg-fp16-b1-640-linux.engine",
+                        "yolo26s-seg.pt",
                     ]
                 ),
             ),

@@ -276,7 +276,14 @@ class RebotArmVisionNode(Node):
         if self.detector is not None and color_bgr is not None:
             results = self.detector.infer(color_bgr)
             detection_msg = result_to_detection_array_msg(
-                results, color_stamp, self.frame_id_color
+                results,
+                color_stamp,
+                self.frame_id_color,
+                allowed_classes={
+                    str(class_name).strip().lower()
+                    for class_name in self.custom_classes
+                    if str(class_name).strip()
+                },
             )
             self.detection_pub.publish(detection_msg)
             self._detection_log_countdown += 1

@@ -72,7 +72,13 @@ def _mask_polygon(result: Any, index: int) -> list[float]:
     return [float(value) for value in polygon.reshape(-1)]
 
 
-def result_to_detection_array_msg(results, stamp, frame_id: str) -> Detection2DArray:
+def result_to_detection_array_msg(
+    results,
+    stamp,
+    frame_id: str,
+    *,
+    allowed_classes: set[str] | None = None,
+) -> Detection2DArray:
     msg = Detection2DArray()
     msg.header.stamp = stamp
     msg.header.frame_id = frame_id
@@ -94,6 +100,8 @@ def result_to_detection_array_msg(results, stamp, frame_id: str) -> Detection2DA
 
             x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
             det.class_name = names.get(cls_id, str(cls_id))
+            if allowed_classes is not None and det.class_name.strip().lower() not in allowed_classes:
+                continue
             det.confidence = conf
             det.center_u = int(round((x1 + x2) / 2.0))
             det.center_v = int(round((y1 + y2) / 2.0))

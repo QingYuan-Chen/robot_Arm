@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 venv_dir="${repo_root}/.venv-vision"
 python_bin="${venv_dir}/bin/python"
+export PYTHONNOUSERSITE=1
 
 python3 -m venv --system-site-packages "${venv_dir}"
 env PYTHONPATH= "${python_bin}" -m pip install --upgrade "pip<27" "setuptools<80" wheel
@@ -43,4 +44,4 @@ echo "No models are downloaded or exported. Select a model using yolo_model_path
 echo "Install the Orbbec udev rule once after connecting the camera:"
 echo "  ${repo_root}/tools/install_orbbec_udev_rules.sh"
 echo "Start Ubuntu-native vision with:"
-echo "  ${repo_root}/tools/run_ubuntu_vision.sh yolo_model_path:=\"${repo_root}/tools/yolo26s-seg.pt\" yolo_device:=0"
+echo "  ${repo_root}/tools/run_ubuntu_vision.sh"

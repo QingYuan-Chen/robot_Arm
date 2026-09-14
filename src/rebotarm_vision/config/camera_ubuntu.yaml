@@ -21,7 +21,6 @@ rebotarm_vision_node:
     yolo.iou_threshold: 0.45
     yolo.use_world: false
     yolo.custom_classes:
-      - person
       - bottle
       - cup
     ros.frame_id_color: camera_color_frame

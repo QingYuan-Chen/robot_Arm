@@ -8,6 +8,10 @@
 - Completed phase / 已完成阶段：P0 机械臂安全启动与执行门控、P1 MuJoCo 基线巩固与差距整合、P2 Gemini 2 SDK 与真实 RGB-D 验收、P3 完整单 Ubuntu 视觉链路、P4 Ubuntu 本地 GraspNet、P5 hand-eye/nominal TCP/MuJoCo 标定检查，以及 P6 当前工程范围均已关闭。
 - Hardware gate / 硬件门：当前没有新的硬件动作授权。P6 关闭不授权 approach、gripper、lift、retreat、自动抓取或其他后续规划中的动作。
 
+- 2026-09-14：按用户要求将旧备份中的 GraspNet 资产迁移到当前工作区：推理代码为 `third_party/graspnet-baseline`，GraspNetAPI 为 `third_party/graspnetAPI`，checkpoint 为 `.local-models/checkpoints/checkpoint-rs.tar`。模型目录和 checkpoint 存在性检查通过，checkpoint 与备份 SHA256 一致，`.venv-graspnet` CUDA/依赖检查通过；第三方资产加入精确 `.gitignore`，不纳入提交。尚未启动真实相机或执行推理。
+
+- 2026-09-14：安装系统 CUDA Toolkit 12.8 后，在当前 `.venv-graspnet` / PyTorch `2.11.0+cu128` 环境中按 RTX 4060 `sm_89` 重新编译 `third_party/graspnet-baseline/pointnet2/_ext`，扩展导入通过；GraspNet ROS 节点初始化日志为 `backend_available=True`。未启动相机、未执行真实 RGB-D 推理、未连接或操作机械臂。
+
 ## 当前事实
 
 - 2026-09-13：用户进一步确认移除旧跨主机 HTTP/JSON/MJPEG 视觉兼容链。已删除远端相机/检测/GraspNet 客户端、网络 camera 配置、本机 HTTP GraspNet 回退服务与无消费者的 HTTP contract/client；保留本机推理 backend、ROS RGB-D/CameraInfo/detection 同步与候选发布。vision 默认配置改为 camera_ubuntu，主组合默认 ubuntu_native，移除 URL/轮询参数；Dashboard HTTP 与 ROS DDS 不在删除范围。此前 762 passed/7 skipped，新增缺失路径防回归与构建待本轮最终核验；未访问硬件或启动相机。

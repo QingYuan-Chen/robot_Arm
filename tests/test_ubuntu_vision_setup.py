@@ -18,6 +18,9 @@ def test_ubuntu_camera_profile_uses_native_gemini_and_local_yolo() -> None:
     assert "camera.type: gemini2" in config
     assert "camera.enable_depth: true" in config
     assert "yolo.device: \"0\"" in config
+    assert "      - bottle" in config
+    assert "      - cup" in config
+    assert "      - person" not in config
     assert "ros.enable_detection: true" in config
     assert "http://" not in config
     assert "https://" not in config
@@ -52,7 +55,7 @@ def test_ubuntu_launch_uses_installed_config_and_model() -> None:
     setup = _read("src/rebotarm_vision/setup.py")
 
     assert '"config" / "camera_ubuntu.yaml"' in launch
-    assert '"yolo26m-seg-fp16-b1-640-linux.engine"' in launch
+    assert '"yolo26s-seg.pt"' in launch
     assert 'DeclareLaunchArgument(' in launch
     assert '"yolo_model_path"' in launch
     assert '"launch/vision_ubuntu.launch.py"' in setup

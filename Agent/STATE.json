@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-14T14:24:57+08:00",
+  "generated_at": "2026-09-14T19:20:05+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "a68eb36",
+    "head": "97845b5",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-"
+  "last_event": "- 2026-09-14T19:20:05+08:00 | actor=codex | event=start | note=移除 person 抓取白名单，验证修复并提交推送 GitHub | verification=-"
 }

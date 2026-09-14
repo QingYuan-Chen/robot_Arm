@@ -605,3 +605,5 @@
 - 2026-09-13T20:43:46+08:00 | actor=codex | event=start | note=查询当前测试进度、测试顺序和测试指令 | verification=-
 - 2026-09-14T12:56:40+08:00 | actor=codex | event=start | note=排查 MuJoCo 无仿真测试 RViz RobotModel 错误 | verification=-
 - 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-
+- 2026-09-14T16:45:40+08:00 | actor=codex | event=start | note=迁移旧备份中的 GraspNet 代码、GraspNetAPI 和 checkpoint 到当前工作区 | verification=-
+- 2026-09-14T19:20:05+08:00 | actor=codex | event=start | note=移除 person 抓取白名单，验证修复并提交推送 GitHub | verification=-

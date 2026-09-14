@@ -82,8 +82,9 @@ lsusb | grep -i -E "orbbec|2bc5"
 engine不能用于CPU，也不能假定可跨机器复用。需要重新导出时，必须使用
 对应的原始权重及目标环境；不能将YOLO26s导出结果改名冒充YOLO26m。
 仓库不提供YOLO26m源权重的自动下载或engine导出流程，未准备好时使用上面的PT路径。
-旧本机默认仍为包内`models/yolo26m-seg-fp16-b1-640-linux.engine`：构建时
-`tools/`中有该文件才会打包。外部模型无需重建；运行时模型缺失将报错，不静默换模型。
+当前本机默认使用包内 `models/yolo26s-seg.pt`，因为仓库实际提供该模型。
+如果以后准备好已审核的 TensorRT engine，可以通过 launch 参数显式覆盖；
+外部模型无需重建，运行时模型缺失将报错，不静默换模型。
 
 ## 4. 验证
 

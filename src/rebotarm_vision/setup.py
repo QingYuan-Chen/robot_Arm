@@ -4,8 +4,8 @@ from setuptools import find_packages, setup
 
 package_name = "rebotarm_vision"
 vision_model_sources = [
-    Path("../../tools/yolo26m-seg-fp16-b1-640-linux.engine"),
     Path("../../tools/yolo26s-seg.pt"),
+    Path("../../tools/yolo26m-seg-fp16-b1-640-linux.engine"),
 ]
 
 # Runtime assets are optional at build time; detection validates its model path.
@@ -72,6 +72,7 @@ setup(
             "rebotarm_tcp_calibration = rebotarm_vision.tcp_calibration_node:main",
             "rebotarm_debug_camera_preview = rebotarm_vision.debug_camera_preview:main",
             "rebotarm_grasp_depth_probe = rebotarm_vision.grasp_depth_probe_node:main",
+            "rebotarm_graspnet_open3d_viewer = rebotarm_vision.graspnet_open3d_viewer:main",
             "rebotarm_offline_yolo_node = rebotarm_vision.offline_yolo_node:main",
         ],
     },

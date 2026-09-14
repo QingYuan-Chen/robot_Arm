@@ -18,7 +18,7 @@ def test_visual_grasp_bringup_exposes_explicit_ubuntu_native_profile() -> None:
     assert 'default_value="ubuntu_native"' in launch
     assert 'choices=["ubuntu_native"]' in launch
     assert '"config", "camera_ubuntu.yaml"' in launch
-    assert '"yolo26m-seg-fp16-b1-640-linux.engine"' in launch
+    assert '"yolo26s-seg.pt"' in launch
     assert 'vision_yolo_model_path = LaunchConfiguration("vision_yolo_model_path")' in launch
     assert "vision_profile" in launch and "ubuntu_native" in launch
 

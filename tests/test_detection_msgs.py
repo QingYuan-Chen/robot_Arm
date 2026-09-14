@@ -113,3 +113,34 @@ def test_invalid_ultralytics_segmentation_polygon_fails_closed_to_no_mask():
     detection = msg.detections[0]
     assert detection.has_mask is False
     assert list(detection.mask_polygon_xy) == []
+
+
+def test_detection_converter_applies_allowed_class_filter():
+    _install_detection_message_stubs_if_needed()
+    from rebotarm_vision.converters.detection_msgs import result_to_detection_array_msg
+
+    person_box = SimpleNamespace(
+        xyxy=np.asarray([[10.0, 20.0, 110.0, 220.0]], dtype=np.float32),
+        cls=np.asarray([0.0], dtype=np.float32),
+        conf=np.asarray([0.95], dtype=np.float32),
+    )
+    bottle_box = SimpleNamespace(
+        xyxy=np.asarray([[20.0, 30.0, 100.0, 210.0]], dtype=np.float32),
+        cls=np.asarray([1.0], dtype=np.float32),
+        conf=np.asarray([0.90], dtype=np.float32),
+    )
+    result = SimpleNamespace(
+        names={0: "person", 1: "bottle"},
+        boxes=[person_box, bottle_box],
+        obb=None,
+        masks=None,
+    )
+
+    msg = result_to_detection_array_msg(
+        [result],
+        stamp=None,
+        frame_id="camera_color_frame",
+        allowed_classes={"bottle"},
+    )
+
+    assert [detection.class_name for detection in msg.detections] == ["bottle"]

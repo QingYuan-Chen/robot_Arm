@@ -25,7 +25,7 @@ def test_offline_perception_launch_uses_only_active_mujoco_and_virtual_sensor():
     assert 'DeclareLaunchArgument("start_motion_execution", default_value="false")' in text
     assert 'DeclareLaunchArgument("max_plan_age_sec", default_value="1.0")' in text
     assert 'DeclareLaunchArgument("offline_yolo_use_world", default_value="false")' in text
-    assert '"yolo26m-seg-fp16-b1-640-linux.engine"' in text
+    assert '"yolo26s-seg.pt"' in text
     assert 'DeclareLaunchArgument("offline_yolo_device", default_value="0")' in text
     assert 'DeclareLaunchArgument("offline_yolo_target_classes", default_value="[\'bottle\']")' in text
     assert '"offline_yolo.use_world": ParameterValue(' in text
@@ -61,7 +61,7 @@ def test_visual_grasp_system_defaults_ubuntu_native_to_packaged_tensorrt_engine(
 
     assert 'vision_yolo_model_path = LaunchConfiguration("vision_yolo_model_path")' in text
     assert '"yolo_model_path": vision_yolo_model_path' in text
-    assert '"yolo26m-seg-fp16-b1-640-linux.engine"' in text
+    assert '"yolo26s-seg.pt"' in text
 
 
 def test_candidate_filter_uses_one_complete_launch_parameter_profile():
