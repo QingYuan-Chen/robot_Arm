@@ -303,8 +303,8 @@ def _add_keyframes(root: ET.Element) -> None:
     if keyframe.find("./key[@name='safe_home']") is None:
         key = ET.SubElement(keyframe, "key")
         key.set("name", "safe_home")
-        key.set("qpos", "-1.5707963267948966 -0.1 -0.2 0.2 0 0 0.04 -0.04")
-        key.set("ctrl", "-1.5707963267948966 -0.1 -0.2 0.2 0 0 0.04")
+        key.set("qpos", "0 0 -0.017453292519943295 0 0 0 0.04 -0.04")
+        key.set("ctrl", "0 0 -0.017453292519943295 0 0 0 0.04")
 
 
 def _remove_keyframes(root: ET.Element) -> None:

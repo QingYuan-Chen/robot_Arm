@@ -18,15 +18,15 @@ SRDF_DIR = ROOT / "src" / "rebotarm_moveit_config" / "config"
 SRDF_NAMES = ("rebotarm.srdf", "reBot-DevArm_fixend.srdf")
 ARM_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
 
-SAFE_HOME = (-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0)
+SAFE_HOME = (0.0, 0.0, -0.017453292519943295, 0.0, 0.0, 0.0)
 HOME = (0.0, -0.8, -1.2, 0.6, 0.0, 0.0)
 WEB_SAFE_HOME = (
-    -1.549363136291504,
-    0.01659393310546875,
-    -0.02002716064453125,
-    -0.00858306884765625,
-    0.10395240783691406,
-    0.00133514404296875,
+    0.0,
+    0.0,
+    -0.017453292519943295,
+    0.0,
+    0.0,
+    0.0,
 )
 
 
@@ -48,14 +48,11 @@ def _group_states(path: Path) -> dict[str, tuple[float, ...]]:
     return states
 
 
-def test_no_srdf_names_the_self_colliding_all_zero_pose():
+def test_srdf_safe_home_is_explicitly_the_requested_all_zero_pose():
     for srdf_name in SRDF_NAMES:
         states = _group_states(SRDF_DIR / srdf_name)
         assert states, f"{srdf_name} declares no arm group_state"
-        for name, values in states.items():
-            assert any(
-                abs(value) > 1e-9 for value in values
-            ), f"{srdf_name} names the folded all-zero pose as {name!r}"
+        assert states["safe_home"] == SAFE_HOME
 
 
 def test_srdfs_agree_on_safe_home_and_home():

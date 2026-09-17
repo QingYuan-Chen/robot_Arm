@@ -1418,6 +1418,8 @@ def test_moveit_demo_standalone_publishes_fake_visual_joint_state_source():
     assert 'executable="joint_state_publisher"' in demo_text
     assert 'condition=IfCondition(use_fake_joint_states)' in demo_text
     assert '"/joint_states", ["/", arm_namespace, "/joint_states"]' in demo_text
+    assert 'executable="GripperVisualJointStateNode"' in demo_text
+    assert '"/joint_states", ["/", arm_namespace, "/visual_joint_states"]' in demo_text
     assert '"use_fake_joint_states": "false"' in hardware_text
     assert '"use_fake_joint_states": PythonExpression' in interactive_text
     assert 'use_moveit_fake_joint_states' in interactive_text

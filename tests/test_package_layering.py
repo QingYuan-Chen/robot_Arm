@@ -232,7 +232,7 @@ def test_architecture_document_defines_package_responsibilities_and_rules() -> N
     assert "Do not add implementation logic to rebotarm_interactive_control" in agents
 
 
-def test_rviz_moveit_drag_entrypoints_exist_without_custom_ee_target() -> None:
+def test_rviz_moveit_drag_entrypoints_use_visible_native_goal_marker() -> None:
     feature_doc = (ROOT / "docs/rebotarm_feature_commands.md").read_text(
         encoding="utf-8"
     )
@@ -248,14 +248,25 @@ def test_rviz_moveit_drag_entrypoints_exist_without_custom_ee_target() -> None:
 
     assert "rviz_ee_drag_real.launch.py" in feature_doc
     assert "rviz_ee_drag_sim.launch.py" in feature_doc
+    assert not (ROOT / "src/rebotarm_bringup/launch/rviz.launch.py").exists()
     assert '"use_moveit_preview": "true"' in real_launch
     assert '"use_moveit_preview": "true"' in sim_launch
+    assert '"start_passive_joint_state_publisher": "false"' in sim_launch
+    assert '"use_moveit_fake_joint_states": "false"' in sim_launch
+    assert 'executable="rebotarm_sim_trajectory_controller"' in sim_launch
     assert "start_interaction_nodes" not in real_launch
     assert "start_interaction_nodes" not in sim_launch
     assert "interactive_control/ee_target" not in feature_doc
     assert "EndEffectorTarget" not in rviz_config
     assert "InteractiveMarkers" not in rviz_config
     assert "/rebotarm/interactive_control/ee_target/update" not in rviz_config
+    assert "Interactive Marker Size: 0.12" in rviz_config
+    assert "  - Class: moveit_rviz_plugin/MotionPlanning" not in rviz_config.split(
+        "Visualization Manager:", 1
+    )[0]
+    assert rviz_config.count("Show Robot Visual: false") >= 2
+    assert "Goal State Alpha: 1" in rviz_config
+    assert "Robot Alpha: 0" in rviz_config
     assert "MarkerServerNode" not in (
         ROOT / "src/rebotarm_teleop/setup.py"
     ).read_text(encoding="utf-8")

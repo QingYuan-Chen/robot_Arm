@@ -134,7 +134,7 @@ _JOINT_POSITION_LIMITS_RAD = {
 # tests/test_paired_trajectory_protocol.py already treats as the canonical
 # working pose, and it matches the "safe_home" named state in the MoveIt SRDF
 # and the MuJoCo keyframes.
-_SAFE_HOME_JOINT_POSITIONS = (-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0)
+_SAFE_HOME_JOINT_POSITIONS = (0.0, 0.0, -0.017453292519943295, 0.0, 0.0, 0.0)
 _SAFE_HOME_ARRIVE_TOL_RAD = 0.02
 _SAFE_HOME_TIMEOUT_SEC = 30.0
 

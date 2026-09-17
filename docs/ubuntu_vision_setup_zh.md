@@ -131,7 +131,7 @@ sudo apt install ros-jazzy-depth-image-proc
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/a/project/rebot_Arm/install/setup.bash
+source ~/robotarm_ros2/install/setup.bash
 ros2 run depth_image_proc point_cloud_xyz_node --ros-args \
   -r image_rect:=/camera/depth/image_raw \
   -r camera_info:=/camera/depth/camera_info \

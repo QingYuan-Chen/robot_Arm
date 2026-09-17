@@ -22,9 +22,10 @@ import venv
 
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_URL = "https://github.com/motorbridge/motorbridge.git"
-UPSTREAM_COMMIT = "38b8a5681887514b301dbcab96e01a473cbd7173"
-PATCHED_VERSION = "0.4.6+rebotarm.2"
-PATCH_SHA256 = "e95b910c86f295e748c37fd16e83c38d9519eab151c089afb31049f392c0b663"
+UPSTREAM_COMMIT = "2b7b350914ace47ba06e85fcad333143de2b057b"
+PATCHED_VERSION = "0.4.7+rebotarm.1"
+PATCH_SHA256 = "3d40ad4f8779c4bacad68a2e1941fde10d36f2af9c41baea10f7ae37e7aaba6a"
+UPSTREAM_DM_SERIAL_TIMEOUT_MS = 10
 PATCH_PATH = ROOT / "patches/motorbridge/0001-add-feedback-sequence-api.patch"
 BUILD_ROOT = ROOT / "build_motorbridge_fresh_feedback"
 SOURCE_DIR = BUILD_ROOT / "source"
@@ -102,6 +103,19 @@ def _verify_patch_file() -> None:
         raise RuntimeError(
             "MotorBridge patch digest does not match the reviewed source patch: "
             f"expected {PATCH_SHA256}, found {digest}"
+        )
+
+
+def _verify_dm_serial_timeout_budget() -> None:
+    source = SOURCE_DIR / "motor_core" / "src" / "dm_serial.rs"
+    expected = (
+        ".timeout(Duration::from_millis("
+        f"{UPSTREAM_DM_SERIAL_TIMEOUT_MS}))"
+    )
+    if not source.is_file() or expected not in source.read_text(encoding="utf-8"):
+        raise RuntimeError(
+            "MotorBridge dm-serial timeout budget does not match the reviewed "
+            f"upstream value of {UPSTREAM_DM_SERIAL_TIMEOUT_MS} ms"
         )
 
 
@@ -349,6 +363,7 @@ def _smoke_test_wheel(wheel_path: Path) -> None:
 def build_patched_wheel() -> Path:
     _verify_patch_file()
     _prepare_source_checkout()
+    _verify_dm_serial_timeout_budget()
     abi_path, gateway_path = _build_rust_artifacts()
     wheel_path = _build_wheel(abi_path, gateway_path)
     _smoke_test_wheel(wheel_path)

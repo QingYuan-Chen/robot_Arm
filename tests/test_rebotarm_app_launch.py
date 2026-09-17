@@ -97,7 +97,6 @@ def test_teach_recording_uses_higher_sampling_defaults() -> None:
         "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
         "src/rebotarm_bringup/launch/bringup.launch.py",
-        "src/rebotarm_bringup/launch/interactive_basic.launch.py",
         "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",
     ):
         launch_text = _read(launch_path)

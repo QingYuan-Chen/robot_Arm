@@ -116,19 +116,35 @@ ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py
 
 ### 控制器依赖（真机或完整软件回归需要）
 
+先在同一个终端加载 ROS 和当前工作区，再检查已经安装的控制器运行时：
+
 ```bash
-python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
+cd ~/robotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 ```
 
-`requirements-runtime.txt` 中固定的 `motorbridge==0.4.6` 只用于 bootstrap /
-基础依赖，原始 PyPI 包没有本控制器所需的逐电机反馈 sequence，不能证明读到的是
-新反馈帧。先安装 Rust/Cargo、Git、Python venv 等构建工具，然后从仓库根目录执行：
+`requirements-runtime.txt` 中的普通 `motorbridge==0.4.7` 只用于 bootstrap，原始
+PyPI 包没有本控制器所需的逐电机反馈 sequence，不能作为真机运行版本。不要在
+patched 版本已经安装后再次执行该 requirements 文件，否则可能覆盖已审查版本。
+
+如果检查失败，优先使用仓库已有的已构建 wheel：
+
+```bash
+python3 -m pip install --user --break-system-packages --force-reinstall --no-deps \
+  build_motorbridge_fresh_feedback/wheel/motorbridge-0.4.7+rebotarm.1-*.whl
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+如果仓库没有 wheel，或需要从源码重建，先安装 Rust/Cargo、Git、Python venv 等
+构建工具，然后执行：
 
 ```bash
 # 只构建并在临时 venv 验证，不改用户 Python
 python3 tools/setup_motorbridge_fresh_feedback.py --build-only
 
-# 显式安装已验证的 0.4.6+rebotarm.2 用户包
+# 构建并显式安装已验证的 0.4.7+rebotarm.1 用户包
 python3 tools/setup_motorbridge_fresh_feedback.py --install-user
 
 # 启动 controller 前的 fail-closed 检查；不联网、不构建、不访问硬件
@@ -136,13 +152,16 @@ python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 ```
 
 脚本固定上游 commit
-`38b8a5681887514b301dbcab96e01a473cbd7173`，只接受仓库内已审查的 source patch，
+`2b7b350914ace47ba06e85fcad333143de2b057b`（上游 `v0.4.7`），只接受仓库内已审查的 source patch，
 并同时构建 `motor_abi`、`ws_gateway` 和 wheel。`--check-installed` 必须报告
-`version=0.4.6+rebotarm.2 feedback_sequence=true`；否则不要启动真机 controller。
+`version=0.4.7+rebotarm.1 feedback_sequence=true`；否则不要启动真机 controller。
 此版本还校验达妙反馈的 CAN ID、电机 ID 和完整 DLC，并要求置零前主动查询到
 新的 status0 反馈；调用 disable 或新建句柄都不能代替状态确认。置零 API 不会
-自动失能，调用方仍需完成置零后的新帧验收。构建保留旧版本 wheel 以便回退。
-重复安装bootstrap清单后也必须重新安装审查补丁并检查；不要把原始0.4.6用作真机运行版本。
+自动失能，调用方仍需完成置零后的新帧验收。上游 `v0.4.7` 的 `dm-serial`
+单次底层读写超时为 10 ms（旧 `v0.4.6` 为 1 ms），并包含模式切换总预算和寄存器
+写 ACK 校验改进；反馈陈旧和通信失败后的
+保护失能策略不变。构建保留旧版本 wheel 以便回退。
+重复安装 bootstrap 清单后也必须重新安装审查补丁并检查；不要把原始 0.4.7 用作真机运行版本。
 
 厂商 SDK 使用仓库根目录的 `rebotarm_dependencies.repos` 固定版本：
 
@@ -278,7 +297,7 @@ auto_enable:=false
 先在终端 A 只启动硬件 driver：
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -290,7 +309,7 @@ ros2 launch rebotarm_bringup driver_only.launch.py \
 确认启动日志为 `CONNECTED_DISABLED`。终端 B 从仓库根目录运行专用验收工具：
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 

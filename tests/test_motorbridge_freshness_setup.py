@@ -68,7 +68,7 @@ def _module_with_contract(
     *,
     method_present: bool,
     feedback_sequence: bool | None,
-    version: str = "0.4.6+rebotarm.2",
+    version: str = "0.4.7+rebotarm.1",
 ) -> SimpleNamespace:
     motor = type("Motor", (), {})
     if method_present:
@@ -120,8 +120,32 @@ def test_runtime_contract_rejects_unexpected_package_version() -> None:
         version="0.4.6",
     )
 
-    with pytest.raises(RuntimeError, match="0.4.6\\+rebotarm.2"):
+    with pytest.raises(RuntimeError, match="0.4.7\\+rebotarm.1"):
         SETUP.validate_runtime_contract(module)
+
+
+def test_upstream_dm_serial_timeout_budget_is_verified(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    dm_serial = source / "motor_core/src/dm_serial.rs"
+    dm_serial.parent.mkdir(parents=True)
+    dm_serial.write_text(
+        ".timeout(Duration::from_millis(10))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(SETUP, "SOURCE_DIR", source)
+
+    assert SETUP._verify_dm_serial_timeout_budget() is None
+
+    dm_serial.write_text(
+        ".timeout(Duration::from_millis(1))\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="10 ms"):
+        SETUP._verify_dm_serial_timeout_budget()
+
 
 
 def test_patch_digest_mismatch_is_rejected(

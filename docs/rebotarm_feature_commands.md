@@ -8,6 +8,9 @@
 
 ## RViz MoveIt 末端拖动
 
+旧的 `interactive_basic.launch.py` 已移除。RViz 末端拖动统一使用下面的
+`rviz_ee_drag_real.launch.py` 或 `rviz_ee_drag_sim.launch.py`。
+
 执行前确认已安装 `ros-jazzy-moveit-simple-controller-manager`。
 若 Plan 成功而 Execute 报 `controller_manager_ does not exist` 或插件类不存在，
 参见[执行插件检查与仿真重启步骤](local_setup_zh.md#moveit-执行插件能-plan-但不能-execute)。
@@ -28,7 +31,7 @@ RViz MotionPlanning
 > 仅在本次真机操作已获授权后使用，不得与其他占用同一串口的控制器同时启动。
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -44,7 +47,7 @@ ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py channel:=/dev/ttyACM1
 仿真 / 不连接真机：
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -58,8 +61,20 @@ RViz 自动打开 MotionPlanning 面板。
 使用 MotionPlanning 的目标姿态 marker 做末端拖动。
 点击 Plan 只规划。
 真机模式下点击 Execute 才会下发到控制器。
-仿真模式不连接真机。
+仿真入口同时启动 `rebotarm_sim_trajectory_controller`，提供 `/rebotarm/follow_joint_trajectory`，因此仿真可执行 Plan & Execute。
+真机模式启动后保持失能；先 Plan，再人工确认现场安全并显式 Enable，最后 Execute。
+真机入口不会启动仿真 fake controller；仿真入口不会连接真机。
 ```
+
+真机 RViz 推荐顺序：
+
+```text
+启动 -> 确认 CONNECTED_DISABLED 和 joint_states -> RViz Plan-only
+-> 显式调用 /rebotarm/enable -> 当前位置 hold 检查 -> Execute
+-> trajectory_stop -> 必要时显式 safe_home -> 确认静止 -> disable -> Ctrl+C
+```
+
+真机入口默认 `shutdown_safe_home:=false`，直接按 `Ctrl+C` 不会自动回 safe_home；需要回位时必须人工确认后显式调用 `safe_home`，再 `disable`。
 
 ## 网页遥操作
 
@@ -78,7 +93,7 @@ Web Dashboard
 > 仅在本次真机操作已获授权后使用；此入口包含控制器，不与上面的真机入口并行启动。
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
@@ -140,11 +155,16 @@ ros2 service list | grep -E "plan_kinematic_path|check_state_validity"
 
 ## MoveIt 实机操作与停机
 
+`bringup.launch.py` 仍保留为基础控制器/状态组合入口，不提供 MoveIt 末端拖动。
+旧的 `rviz.launch.py` 已移除；需要 MoveIt Plan/Execute 时使用
+`rviz_ee_drag_real.launch.py`，仿真使用 `rviz_ee_drag_sim.launch.py`；需要网页、示教和完整工作台时使用
+`rebotarm_app.launch.py`。不要同时启动这些入口。
+
 以下内容接替已清理的根目录 MoveIt 使用说明。使用原生 MotionPlanning，
 不依赖旧自定义预览和执行节点。只需要 MoveIt 实机链时，可以选择独立入口：
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 python3 tools/setup_motorbridge_fresh_feedback.py --check-installed

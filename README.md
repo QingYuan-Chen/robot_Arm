@@ -58,9 +58,13 @@ Execute 成功。真机启动默认失能，必须在新鲜反馈和现场安全
 ## 真机边界
 
 连接不等于使能；运动必须明确授权并显式使能。串口只允许一个控制器占用。
-主控制器要求 `motorbridge 0.4.6+rebotarm.2` 及逐电机反馈序号能力，启动前运行：
+主控制器要求 `motorbridge 0.4.7+rebotarm.1`、逐电机反馈序号能力及上游
+`dm-serial` 10 ms 读写超时预算，启动前运行：
 
 ```bash
+cd ~/robotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
 python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 ```
 

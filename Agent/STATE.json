@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-14T19:20:05+08:00",
+  "generated_at": "2026-09-17T14:47:08+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "97845b5",
+    "head": "906beda",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-14T19:20:05+08:00 | actor=codex | event=start | note=移除 person 抓取白名单，验证修复并提交推送 GitHub | verification=-"
+  "last_event": "- 2026-09-17T14:47:08+08:00 | actor=codex | event=verified | note=MotorBridge 0.4.7升级、RViz入口修整和旧入口清理已完成发布前核验；记录operator已测driver_only与sim/real RViz，下一项为rebotarm_app网页遥操作 | verification=MotorBridge 0.4.7+rebotarm.1 contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures; compileall and git diff --check passed"
 }

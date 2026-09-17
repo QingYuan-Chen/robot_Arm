@@ -1,23 +1,19 @@
-# reBotArm ROS2 Architecture
+# reBotArm ROS2 架构
 
-## Current Deployment Scope
+## 当前部署范围
 
-The supported vision route is Ubuntu 24.04 / ROS 2 Jazzy with native Gemini 2,
-local YOLO, ROS RGB-D/CameraInfo/detections, and local in-process GraspNet.
-Windows, HTTP, MJPEG, remote JSON, and standalone GraspNet service routes have
-been retired and must not be restored.
+当前支持的视觉路线是 Ubuntu 24.04 / ROS 2 Jazzy：原生 Gemini 2、本地 YOLO、ROS RGB-D/CameraInfo/检测结果，以及本机进程内 GraspNet。Windows、HTTP、MJPEG、远程 JSON 和独立 GraspNet 服务路线已经废弃，不得恢复。
 
-This repository is organized as layered ROS2 packages. New code must follow
-these ownership boundaries instead of adding more logic to the legacy
+本仓库由分层 ROS2 包组成。新代码必须遵守以下职责边界，不得继续向旧版
 `rebotarm_interactive_control` package.
 
-## Ownership Rules
+## 职责边界
 
-### Hardware ownership
+### 硬件职责（Hardware ownership）
 
-`rebotarmcontroller` owns real hardware communication and last-line safety.
+`rebotarmcontroller` 负责真实硬件通信和最后一道安全防线。
 
-It is responsible for:
+负责：
 
 - motor SDK / serial channel access
 - arm and gripper state publication
@@ -28,7 +24,7 @@ It is responsible for:
 - gripper execution
 - rejecting unsafe or malformed low-level commands
 
-It must not own:
+不得负责：
 
 - web UI
 - teach file management
@@ -36,11 +32,11 @@ It must not own:
 - MoveIt planning policy
 - user-facing workflow state
 
-### Motion ownership
+### 运动职责（Motion ownership）
 
-`rebotarm_motion` owns motion generation and motion validation.
+`rebotarm_motion` 负责运动生成和运动校验。
 
-It is responsible for:
+负责：
 
 - point-to-point preview and execution nodes
 - MoveIt planning client adapters
@@ -52,14 +48,13 @@ It is responsible for:
 - start alignment for teach replay
 - `JointTrajectory` construction utilities
 
-It may call MoveIt services and controller actions, but it must not talk
-directly to the motor SDK.
+可以调用 MoveIt 服务和控制器 Action，但不得直接访问电机 SDK。
 
-### Teach ownership
+### 示教职责
 
-`rebotarm_teach` owns the teach workflow.
+`rebotarm_teach` 负责示教工作流。
 
-It is responsible for:
+负责：
 
 - gravity-comp teach recording
 - teach record file format and file listing
@@ -83,7 +78,7 @@ It may use `rebotarm_motion` for retiming, alignment, collision checks, and
 trajectory validation. It must not implement dashboard HTML or direct motor SDK
 logic.
 
-### Operator interaction ownership
+### 操作交互职责（Operator interaction ownership）
 
 `rebotarm_teleop` owns operator command adapters.
 
@@ -99,7 +94,7 @@ It is responsible for:
 It may publish target commands or call controller-facing ROS actions/services.
 It must not own teach replay quality policy or dashboard rendering.
 
-### Dashboard ownership
+### Dashboard 职责（Dashboard ownership）
 
 `rebotarm_dashboard` owns the web application boundary.
 
@@ -116,7 +111,7 @@ It must not contain complex motion planning, retiming, teach replay algorithms,
 or hardware SDK code. The dashboard may display motion and teach results, but
 the algorithms live in `rebotarm_motion` and `rebotarm_teach`.
 
-### MoveIt configuration ownership
+### MoveIt 配置职责
 
 `rebotarm_moveit_config` owns only MoveIt model and planning configuration.
 
@@ -138,7 +133,7 @@ It is responsible for:
 
 It must not contain executable business logic.
 
-### Vision ownership
+### 视觉职责
 
 `rebotarm_vision` owns perception and grasp candidates.
 
@@ -158,7 +153,7 @@ Ready-pose motion (`visual_ready_node` and its parameter profile) lives in
 `rebotarm_motion`. The old vision Python/console entry remains a compatibility
 alias; bringup launches the motion owner directly.
 
-### Simulation ownership
+### 仿真职责
 
 `rebotarm_simulation` owns offline robot physics and the simulated controller
 backend.
@@ -175,7 +170,7 @@ It must not import or call the real motor SDK. A simulation launch must not
 start `rebotarmcontroller`, open a hardware channel, or expose a second active
 `FollowJointTrajectory` server under the same name.
 
-### Bringup ownership
+### Bringup 职责
 
 `rebotarm_bringup` owns launch-time composition and backend selection.
 
@@ -189,7 +184,7 @@ It is responsible for:
 It must not implement motor control, motion planning, perception, or calibration
 algorithms inside launch files.
 
-### Calibration ownership
+### 标定职责
 
 `rebotarm_calibration` is the intended owner for calibration tools.
 
@@ -203,7 +198,7 @@ It is responsible for:
 Calibration outputs should be consumed by vision and motion layers through
 configuration or TF, not copied into dashboard or controller code.
 
-### Compatibility layer
+### 兼容层
 
 `rebotarm_interactive_control` is now a compatibility layer.
 
@@ -218,7 +213,7 @@ Layered packages must not import rebotarm_interactive_control:
 - `rebotarm_teleop`
 - `rebotarm_dashboard`
 
-## Dependency Direction
+## 依赖方向
 
 Allowed dependency direction:
 
@@ -264,7 +259,7 @@ rebotarm_simulation -> rebotarmcontroller implementation
 rebotarm_bringup -> package implementation internals
 ```
 
-## Authority Matrix
+## 权限矩阵
 
 | Package | May directly command hardware | May call controller ROS services/actions | May call MoveIt | May own files/UI | May publish operator targets |
 | --- | --- | --- | --- | --- | --- |
@@ -284,9 +279,9 @@ If a package needs authority outside its row, create a small interface in the
 owning package and call that interface. Do not copy the implementation across
 layers.
 
-## Workflow Boundaries
+## 工作流边界
 
-### Point-to-point execution
+### 点到点执行
 
 Point-to-point execution means moving from the current robot state to one target
 state. It is owned by `rebotarm_motion`.
@@ -299,7 +294,7 @@ Required properties:
 - controller stop path remains available
 - hardware execution goes through `rebotarmcontroller`
 
-### Teach replay
+### 示教回放
 
 Teach replay means reproducing a recorded teach trajectory safely. It is owned
 by `rebotarm_teach` with motion services from `rebotarm_motion`.
@@ -313,7 +308,7 @@ Required properties:
 - runtime tracking guard can stop replay
 - final hold uses zero velocity
 
-### Web teleop
+### Web 遥操作
 
 Web teleop means the dashboard sends operator-intended joint or gripper targets.
 The dashboard owns UI; `rebotarm_teleop` owns command adaptation; the controller
@@ -326,7 +321,7 @@ Required properties:
 - replay state can lock unsafe arm commands
 - web preview and execute are separate concepts unless explicitly confirmed
 
-### RViz MoveIt Drag Control
+### RViz MoveIt 末端拖动
 
 RViz drag control is now the native MoveIt MotionPlanning workflow. It does not
 use the retired custom `ee_target` marker, `PreviewNode`, `ExecutionNode`, or
@@ -338,7 +333,7 @@ Current split:
 - MoveIt `move_group` computes the trajectory
 - `rebotarmcontroller` executes the resulting `FollowJointTrajectory`
 
-## Where New Code Goes
+## 新代码归属
 
 Use this table before adding a file:
 
@@ -359,7 +354,7 @@ Use this table before adding a file:
 If a feature seems to belong in multiple packages, split it by responsibility
 instead of making one large node own the whole workflow.
 
-## Testing Rules
+## 测试规则
 
 Architecture rules are guarded by `tests/test_package_layering.py`.
 

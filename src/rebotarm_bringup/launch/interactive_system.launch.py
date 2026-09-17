@@ -206,6 +206,7 @@ def generate_launch_description():
                 name="rviz2",
                 output="screen",
                 arguments=["-d", rviz_config],
+                remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
                 parameters=[
                     moveit_config.robot_description,
                     moveit_config.robot_description_semantic,

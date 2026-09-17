@@ -607,3 +607,16 @@
 - 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-
 - 2026-09-14T16:45:40+08:00 | actor=codex | event=start | note=迁移旧备份中的 GraspNet 代码、GraspNetAPI 和 checkpoint 到当前工作区 | verification=-
 - 2026-09-14T19:20:05+08:00 | actor=codex | event=start | note=移除 person 抓取白名单，验证修复并提交推送 GitHub | verification=-
+- 2026-09-15T10:28:20+08:00 | actor=codex | event=start | note=按旧仓库恢复 RViz 真机末端拖动，同时保留显式 Enable 和当前位置保持 | verification=-
+- 2026-09-16T11:23:12+08:00 | actor=codex | event=start | note=移除旧兼容 launch 入口，并评估 bringup/rviz 入口替代方案 | verification=-
+- 2026-09-16T11:34:56+08:00 | actor=codex | event=verified | note=已移除 interactive_basic 旧兼容入口；bringup/rviz 保留并完成替代方案文档 | verification=python3 -m pytest tests/test_rebotarm_app_launch.py tests/test_package_layering.py -q; colcon build --base-paths src --executor sequential --symlink-install --packages-select rebotarm_bringup
+- 2026-09-16T12:55:24+08:00 | actor=codex | event=verified | note=已删除 rviz.launch.py 并同步清理当前文档与映射说明 | verification=python3 -m pytest tests/test_package_layering.py tests/test_rebotarm_app_launch.py -q; colcon build --base-paths src --executor sequential --symlink-install --packages-select rebotarm_bringup
+- 2026-09-17T12:36:58+08:00 | actor=codex | event=start | note=核对 driver_only.launch.py 当前功能与服务 | verification=-
+- 2026-09-17T12:43:26+08:00 | actor=codex | event=start | note=整理 driver_only 真机功能测试指令与安全顺序 | verification=-
+- 2026-09-17T12:55:12+08:00 | actor=codex | event=start | note=诊断 P0 enable hold 后反馈过期及保护失能 | verification=-
+- 2026-09-17T13:01:30+08:00 | actor=codex | event=start | note=同步上游 MotorBridge dm-serial 10ms 超时并重建验证 | verification=-
+- 2026-09-17T13:13:45+08:00 | actor=codex | event=complete | note=MotorBridge 固定基线升级为上游 v0.4.7，安装 0.4.7+rebotarm.1；保留反馈与置零安全补丁，等待失能反馈和 P0 真机复测 | verification=35 focused passed; Rust 40 passed; layering 20 passed; full 763 passed, 7 skipped, 3 existing environment failures; compileall and diff-check passed; no hardware accessed
+- 2026-09-17T14:14:49+08:00 | actor=codex | event=start | note=制定 driver_only 功能 6 7 8 的真机分级测试步骤 | verification=-
+- 2026-09-17T14:44:54+08:00 | actor=codex | event=start | note=核对当前改动和真机验收状态，提交并推送项目，明确下一项测试 | verification=-
+- 2026-09-17T14:46:33+08:00 | actor=codex | event=start | note=解释截图中的 ROS 2 launch 脚本功能 | verification=-
+- 2026-09-17T14:47:08+08:00 | actor=codex | event=verified | note=MotorBridge 0.4.7升级、RViz入口修整和旧入口清理已完成发布前核验；记录operator已测driver_only与sim/real RViz，下一项为rebotarm_app网页遥操作 | verification=MotorBridge 0.4.7+rebotarm.1 contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures; compileall and git diff --check passed

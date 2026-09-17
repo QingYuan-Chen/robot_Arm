@@ -3,7 +3,9 @@
 > P0 安全门：`HardwareManager.connect()` 已改为只连接并保持失能，显式 enable、失败回滚和安全默认 launch 已有自动化测试；真机 joint states、enable/hold/disable 和故障回滚仍待验收。完成这些实机证据前，本文所有 `use_hardware:=true`、网页真机执行、示教真机回放及视觉真机命令仅作为操作参考，不应直接运行。无硬件仿真和只读检查不受此限制。
 
 这份文档只写当前真实可用的遥操作流程，目标是直接复制粘贴使用。  
-日常启动不需要选择 `mode`，网页是主入口。
+日常启动不需要选择 `mode`，网页是主入口。RViz 末端拖动请使用 `docs/rebotarm_feature_commands.md` 中的 sim/real 专用入口；仿真入口包含 `rebotarm_sim_trajectory_controller`，支持真实的 Plan & Execute。
+
+入口约定：`interactive_basic.launch.py` 和旧的 `rviz.launch.py` 已移除；`bringup.launch.py` 仅用于基础控制器/状态组合，不替代 RViz MoveIt 末端拖动。真机拖动使用 `rviz_ee_drag_real.launch.py`，仿真拖动使用 `rviz_ee_drag_sim.launch.py`，完整网页和示教工作台使用 `rebotarm_app.launch.py`。
 
 ## 1. 启动遥操作系统
 

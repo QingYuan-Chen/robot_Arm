@@ -119,7 +119,7 @@ PYTHONPATH="$PWD/Python_SDK${PYTHONPATH:+:$PYTHONPATH}" \
 source /opt/ros/jazzy/setup.bash
 source /home/a/project/rebot_Arm/install/setup.bash
 export ROS_DOMAIN_ID=42
-ros2 launch rebotarm_bringup rviz.launch.py arm_namespace:=mapping_preview
+当前仓库已移除旧的 `rviz.launch.py`。该映射验证应使用映射项目自己的 RViz/状态发布入口；不要启动 reBotArm 的真机或仿真 RViz 入口来替代两台机械臂的映射模型。
 ```
 
 再在终端二启动只读映射发布器：

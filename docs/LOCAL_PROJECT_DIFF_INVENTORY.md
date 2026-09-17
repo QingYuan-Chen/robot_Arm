@@ -1,15 +1,12 @@
-# Local Migration Inventory
+# 本地迁移清单
 
-> Historical migration inventory: later Windows and HTTP vision removals are recorded in LOCAL_PROJECT_DIFF.md. Paths below are comparison evidence, not a current installation manifest.
+> 历史迁移清单：后续 Windows 和 HTTP 视觉路线的移除记录在 LOCAL_PROJECT_DIFF.md。下方路径是对比证据，不是当前安装清单。
 
-Generated from tracked files in the actual old/new worktrees, including old uncommitted edits.
-Build/install/log/venv/cache directories are excluded by using the Git tracked-file inventories.
-Path-only additions/removals can be resource moves, not added/removed functionality.
+本清单根据新旧工作树中的 Git 跟踪文件生成，并包含旧工作树未提交的修改。通过 Git 跟踪文件清单排除了 build/install/log/venv/cache 目录。仅路径发生的新增或删除可能只是资源移动，不代表功能新增或移除。
 
-Old tracked files present: 539; new baseline tracked files: 604.
-New-only: 260; old-only: 195; changed: 123; identical: 221.
+旧版跟踪文件：539；新版基线跟踪文件：604。仅新版存在：260；仅旧版存在：195；已变更：123；完全相同：221。
 
-## NEW Packages / Executables / Launch / Dependencies
+## 新版包、可执行文件、启动文件与依赖
 
 ### rebotarm_bringup
 
@@ -21,13 +18,11 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 
 - `bringup.launch.py`
 - `driver_only.launch.py`
-- `interactive_basic.launch.py`
 - `interactive_system.launch.py`
 - `moveit_hardware.launch.py`
 - `mujoco_offline_perception.launch.py`
 - `real_perception_sim_execution.launch.py`
 - `rebotarm_app.launch.py`
-- `rviz.launch.py`
 - `rviz_ee_drag_real.launch.py`
 - `rviz_ee_drag_sim.launch.py`
 - `teach_record.launch.py`
@@ -496,7 +491,7 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `tf_transformations`
 - `trajectory_msgs`
 
-## OLD Packages / Executables / Launch / Dependencies
+## 旧版包、可执行文件、启动文件与依赖
 
 ### rebotarm_bringup
 
@@ -969,7 +964,7 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `tf_transformations`
 - `trajectory_msgs`
 
-## NEW-only Paths
+## 仅新版存在的路径
 
 - `AGENTS.md`
 - `Agent/ACTIVITY_LOG.md`
@@ -1008,7 +1003,6 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `src/rebotarm_bringup/config/driver_params.yaml`
 - `src/rebotarm_bringup/config/gripper.yaml`
 - `src/rebotarm_bringup/config/replay_profiles.yaml`
-- `src/rebotarm_bringup/launch/interactive_basic.launch.py`
 - `src/rebotarm_bringup/launch/mujoco_offline_perception.launch.py`
 - `src/rebotarm_calibration/rebotarm_calibration/aruco_pose.py`
 - `src/rebotarm_calibration/rebotarm_calibration/handeye_residual.py`
@@ -1232,7 +1226,7 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `tools/source_local_environment.bash`
 - `tools/ubuntu_graspnet_service.py`
 
-## OLD-only Paths
+## 仅旧版存在的路径
 
 - `.gitattributes`
 - `.github/workflows/architecture.yml`
@@ -1430,7 +1424,7 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `tools/verify_perception_ros.py`
 - `tools/verify_sim_workflows.py`
 
-## Changed Paths
+## 已变更的路径
 
 - `.gitignore`
 - `docs/rebotarm_feature_commands.md`
@@ -1443,7 +1437,6 @@ New-only: 260; old-only: 195; changed: 123; identical: 221.
 - `src/rebotarm_bringup/launch/moveit_hardware.launch.py`
 - `src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py`
 - `src/rebotarm_bringup/launch/rebotarm_app.launch.py`
-- `src/rebotarm_bringup/launch/rviz.launch.py`
 - `src/rebotarm_bringup/launch/rviz_ee_drag_real.launch.py`
 - `src/rebotarm_bringup/launch/rviz_ee_drag_sim.launch.py`
 - `src/rebotarm_bringup/launch/teach_record.launch.py`
