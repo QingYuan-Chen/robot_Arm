@@ -628,3 +628,7 @@ P0 Gate B/C 在 Enable 后保持阶段首先出现 `dm-serial write failed: Oper
 ## 2026-09-17 bringup 硬件启动片段统一
 
 用户要求先上传既有进度再重构 launch。累计包迁移成果已作为提交 `f0620c3` 推送到 `origin/main`。随后新增 `hardware_controller.launch.py`，它成为 `rebotarm_bringup/launch` 内唯一直接声明 `reBotArmController` 的文件；`driver_only` 改为兼容薄入口，`bringup`、`moveit_hardware`、`interactive_system`、`teleop_keyboard`、`visual_ready_hold` 均通过 include 复用并保留原公开参数、默认失能和退出不自动回位语义。新增 `docs/launch_structure_and_functions.md`，架构和中文 README 已链接；分层测试增加唯一硬件 owner 约束。聚焦 107 项在加载工作空间后通过，layering 18 项通过，7 个新/迁移入口的 `--show-args` 解析通过，必需 compileall 和 diff check 通过；全量 `762 passed, 7 skipped, 3 failed`，失败为既有 OpenCV ArUco/`calibrateHandEye` API 与 MuJoCo 解释器默认断言。colcon 单包构建受旧安装空间缺失 eigenpy/coal/pinocchio package hook 阻断，独立 pip wheel 构建/安装成功。全程未访问串口、未启动控制器或发送运动命令。
+
+## 2026-09-18 Pinocchio 安装与 OpenCV 冲突解除
+
+用户已安装 `ros-jazzy-pinocchio 4.1.0`，apt 同步安装 `ros-jazzy-eigenpy 3.13.0` 与 `ros-jazzy-coal 3.0.3`；三者从 `/opt/ros/jazzy` Python 路径导入成功。用户目录中覆盖系统库且缺少 `calibrateHandEye` 的 `opencv-python 5.0.0.93` 已卸载，默认 Python 恢复使用 Ubuntu `python3-opencv 4.6.0`，手眼与 ArUco API 可用，标定聚焦 6 项通过；两个项目虚拟环境的 OpenCV 4.11 未修改。旧 bringup 构建缓存仍引用已删除的 `teleop_control.yaml`，已可恢复移至 `/tmp/rebotarm-bringup-stale.JpkLpA`，随后 `rebotarm_bringup` symlink build 成功。最终 layering 18 passed、全量 `764 passed, 7 skipped, 1 failed`，唯一失败为既有 `mujoco_sim.launch.py` 默认解释器断言；必需 compileall 通过。未启动节点、访问串口或操作真机。
