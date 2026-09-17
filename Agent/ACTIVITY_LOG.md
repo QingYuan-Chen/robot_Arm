@@ -620,3 +620,4 @@
 - 2026-09-17T14:44:54+08:00 | actor=codex | event=start | note=核对当前改动和真机验收状态，提交并推送项目，明确下一项测试 | verification=-
 - 2026-09-17T14:46:33+08:00 | actor=codex | event=start | note=解释截图中的 ROS 2 launch 脚本功能 | verification=-
 - 2026-09-17T14:47:08+08:00 | actor=codex | event=verified | note=MotorBridge 0.4.7升级、RViz入口修整和旧入口清理已完成发布前核验；记录operator已测driver_only与sim/real RViz，下一项为rebotarm_app网页遥操作 | verification=MotorBridge 0.4.7+rebotarm.1 contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures; compileall and git diff --check passed
+- 2026-09-17T14:47:34+08:00 | actor=codex | event=complete | note=已提交并推送main；MotorBridge 0.4.7升级、RViz工作流与旧入口清理已发布，下一项测试rebotarm_app网页遥操作 | verification=origin/main=4f9893c; MotorBridge contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures
