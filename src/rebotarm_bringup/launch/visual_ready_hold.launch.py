@@ -23,8 +23,9 @@
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -49,23 +50,22 @@ def generate_launch_description():
     # 位姿/时长/超时/起始偏差保护都取自运动包的观察位姿参数文件，两个实例共用。
     visual_ready_params = PathJoinSubstitution([FindPackageShare("rebotarm_motion"), "config", "visual_ready.yaml"])
 
-    # 硬件控制器：与视觉链路共用同一个命名空间，使摆位动作能落到真机上。
-    controller = Node(
-        package="rebotarmcontroller",
-        executable="reBotArmController",
-        name="reBotArmController",
-        output="screen",
-        parameters=[
-            {
-                "arm_config": arm_config,
-                "gripper_config": gripper_config,
-                "channel": channel,
-                "shutdown_safe_home": shutdown_safe_home,
-                "joint_state_rate": joint_state_rate,
-                "cmd_arbitration": cmd_arbitration,
-                "arm_namespace": arm_namespace,
-            }
-        ],
+    # 与视觉链路共用命名空间的唯一硬件底层片段。
+    controller = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [bringup_share, "launch", "hardware_controller.launch.py"]
+            )
+        ),
+        launch_arguments={
+            "arm_config": arm_config,
+            "gripper_config": gripper_config,
+            "channel": channel,
+            "shutdown_safe_home": shutdown_safe_home,
+            "joint_state_rate": joint_state_rate,
+            "cmd_arbitration": cmd_arbitration,
+            "arm_namespace": arm_namespace,
+        }.items(),
     )
     # 启动实例：auto_move_on_start=true 自动摆位，exit_after_startup_move=true 摆完即退出，
     # 供下面的事件处理器串联常驻实例。startup_delay_sec 用于等控制器与底层驱动就绪。

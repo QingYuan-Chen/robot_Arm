@@ -122,29 +122,28 @@ def generate_launch_description():
             DeclareLaunchArgument("ee_frame_id", default_value="end_link"),
             # use_rviz：是否由 MoveIt 的 demo 启动文件打开 RViz。
             DeclareLaunchArgument("use_rviz", default_value="true"),
-            # 硬件控制器：唯一硬件入口，本文件无条件启动它（真机入口）。
-            Node(
-                package="rebotarmcontroller",
-                executable="reBotArmController",
-                name="reBotArmController",
-                output="screen",
-                parameters=[
-                    {
-                        "arm_config": arm_config,
-                        "gripper_config": gripper_config,
-                        "channel": channel,
-                        "joint_state_rate": joint_state_rate,
-                        "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
-                        "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
-                        "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
-                        "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
-                        "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
-                        "cmd_arbitration": cmd_arbitration,
-                        "arm_namespace": arm_namespace,
-                        "frame_id": frame_id,
-                        "ee_frame_id": ee_frame_id,
-                    }
-                ],
+            # 真实硬件由唯一底层片段启动；本文件只叠加示教与 MoveIt。
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [bringup_share, "launch", "hardware_controller.launch.py"]
+                    )
+                ),
+                launch_arguments={
+                    "arm_config": arm_config,
+                    "gripper_config": gripper_config,
+                    "channel": channel,
+                    "joint_state_rate": joint_state_rate,
+                    "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
+                    "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
+                    "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
+                    "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
+                    "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
+                    "cmd_arbitration": cmd_arbitration,
+                    "arm_namespace": arm_namespace,
+                    "frame_id": frame_id,
+                    "ee_frame_id": ee_frame_id,
+                }.items(),
             ),
             # 示教录制节点：默认不自动开始录制，也不绑定键盘退出键。
             Node(

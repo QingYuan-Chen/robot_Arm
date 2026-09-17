@@ -17,6 +17,8 @@
 
 当前源码版本以 Git 提交为准。项目总览见 [README.md](README.md)，
 最新操作入口见 [功能操作手册](docs/rebotarm_feature_commands.md)。
+启动文件的分层、包含关系和功能边界见
+[启动结构与功能](docs/launch_structure_and_functions.md)。
 
 `rebotarm_ros2` 是 reBotArm B601 机械臂的 ROS2 SDK 工作空间。它将现有的
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，

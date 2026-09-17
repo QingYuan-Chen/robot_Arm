@@ -89,6 +89,11 @@ def test_operator_configs_are_split_by_consumer() -> None:
     assert teach_params["filter_sample_rate_hz"] == 150.0
     assert teach_params["resample_rate_hz"] == 150.0
 
+    hardware_launch = _read(
+        "src/rebotarm_bringup/launch/hardware_controller.launch.py"
+    )
+    assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in hardware_launch
+
     for launch_path in (
         "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
         "src/rebotarm_bringup/launch/driver_only.launch.py",
@@ -96,8 +101,7 @@ def test_operator_configs_are_split_by_consumer() -> None:
         "src/rebotarm_bringup/launch/bringup.launch.py",
         "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",
     ):
-        launch_text = _read(launch_path)
-        assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in launch_text
+        assert "hardware_controller.launch.py" in _read(launch_path)
 
 
 def test_launches_reference_consumer_specific_operator_configs() -> None:

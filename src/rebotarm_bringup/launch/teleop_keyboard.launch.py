@@ -23,8 +23,9 @@
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -97,22 +98,21 @@ def generate_launch_description():
                     [config_share, "config", "keyboard_control.yaml"]
                 ),
             ),
-            # 硬件控制器：唯一持有电机总线的节点，仅 use_hardware=true 时启动。
-            Node(
-                package="rebotarmcontroller",
-                executable="reBotArmController",
-                name="reBotArmController",
-                output="screen",
+            # 真机控制器由统一底层片段提供；无硬件模式不会解析或启动该片段。
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [bringup_share, "launch", "hardware_controller.launch.py"]
+                    )
+                ),
                 condition=IfCondition(use_hardware),
-                parameters=[
-                    {
-                        "arm_config": arm_config,
-                        "gripper_config": gripper_config,
-                        "channel": channel,
-                        "joint_state_rate": joint_state_rate,
-                        "arm_namespace": arm_namespace,
-                    }
-                ],
+                launch_arguments={
+                    "arm_config": arm_config,
+                    "gripper_config": gripper_config,
+                    "channel": channel,
+                    "joint_state_rate": joint_state_rate,
+                    "arm_namespace": arm_namespace,
+                }.items(),
             ),
             # 夹爪可视化关节状态：把夹爪宽度映射成 URDF 里的左右指关节角，供 RViz 显示。
             Node(

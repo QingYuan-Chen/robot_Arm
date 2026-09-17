@@ -276,7 +276,8 @@ def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack()
 def test_visual_ready_hold_launch_starts_real_controller_without_moveit_stack():
     launch_text = _read("src/rebotarm_bringup/launch/visual_ready_hold.launch.py")
 
-    assert 'executable="reBotArmController"' in launch_text
+    assert "hardware_controller.launch.py" in launch_text
+    assert 'executable="reBotArmController"' not in launch_text
     assert 'executable="rebotarm_visual_ready"' in launch_text
     assert 'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"' in launch_text
     assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in launch_text

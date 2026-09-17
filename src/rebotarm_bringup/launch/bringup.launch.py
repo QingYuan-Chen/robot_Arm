@@ -19,8 +19,9 @@
 #   - 真机上电后控制器处于失能态，必须显式调用 enable 服务才会运动，本文件不做任何自动使能。 
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -70,25 +71,23 @@ def generate_launch_description():
             # frame_id / ee_frame_id：对外位姿的参考坐标系与末端坐标系名，需与 URDF 中的 link 名一致，否则 TF 查询与可视化会失败。
             DeclareLaunchArgument("frame_id", default_value="base_link"),
             DeclareLaunchArgument("ee_frame_id", default_value="end_link"),
-            # 硬件控制器节点：真实电机通信、反馈校验、轨迹跟踪与所有安全门的落地点。
-            # 启动后处于失能态，必须显式调用 enable 服务才允许运动；参数全部来自上面的launch 参数（最终解析到 arm.yaml / gripper.yaml）。
-            Node(
-                package="rebotarmcontroller",
-                executable="reBotArmController",
-                name="reBotArmController",
-                output="screen",
-                parameters=[
-                    {
-                        "arm_config": arm_config,
-                        "gripper_config": gripper_config,
-                        "channel": channel,
-                        "joint_state_rate": joint_state_rate,
-                        "cmd_arbitration": cmd_arbitration,
-                        "arm_namespace": arm_namespace,
-                        "frame_id": frame_id,
-                        "ee_frame_id": ee_frame_id,
-                    }
-                ],
+            # 唯一硬件底层片段；本文件只在其上叠加状态发布与可视化。
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [bringup_share, "launch", "hardware_controller.launch.py"]
+                    )
+                ),
+                launch_arguments={
+                    "arm_config": arm_config,
+                    "gripper_config": gripper_config,
+                    "channel": channel,
+                    "joint_state_rate": joint_state_rate,
+                    "cmd_arbitration": cmd_arbitration,
+                    "arm_namespace": arm_namespace,
+                    "frame_id": frame_id,
+                    "ee_frame_id": ee_frame_id,
+                }.items(),
             ),
             # 夹爪可视化桥接节点（操作交互包）：把夹爪开口状态换算成左右指关节位置，供 robot_state_publisher 发布 TF 与 RViz 显示；不参与任何电机命令。
             Node(

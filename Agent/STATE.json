@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-17T23:36:21+08:00",
+  "generated_at": "2026-09-17T23:50:03+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "30c7e56",
+    "head": "f0620c3",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-17T23:36:21+08:00 | actor=codex | event=start | note=先上传当前进度，再统一 launch 硬件底层结构并生成结构功能文档 | verification=-"
+  "last_event": "- 2026-09-17T23:50:03+08:00 | actor=codex | event=verified | note=统一 bringup 硬件启动片段并生成结构功能文档；无硬件操作 | verification=layering 18 passed; focused 107 passed; full 762 passed, 7 skipped, 3 existing environment failures; compileall and diff check passed"
 }

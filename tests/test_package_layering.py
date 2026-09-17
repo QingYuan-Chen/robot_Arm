@@ -126,7 +126,6 @@ def test_teach_launches_use_teach_package_directly() -> None:
 
 def test_keyboard_launches_use_teleop_package_directly() -> None:
     launch_expectations = [
-        ROOT / "src/rebotarm_bringup/launch/rebotarm_app.launch.py",
         ROOT / "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",
     ]
 
@@ -135,6 +134,31 @@ def test_keyboard_launches_use_teleop_package_directly() -> None:
         node_index = text.index('executable="TeleopKeyboardNode"')
         package_context = text[max(0, node_index - 120):node_index]
         assert 'package="rebotarm_teleop"' in package_context
+
+
+def test_bringup_has_one_real_hardware_controller_owner() -> None:
+    launch_dir = ROOT / "src/rebotarm_bringup/launch"
+    launch_files = sorted(launch_dir.glob("*.launch.py"))
+    direct_owners = [
+        path.name
+        for path in launch_files
+        if 'package="rebotarmcontroller"' in path.read_text(encoding="utf-8")
+    ]
+
+    assert direct_owners == ["hardware_controller.launch.py"]
+
+    hardware_consumers = {
+        "bringup.launch.py",
+        "driver_only.launch.py",
+        "interactive_system.launch.py",
+        "moveit_hardware.launch.py",
+        "teleop_keyboard.launch.py",
+        "visual_ready_hold.launch.py",
+    }
+    for name in hardware_consumers:
+        assert "hardware_controller.launch.py" in (launch_dir / name).read_text(
+            encoding="utf-8"
+        )
 
 
 def test_rviz_drag_launch_does_not_start_legacy_preview_execution_nodes() -> None:

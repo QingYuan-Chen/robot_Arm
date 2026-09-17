@@ -180,6 +180,12 @@ It is responsible for:
 - propagating `use_hardware`, `execution_mode`, and `use_sim_time`
 - safe launch defaults and mutually exclusive node conditions
 
+The real controller is composed through the single
+`rebotarm_bringup/launch/hardware_controller.launch.py` fragment. Other bringup
+launch files may forward public hardware arguments, but must not duplicate the
+`reBotArmController` node declaration. See
+[launch structure and functions](launch_structure_and_functions.md).
+
 It must not implement motor control, motion planning, perception, or calibration
 algorithms inside launch files.
 

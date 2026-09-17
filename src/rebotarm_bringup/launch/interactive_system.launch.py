@@ -168,32 +168,31 @@ def generate_launch_description():
                     ),
                 }.items(),
             ),
-            # 真实硬件后端：仅当 use_hardware=true 时启动，串口配置与抓爪安全阈值全部显式下发
-            Node(
-                package="rebotarmcontroller",
-                executable="reBotArmController",
-                name="reBotArmController",
-                output="screen",
+            # 真实硬件后端统一由底层片段拥有；预览/仿真时整个 include 被跳过。
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [bringup_share, "launch", "hardware_controller.launch.py"]
+                    )
+                ),
                 condition=IfCondition(use_hardware),
-                parameters=[
-                    {
-                        "arm_config": arm_config,
-                        "gripper_config": gripper_config,
-                        "channel": channel,
-                        "shutdown_safe_home": shutdown_safe_home,
-                        "joint_state_rate": joint_state_rate,
-                        "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
-                        "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
-                        "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
-                        "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
-                        "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
-                        "grasp_hold_timeout_sec": grasp_hold_timeout_sec,
-                        "cmd_arbitration": cmd_arbitration,
-                        "arm_namespace": arm_namespace,
-                        "frame_id": frame_id,
-                        "ee_frame_id": ee_frame_id,
-                    }
-                ],
+                launch_arguments={
+                    "arm_config": arm_config,
+                    "gripper_config": gripper_config,
+                    "channel": channel,
+                    "shutdown_safe_home": shutdown_safe_home,
+                    "joint_state_rate": joint_state_rate,
+                    "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
+                    "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
+                    "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
+                    "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
+                    "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
+                    "grasp_hold_timeout_sec": grasp_hold_timeout_sec,
+                    "cmd_arbitration": cmd_arbitration,
+                    "arm_namespace": arm_namespace,
+                    "frame_id": frame_id,
+                    "ee_frame_id": ee_frame_id,
+                }.items(),
             ),
             # 夹爪可视化状态桥：把夹爪反馈映射成 RViz 手指关节角，随 /visual_joint_states 发布；
             # 预览模式下由 MoveIt demo 负责该职责，故用 UnlessCondition 互斥
