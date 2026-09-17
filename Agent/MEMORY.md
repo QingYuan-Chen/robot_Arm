@@ -14,6 +14,8 @@
 
 ## 当前事实
 
+- 2026-09-17 为 `src/` 全部 12 个包补全阅读用中文注释（文件级职责说明 + 关键类/函数 + 参数与算法要点），只改注释与 docstring，代码语义、命名、导入与全部字符串字面量均未变动。308/309 个可注释文件已覆盖；唯一跳过 `src/rebotarm_simulation/config/mujoco_collision_baseline.json`（JSON 不支持注释，且它是带内容哈希的基准记录）。改动以 AST（剥离 docstring 与 `pass` 后比对）与 HTML/CSS/JS 注释剥离两种方式双向校验全部通过；全量回归 17 failed / 745 passed / 7 skipped，失败集合与改动前逐条一致。本轮顺带修复三项既有缺陷：`src/rebotarm_bringup/launch/{bringup,teleop_keyboard,interactive_system}.launch.py` 自初始导入提交 `921588b` 起即带 UTF-8 BOM，其中 `bringup.launch.py` 第 1 行中文注释还被 GBK 误解码损坏（含私有区字符，无法字节级还原），三个文件此前 `ast.parse` 全部失败、根本无法作为 launch 文件使用；已去除 BOM 并按还原语义重写该行注释。注意 `src/rebotarm_simulation/models/rebotarm/robot.xml` 是 AUTO-GENERATED 文件，`urdf_to_mjcf.check_generated_model` 按字节全等比对，任何手改（含加注释）都会让 `--check` 判为 stale；本轮曾误加注释，已回退为与生成器一致并排除在注释范围之外，后续如需给 MJCF 加说明应改生成器而不是提交文件。
+
 - 2026-09-13：用户进一步确认移除旧跨主机 HTTP/JSON/MJPEG 视觉兼容链。已删除远端相机/检测/GraspNet 客户端、网络 camera 配置、本机 HTTP GraspNet 回退服务与无消费者的 HTTP contract/client；保留本机推理 backend、ROS RGB-D/CameraInfo/detection 同步与候选发布。vision 默认配置改为 camera_ubuntu，主组合默认 ubuntu_native，移除 URL/轮询参数；Dashboard HTTP 与 ROS DDS 不在删除范围。此前 762 passed/7 skipped，新增缺失路径防回归与构建待本轮最终核验；未访问硬件或启动相机。
 
 - 2026-09-13 按用户要求收口 Windows：删除 tools 下 Windows 启动/服务脚本、Windows GraspNet bridge 及其依赖的旧 Open3D 查看器；删除对应专属测试。`docs/visual_grasp_commands.md` 重写为 Ubuntu 原生相机/YOLO/GraspNet、MuJoCo plan-only/benchmark 和真机安全边界；Ubuntu 视觉安装说明、七层参数和迁移差异报告已同步。通用 `graspnet_baseline_inference.py`、Ubuntu GraspNet service 和 network_mjpeg 输入仍保留，因为可用于 Ubuntu/非 Windows 兼容。完整测试在文档清理后待最终复跑。
@@ -614,3 +616,11 @@ operator补充校零后测试、故障失能、手动闭合、重新使能，明
 P0 Gate B/C 在 Enable 后保持阶段首先出现 `dm-serial write failed: Operation timed out`，随后控制器正确触发 `FEEDBACK_PROTECTIVE_DISABLE`；报告中最大位置跳变 0.000381 rad、最大速度 0.007326 rad/s，未触发运动阈值。按用户决定将固定基线从上游 v0.4.6 升级到 `v0.4.7@2b7b350914ace47ba06e85fcad333143de2b057b`，获得 10 ms dm-serial 超时、模式切换总预算、寄存器写 ACK 和参数保存改进；现有 feedback sequence、严格帧路由、置零新鲜 status0 门和保护失能经三方合并保留。用户级运行时已安装 `0.4.7+rebotarm.1`。focused 虚拟串口 35 passed、Rust 40 passed、layering 20 passed；全量 763 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall 与 diff 检查通过。升级期间未启动 controller 或访问串口，必须先做失能反馈稳定性和 P0 Gate B/C 复测，不能视为真机验收。证据：`Agent/evidence/maintenance/2026-09-17-motorbridge-v047-upgrade.md`。
 
 2026-09-17 operator 报告已完成 `driver_only.launch.py`、`rviz_ee_drag_sim.launch.py` 和 `rviz_ee_drag_real.launch.py` 的现场功能测试。该确认记录为 operator-reported 测试进度；最新 P0 Gate B/C 报告因工具启动前已使能而 fail closed，不将其写成升级后 Gate B/C PASSED。下一项按从底层到组合入口的顺序测试 `rebotarm_app.launch.py`：先验证网页状态、显式 Enable/保持/停止/失能，再做单关节小幅遥操；示教录制/回放和视觉抓取继续后置。
+
+2026-09-17 网页 3D 视图网格竖直和初始视角异常已修正：Three.js `GridHelper` 默认已位于 XZ 水平面，移除了额外 90° 旋转；初始相机改为地面上方斜视并对准机械臂主体。focused 113 passed，dashboard compileall 和 diff check 通过。`rebotarm_app.launch.py` 的 controller 未传入 `shutdown_safe_home`，使用 controller 默认 false；正常 Ctrl+C 会停止 loop、失能并断开串口，不会先回 Safe Home，也不会切断 24 V 实体电源。
+
+2026-09-17 用户同意删除未接入任何 launch/节点的 `src/rebotarm_bringup/config/replay_profiles.yaml`；回放安全参数测试改为验证实际生效的 `teleop_control.yaml`，文档清单已同步。`src/` 只读审计另发现两个确定未进入运行链的候选：`config/driver_params.yaml`、`rebotarm_simulation/mujoco_legacy_cli.py`；本轮未删除。`rebotarm_interactive_control` 的 36 个薄 wrapper 和 vision 的 3 个迁移 shim 属于明确兼容层，要删需先决定是否破坏旧 import/console 路径。focused 97 passed；全量 763 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall 和 diff check 通过。
+
+2026-09-17 用户随后明确授权退役上述三批兼容/无引用内容。已删除 `driver_params.yaml`、`mujoco_legacy_cli.py`、Vision 的 `visual_ready_node.py`/`tcp_calibration.py`/`tcp_calibration_node.py` 及两个重复 console entry，并整体删除 `rebotarm_interactive_control` 包。测试已迁移到 motion/teach/teleop/dashboard/calibration 正式导入路径，架构、README、拓扑和命令文档已同步。旧 import 与旧 console scripts 不再兼容；当前为 12 个项目 ROS 包。symlink-install 旧包残留已可恢复移至 `/tmp/rebotarm-retired-compat-DHYDGX`，bringup/vision 旧构建目录分别移至 `/tmp/rebotarm-bringup-stale-Hlcte0` 和 `/tmp/rebotarm-vision-stale-KiHvQw`。focused 252 passed，12 包 symlink build 通过；全量 759 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall/diff check 通过。
+
+2026-09-17 用户授权清理无效的 `src/rebotarm_bringup/config/interactive_control.yaml`。已删除该文件及 `interactive_system.launch.py` 中的 `interactive_config` 参数文件引用，夹爪可视化节点保留显式 `arm_namespace` 参数；bringup 安装注释、当前迁移清单和分层回归测试已同步。历史旧版清单仍可保留该路径作为旧树记录。

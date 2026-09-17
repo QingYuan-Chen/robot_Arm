@@ -104,12 +104,6 @@ flowchart TB
     %% 语音流
     VC --> LLM --> SG -->|MoveToPose/MoveRelative action| CTRL
 
-    %% 兼容层
-    COMPAT["rebotarm_interactive_control<br/>(旧import重定向壳)"]
-    COMPAT -.->|sys.modules 转发| TEACH
-    COMPAT -.->|sys.modules 转发| TELEOP
-    COMPAT -.->|sys.modules 转发| DASH
-
     classDef hw fill:#ffd9d9,stroke:#c0392b,color:#000;
     classDef safe fill:#fff3cd,stroke:#e67e22,color:#000;
     class CTRL,HM,MPT hw;

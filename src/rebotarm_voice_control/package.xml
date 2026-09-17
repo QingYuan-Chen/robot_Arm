@@ -1,4 +1,14 @@
 <?xml version="1.0"?>
+<!--
+  rebotarm_voice_control：任务级语音/文本指令控制包。
+
+  构建类型为 ament_python；下方依赖分为三类：
+    * <depend>：构建与运行都需要的依赖；
+    * <exec_depend>：仅运行期需要的依赖（如运动层包与启动相关库）；
+    * <test_depend>：仅在跑本包代码风格/单元测试时需要。
+  依赖列表同时是 tests/test_package_resources.py 的校验依据：源码字符串常量里
+  出现的包名必须在此声明，因此新增依赖引用时必须同步更新本文件。
+-->
 <package format="3">
   <name>rebotarm_voice_control</name>
   <version>0.1.0</version>
@@ -8,18 +18,22 @@
 
   <buildtool_depend>ament_python</buildtool_depend>
 
+  <!-- 运行期基础依赖：ROS 2 Python 客户端库与消息/服务/动作接口。 -->
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>geometry_msgs</depend>
   <depend>control_msgs</depend>
   <depend>rebotarm_msgs</depend>
+  <!-- 运动层由语音指令间接调用（真实后端），本包不直接链接其库。 -->
   <exec_depend>rebotarm_motion</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
+  <!-- 配置读取所用 YAML 库（系统包，对应 Python 的 yaml 模块）。 -->
   <exec_depend>python3-yaml</exec_depend>
 
+  <!-- 代码风格与单元测试依赖，仅测试阶段使用。 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

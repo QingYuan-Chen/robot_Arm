@@ -61,15 +61,15 @@ NEW 的构建、虚拟环境、MotorBridge 编译和本地依赖均重新生成�
 | `rebotarm_dashboard` | HTTP 页面、命令 API、SSE 状态、模型资源服务、teach workflow 调用 | 同域；面板参数及部分工作流封装不同 |
 | `rebotarm_moveit_config` | 规范 URDF/mesh、SRDF、IK/OMPL/Pilz/控制器映射、RViz | 规划配置，物理描述另属 description |
 | `rebotarm_description` | 不存在；描述能力并未删除，归 moveit_config | 独立 URDF/mesh 和共用电机配置所有者 |
-| `rebotarm_calibration` | ArUco 位姿、手眼求解/残差 CLI、TCP 标定工具 | geometry/handeye 配置校验和 TCP；节点主要在 vision |
+| `rebotarm_calibration` | ArUco 位姿、手眼求解/残差 CLI、TCP 标定工具 | geometry/handeye 配置校验和 TCP；节点已归属 calibration |
 | `rebotarm_vision` | Ubuntu 相机+YOLO、原生 ROS GraspNet、候选筛选/IK、视觉抓取状态机、标记/预览、离线检测、ordinary_grasp 适配 | Ubuntu 相机/独立 YOLO/GraspNet ROS 链、候选与抓取状态机；旧 Windows/HTTP 链已移除 |
 | `rebotarm_simulation` | 唯一活动 MuJoCo ROS 后端、fake trajectory、模型生成、健康检查、Viewer、指标、虚拟相机和离线检测接线 | 同类基础能力，加 Real2Sim、Sim2Real、Reach/Pick、Gym/vector 环境及批处理/验收工具 |
 | `rebotarm_voice_control` | 文本/语音文件/LLM tool-call/Realtime 网关、命令路由、安全门、模板展开和模拟动作执行 | 已从旧当前工作树删除；共享任务消息仍保留 |
 | `rebotarm_bringup` | 场景组合、互斥后端选择、逐进程解释器配置 | 同域，以 core.launch.py 及分离运行/安全配置组织 |
-| `rebotarm_interactive_control` | 历史 import / console 薄兼容层 | 同域；不应往两者兼容层增加新业务 |
 | 独立 Star Arm 跟随 | SDK 跟随工具，部分 follower/hardware specs 变化 | 也存在；均非主 ROS 启动链，本轮不运行 |
 
-两边均为 13 包，但集合不同：NEW 用 voice_control 替代了 OLD 的 description 包位置，不是“功能完全相同的 13 包”。
+当前 NEW 为 12 包：已退役旧 import/console 兼容包；voice_control 仍保留，
+description 能力归 `rebotarm_moveit_config`。
 NEW 有 9 个 voice console entries；全包精确入口映射列于完整清单。
 两边 ROS 应用主体为 Python，msgs 为 ament_cmake/rosidl 生成接口；没有把生成的 C/C++ 消息代码当成手写算法差异。MotorBridge Rust/C ABI 属第三方构建。
 
@@ -113,7 +113,9 @@ NEW 部分通用 app/driver 入口仍面向硬件；“视觉安全默认值”�
 ## 8. Config、URDF / SRDF 与 MoveIt
 
 - OLD description 的 arm/gripper YAML 改由 NEW bringup 持有；arm.yaml 检查主要是注释/归属变化，不能仅因路径变化假定电机数值全变。
-- NEW `driver_params.yaml`、`replay_profiles.yaml` 与 OLD 分离运行/安全配置组织不同。
+- 未接入运行链的 driver 参数示例和回放预设配置已删除；启动参数由
+  launch 显式管理，键盘、网页与示教分别使用 `keyboard_control.yaml`、`web_teleop.yaml`
+  和 `teach_control.yaml`，公共关节定义使用 `operator_common.yaml`。
 - 规范 URDF 从 OLD description 移至 NEW `moveit_config/config/rebotarm.urdf`，mesh URI 同步变化；网格仍为同源对象。
 - URDF joint2/joint3 上界存在 `0 -> 0.02 rad` 等变化，不能自动应用旧机械限位假设。
 - `joint_limits.yaml` 本次逐字节比较一致；SRDF 不一致：NEW 增加 `safe_home=[-pi/2,-0.1,-0.2,0.2,0,0]`，home 改为 `[0,-0.8,-1.2,0.6,0,0]`，移除 MoveIt all-zero 命名态。

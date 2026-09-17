@@ -42,7 +42,7 @@ def test_rebotarm_app_launch_exposes_simple_modes_and_profiles() -> None:
     assert '"use_rviz": "false"' in launch_text
     assert 'arguments=["-d", web_rviz_config]' in launch_text
     assert '"web_teleop_status.rviz"' in launch_text
-    assert "_keyboard_node(" in launch_text
+    assert 'executable="TeleopKeyboardNode"' not in launch_text
     assert 'safe_name = os.path.basename(safe_name.replace("\\\\", "/")) or "teach_record"' in launch_text
     assert 'return f"teleop_records/{safe_name}"' in launch_text
 
@@ -60,37 +60,34 @@ def test_web_teleop_rviz_is_robot_status_only() -> None:
     assert "EndEffectorTarget" not in rviz_text
 
 
-def test_replay_profiles_keep_safe_defaults_in_config() -> None:
-    profiles = yaml.safe_load(
-        _read("src/rebotarm_bringup/config/replay_profiles.yaml")
-    )
+def test_operator_configs_are_split_by_consumer() -> None:
+    common = yaml.safe_load(_read("src/rebotarm_bringup/config/operator_common.yaml"))
+    keyboard = yaml.safe_load(_read("src/rebotarm_bringup/config/keyboard_control.yaml"))
+    web = yaml.safe_load(_read("src/rebotarm_bringup/config/web_teleop.yaml"))
+    teach = yaml.safe_load(_read("src/rebotarm_bringup/config/teach_control.yaml"))
 
-    assert profiles["default_profile"] == "safe"
-    assert {"safe", "normal", "large"}.issubset(profiles["profiles"])
+    common_params = common["/**"]["ros__parameters"]
+    keyboard_params = keyboard["/**"]["ros__parameters"]
+    web_params = web["/**"]["ros__parameters"]
+    teach_params = teach["/**"]["ros__parameters"]
 
-    safe = profiles["profiles"]["safe"]
-    assert safe["dry_run"] is False
-    assert safe["speed"] <= 0.2
-    assert safe["collision_check_enabled"] is True
-    assert safe["use_moveit_start_align"] is True
-    assert safe["max_replay_velocity_rad_s"] <= 3.0
-    assert safe["max_replay_acceleration_rad_s2"] <= 5.0
-    assert safe["max_replay_jerk_rad_s3"] <= 30.0
+    assert "deadman_required" in keyboard_params
+    assert "deadman_key" in keyboard_params
+    assert not (set(keyboard_params) & set(teach_params))
+    assert "web_execute_enabled" in web_params
+    assert "web_keyboard_default_step_rad" in web_params
+    assert "replay_monitor_enabled" in teach_params
+    assert "collision_check_enabled" in teach_params
+    assert "joint_names" in common_params
+    assert "joint_lower_limits" in common_params
 
-    large = profiles["profiles"]["large"]
-    assert large["speed"] <= profiles["profiles"]["normal"]["speed"]
-    assert large["large_motion_max_speed"] <= 1.0
+    assert "deadman_required" not in web_params
+    assert "deadman_key" not in web_params
+    assert "web_execute_enabled" not in teach_params
 
-
-def test_teach_recording_uses_higher_sampling_defaults() -> None:
-    teleop_config = yaml.safe_load(
-        _read("src/rebotarm_bringup/config/teleop_control.yaml")
-    )
-    params = teleop_config["/**"]["ros__parameters"]
-
-    assert params["sample_rate_hz"] == 150.0
-    assert params["filter_sample_rate_hz"] == 150.0
-    assert params["resample_rate_hz"] == 150.0
+    assert teach_params["sample_rate_hz"] == 150.0
+    assert teach_params["filter_sample_rate_hz"] == 150.0
+    assert teach_params["resample_rate_hz"] == 150.0
 
     for launch_path in (
         "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
@@ -102,9 +99,27 @@ def test_teach_recording_uses_higher_sampling_defaults() -> None:
         launch_text = _read(launch_path)
         assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in launch_text
 
-    driver_params = yaml.safe_load(_read("src/rebotarm_bringup/config/driver_params.yaml"))
-    assert driver_params["reBotArmController"]["ros__parameters"]["joint_state_rate"] == 100.0
 
+def test_launches_reference_consumer_specific_operator_configs() -> None:
+    keyboard = _read("src/rebotarm_bringup/launch/teleop_keyboard.launch.py")
+    teach_record = _read("src/rebotarm_bringup/launch/teach_record.launch.py")
+    teach_replay = _read("src/rebotarm_bringup/launch/teach_replay.launch.py")
+    system = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
+    app = _read("src/rebotarm_bringup/launch/rebotarm_app.launch.py")
+
+    assert "keyboard_control.yaml" in keyboard
+    assert "operator_common.yaml" in keyboard
+    assert "teach_control.yaml" in teach_record
+    assert "operator_common.yaml" in teach_record
+    assert "teach_control.yaml" in teach_replay
+    assert "operator_common.yaml" in teach_replay
+    assert "keyboard_control.yaml" in system
+    for text in (system, app):
+        assert "web_teleop.yaml" in text
+        assert "teach_control.yaml" in text
+        assert "operator_common.yaml" in text
+    for text in (keyboard, teach_record, teach_replay, system, app):
+        assert "teleop_control.yaml" not in text
 
 def test_common_commands_document_recommends_one_entrypoint() -> None:
     doc = _read("docs/rebotarm_common_commands.md")

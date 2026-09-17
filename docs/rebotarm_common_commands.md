@@ -365,7 +365,6 @@ source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install --packages-select \
   rebotarm_bringup \
   rebotarm_moveit_config \
-  rebotarm_interactive_control \
   rebotarmcontroller
 
 source install/setup.bash

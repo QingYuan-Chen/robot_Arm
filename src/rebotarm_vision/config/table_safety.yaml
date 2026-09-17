@@ -1,15 +1,35 @@
+# 桌面/台面安全参数：把"抓取点与接近点不得低于台面"的判据集中在一处，
+# 由两个节点共享（高度下限必须一致，否则会出现"过滤节点放行、执行节点拒绝"的割裂）。
+# 注意：本文件中的参数键都是对外接口，禁止改动；只允许增加注释。
+
+# 抓取候选逆解过滤节点：在求 IK 之前先做高度与工作空间闸门
 rebotarm_grasp_candidate_ik_filter:
   ros__parameters:
+    # 抓取点最低允许高度（单位 m，基座系 z 轴向上）；低于该值判为贴地或穿桌，直接丢弃候选
     candidate_min_grasp_z_m: 0.0
+    # 接近点（预抓取点）最低高度钳位（单位 m，0.120 = 12 cm）；
+    # 低于该值会被抬高到该值，保证从目标上方进入而不是贴着台面平推
     candidate_pregrasp_min_z_m: 0.120
+    # 抬升安全高度下限（单位 m）。本节点只声明不使用，由执行节点读取同名参数生效，
+    # 列在这里是为了两个节点共享同一份数值。
     candidate_safe_lift_min_z_m: 0.120
+    # 是否启用工作空间盒闸门。此处为 false，即只靠上面的高度下限保护台面；
+    # 置 true 后抓取点还必须落在下面的 min/max 盒内。
     candidate_workspace_gate_enabled: false
+    # 上游 +X 工作区绕基座 Z 轴旋转 -90° 后的最小角（基座系，单位 m）
     # Upstream +X workspace rotated -90 deg around base Z for this installation.
     candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+    # 上述旋转后的工作空间盒最大角（基座系，单位 m）
     candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
+    # 抓取点到目标中心的最大允许偏差（单位 m，0.15 = 15 cm）；
+    # 超出说明抓取点已明显偏离物体（深度或分割异常），判定该候选不可信
     candidate_max_grasp_to_object_center_m: 0.15
 
+# 视觉抓取执行节点：在执行序列构建时再次校验高度下限（纵深防御）
 rebotarm_visual_grasp_executor:
   ros__parameters:
+    # 抓取点最低允许高度（单位 m，基座系）；不满足即判序列构建失败，不下发任何动作
     min_grasp_z_m: 0.0
+    # 安全撤退前的最低抬升高度（单位 m，0.12 = 12 cm）；与 lift_z_m 取较大者，
+    # 保证"先离开台面、再水平撤退"，避免撤退时撞到桌面或已放置物体
     safe_retreat_min_lift_z_m: 0.12

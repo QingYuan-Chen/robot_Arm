@@ -4,11 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from rebotarm_motion.visual_ready_node import VisualReadyNode
-from rebotarm_vision.visual_ready_node import VisualReadyNode as LegacyVisualReadyNode
 
 
-def test_legacy_visual_ready_entrypoint_resolves_to_motion_owner():
-    assert LegacyVisualReadyNode is VisualReadyNode
+def test_visual_ready_entrypoint_is_owned_by_motion_package():
     assert VisualReadyNode.__module__ == "rebotarm_motion.visual_ready_node"
 
 

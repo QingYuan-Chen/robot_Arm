@@ -1,16 +1,35 @@
+# 示教录制、示教回放及网页示教卡片使用的工作流参数。（得修改）
+#
+# 这是示教包的配置，不是遥操作配置。网页面板会加载本文件的镜像参数，用于回显和向 TeachReplayWorkflow 发出一致的 dry-run/execute 设置。
+
 /**:
   ros__parameters:
-    arm_namespace: rebotarm
-    joint_step_rad: 0.02
-    trajectory_duration: 0.2
-    poll_period: 0.05
-    input_timeout: 0.5
-    deadman_required: false
-    deadman_key: z
+    # 记录文件与录制前置条件。
+    record_path: teleop_records/teach_record.jsonl
+    sample_rate_hz: 150.0
+    require_gravity_comp: true
+    require_motor_status: true
+    feedback_timeout_sec: 0.15
+    auto_start_gravity_comp: false
+    auto_start_gravity_comp_retry_sec: 1.0
+    auto_start_gravity_comp_max_attempts: 30
+    keyboard_quit_enabled: true
+    quit_key: q
+    start_on_launch: true
+
+    # 回放启动方式与起点分类/对齐。
+    speed: 1.0
+    replay_speed: 1.0
     direct_threshold: 0.01
     align_threshold: 0.25
     align_duration: 3.0
+    align_duration_auto: true
+    align_target_speed_rad_s: 0.15
+    align_min_duration: 3.0
+    align_max_duration: 10.0
     align_steps: 30
+
+    # 轨迹质量与动力学上限。
     green_jump_rad: 0.03
     yellow_jump_rad: 0.05
     yellow_max_speed: 0.6
@@ -27,12 +46,16 @@
     large_motion_span_rad: 0.8
     large_motion_total_rad: 2.5
     large_motion_max_speed: 1.0
+
+    # 起停保持、软启动与回放延时。
     start_hold_sec: 0.8
     soft_start_duration: 1.0
     soft_start_steps: 30
     first_hold_sec: 0.3
     final_hold_sec: 1.0
     initial_replay_delay_sec: 0.2
+
+    # MoveIt 起点对齐与碰撞预检。
     use_moveit_start_align: true
     moveit_start_skip_threshold: 0.005
     moveit_group_name: arm
@@ -49,6 +72,8 @@
     collision_check_service: /check_state_validity
     collision_check_max_samples: 80
     collision_check_timeout_sec: 2.0
+
+    # 录制后的平滑、滤波、重采样和重定时。
     smoothing_enabled: true
     smoothing_window: 7
     filter_enabled: true
@@ -57,36 +82,12 @@
     resample_enabled: true
     resample_rate_hz: 150.0
     time_parameterization_method: auto
-    sample_rate_hz: 150.0
     max_prepared_jump_rad: 0.02
+
+    # 回放运行期跟踪保护。
     replay_monitor_enabled: true
     replay_monitor_period_sec: 0.05
     replay_monitor_start_grace_sec: 1.0
     replay_monitor_violation_grace_sec: 0.30
     max_tracking_error_rad: 0.25
     max_live_velocity_rad_s: 3.0
-    require_gravity_comp: true
-    auto_start_gravity_comp: false
-    status_panel_host: 127.0.0.1
-    status_panel_port: 8088
-    joint_names:
-      - joint1
-      - joint2
-      - joint3
-      - joint4
-      - joint5
-      - joint6
-    joint_lower_limits:
-      - -3.14159
-      - -3.14159
-      - -3.14159
-      - -3.14159
-      - -3.14159
-      - -3.14159
-    joint_upper_limits:
-      - 3.14159
-      - 3.14159
-      - 3.14159
-      - 3.14159
-      - 3.14159
-      - 3.14159

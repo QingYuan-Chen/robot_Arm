@@ -1,1 +1,1 @@
-"""Keyboard, web, and gripper teleoperation command adapters for reBotArm."""
+"""reBotArm 遥操作命令适配包：键盘、Web 与夹爪的操作者意图翻译层。"""

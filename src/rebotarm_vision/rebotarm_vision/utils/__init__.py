@@ -1,1 +1,5 @@
-"""Utility helpers for rebotarm_vision."""
+"""视觉包的通用辅助工具子包（rebotarm_vision.utils）。
+
+当前只放不依赖 ROS 参数、可直接在脚本与测试中调用的函数，
+例如把检测结果画到图像上用于调试预览的可视化工具。
+"""

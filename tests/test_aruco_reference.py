@@ -111,7 +111,7 @@ def test_transform_camera_point_to_base_uses_tf_transform():
 def test_auto_reference_provider_transforms_detected_aruco_center_to_base():
     _install_ros_stubs_if_needed()
 
-    from rebotarm_vision.tcp_calibration_node import AutoArucoReferenceProvider
+    from rebotarm_calibration.tcp_calibration_node import AutoArucoReferenceProvider
 
     class Driver:
         def get_frame(self):

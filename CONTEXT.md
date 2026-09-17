@@ -49,12 +49,6 @@ hardware internals or teach replay algorithms.
 The web-facing UI and status API. It displays state and calls services but does
 not own motion planning, teach replay algorithms, or motor SDK calls.
 
-### Compatibility Layer
-
-An old package or module path kept so existing launch files and imports do not
-break immediately. In this repository, `rebotarm_interactive_control` is a
-compatibility layer after the package split.
-
 ## Current Runtime Contract
 
 The maintained vision path is native Ubuntu only:

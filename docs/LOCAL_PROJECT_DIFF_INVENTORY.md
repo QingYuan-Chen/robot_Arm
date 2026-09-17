@@ -1,12 +1,15 @@
 # 本地迁移清单
 
 > 历史迁移清单：后续 Windows 和 HTTP 视觉路线的移除记录在 LOCAL_PROJECT_DIFF.md。下方路径是对比证据，不是当前安装清单。
+> 2026-09-17 后续清理已退役旧交互兼容包、Vision 的 visual-ready/TCP 重复兼容入口、
+> 未接线的 driver/回放配置和 MuJoCo legacy CLI。当前发布树以 README 与
+> `docs/architecture.md` 为准；下方“旧版”段仍保留历史对比事实。
 
 本清单根据新旧工作树中的 Git 跟踪文件生成，并包含旧工作树未提交的修改。通过 Git 跟踪文件清单排除了 build/install/log/venv/cache 目录。仅路径发生的新增或删除可能只是资源移动，不代表功能新增或移除。
 
 旧版跟踪文件：539；新版基线跟踪文件：604。仅新版存在：260；仅旧版存在：195；已变更：123；完全相同：221。
 
-## 新版包、可执行文件、启动文件与依赖
+## 清理前新版快照：包、可执行文件、启动文件与依赖
 
 ### rebotarm_bringup
 
@@ -38,8 +41,6 @@
 - `config/arm.yaml`
 - `config/driver_params.yaml`
 - `config/gripper.yaml`
-- `config/interactive_control.yaml`
-- `config/replay_profiles.yaml`
 - `config/teleop_control.yaml`
 
 **dependencies**
@@ -111,42 +112,6 @@
 - `rclpy`
 - `rebotarm_motion`
 - `rebotarm_moveit_config`
-- `rebotarm_msgs`
-- `rebotarm_teach`
-- `rebotarm_teleop`
-- `sensor_msgs`
-- `std_msgs`
-- `std_srvs`
-- `trajectory_msgs`
-
-### rebotarm_interactive_control
-
-**Console entries**
-
-- `TeleopKeyboardNode = rebotarm_interactive_control.teleop_keyboard_node:main`
-- `TeachRecorderNode = rebotarm_interactive_control.teach_recorder_node:main`
-- `TeachReplayNode = rebotarm_interactive_control.teach_replay_node:main`
-- `TeleopStatusPanelNode = rebotarm_interactive_control.teleop_status_panel_node:main`
-- `GripperVisualJointStateNode = rebotarm_interactive_control.gripper_visual_joint_state_node:main`
-
-**launch**
-
-- None.
-
-**config**
-
-- None.
-
-**dependencies**
-
-- `ament_index_python`
-- `ament_python`
-- `control_msgs`
-- `geometry_msgs`
-- `moveit_msgs`
-- `rclpy`
-- `rebotarm_dashboard`
-- `rebotarm_motion`
 - `rebotarm_msgs`
 - `rebotarm_teach`
 - `rebotarm_teleop`
@@ -363,10 +328,8 @@
 - `rebotarm_visual_grasp_executor = rebotarm_vision.visual_grasp_executor_node:main`
 - `rebotarm_grasp_candidate_ik_filter = rebotarm_vision.candidate_ik_filter_node:main`
 - `rebotarm_grasp_tcp_frame = rebotarm_vision.grasp_tcp_frame_node:main`
-- `rebotarm_visual_ready = rebotarm_vision.visual_ready_node:main`
 - `rebotarm_visual_grasp_benchmark = rebotarm_vision.visual_grasp_benchmark:main`
 - `rebotarm_hybrid_grasp_sim_benchmark = rebotarm_vision.hybrid_grasp_sim_benchmark:main`
-- `rebotarm_tcp_calibration = rebotarm_vision.tcp_calibration_node:main`
 - `rebotarm_debug_camera_preview = rebotarm_vision.debug_camera_preview:main`
 - `rebotarm_grasp_depth_probe = rebotarm_vision.grasp_depth_probe_node:main`
 - `rebotarm_offline_yolo_node = rebotarm_vision.offline_yolo_node:main`
@@ -523,9 +486,11 @@
 
 - `config/controller_runtime.yaml`
 - `config/controller_safety.yaml`
-- `config/interactive_control.yaml`
 - `config/rviz_real.yaml`
-- `config/teleop_control.yaml`
+- `config/operator_common.yaml`
+- `config/keyboard_control.yaml`
+- `config/web_teleop.yaml`
+- `config/teach_control.yaml`
 
 **dependencies**
 
@@ -964,7 +929,7 @@
 - `tf_transformations`
 - `trajectory_msgs`
 
-## 仅新版存在的路径
+## 清理前仅新版存在的路径
 
 - `AGENTS.md`
 - `Agent/ACTIVITY_LOG.md`
@@ -1000,16 +965,13 @@
 - `requirements-tensorrt.txt`
 - `requirements-vision.txt`
 - `src/rebotarm_bringup/config/arm.yaml`
-- `src/rebotarm_bringup/config/driver_params.yaml`
 - `src/rebotarm_bringup/config/gripper.yaml`
-- `src/rebotarm_bringup/config/replay_profiles.yaml`
 - `src/rebotarm_bringup/launch/mujoco_offline_perception.launch.py`
 - `src/rebotarm_calibration/rebotarm_calibration/aruco_pose.py`
 - `src/rebotarm_calibration/rebotarm_calibration/handeye_residual.py`
 - `src/rebotarm_calibration/rebotarm_calibration/handeye_residual_cli.py`
 - `src/rebotarm_calibration/rebotarm_calibration/handeye_solver.py`
 - `src/rebotarm_calibration/rebotarm_calibration/tcp_calibration_node.py`
-- `src/rebotarm_interactive_control/rebotarm_interactive_control/pose_preview_solver.py`
 - `src/rebotarm_motion/config/visual_ready.yaml`
 - `src/rebotarm_motion/rebotarm_motion/pose_preview_solver.py`
 - `src/rebotarm_motion/rebotarm_motion/trajectory_runtime_limits.py`
@@ -1032,7 +994,6 @@
 - `src/rebotarm_simulation/rebotarm_simulation/assets/rebotarm_grasp_scene.xml`
 - `src/rebotarm_simulation/rebotarm_simulation/mujoco_adapter_core.py`
 - `src/rebotarm_simulation/rebotarm_simulation/mujoco_grasp_quality.py`
-- `src/rebotarm_simulation/rebotarm_simulation/mujoco_legacy_cli.py`
 - `src/rebotarm_simulation/rebotarm_simulation/mujoco_legacy_health.py`
 - `src/rebotarm_simulation/rebotarm_simulation/mujoco_limit_checks.py`
 - `src/rebotarm_simulation/rebotarm_simulation/mujoco_metrics.py`
@@ -1429,7 +1390,6 @@
 - `.gitignore`
 - `docs/rebotarm_feature_commands.md`
 - `rebotarm_dependencies.repos`
-- `src/rebotarm_bringup/config/interactive_control.yaml`
 - `src/rebotarm_bringup/config/teleop_control.yaml`
 - `src/rebotarm_bringup/launch/bringup.launch.py`
 - `src/rebotarm_bringup/launch/driver_only.launch.py`
@@ -1460,9 +1420,6 @@
 - `src/rebotarm_dashboard/rebotarm_dashboard/status_panel_state.py`
 - `src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py`
 - `src/rebotarm_dashboard/rebotarm_dashboard/web_robot_assets.py`
-- `src/rebotarm_interactive_control/README.md`
-- `src/rebotarm_interactive_control/package.xml`
-- `src/rebotarm_interactive_control/setup.py`
 - `src/rebotarm_motion/package.xml`
 - `src/rebotarm_motion/rebotarm_motion/moveit_planner.py`
 - `src/rebotarm_motion/rebotarm_motion/teach_replay_start_align_precheck.py`

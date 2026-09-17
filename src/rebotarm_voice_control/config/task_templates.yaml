@@ -1,29 +1,49 @@
+# 任务模板：把一条高层语音指令展开为有序的低层步骤序列。
+# 由 task_planner 读取：命中 run_task_template 意图后，逐个步骤构造意图命令并
+# 重新做安全校验（模板不豁免白名单、工作空间与位移上限检查）。
+#
+# 模板字段说明：
+#   description   模板用途的人类可读说明（仅供阅读/日志，不参与逻辑）
+#   need_confirm  整条模板是否需要操作员确认
+#   steps         有序步骤列表；数组顺序即执行顺序
+# 步骤字段说明：
+#   intent        意图名（对应 intents.yaml 顶层键），用于审计与结果展示
+#   command       归一化命令名，必须落在 SafetyGuard 的命令白名单内
+#   params        该步骤参数，含义随 command 而变（见下方逐项注释）
+#   need_confirm  该步骤执行前是否需再次确认
+#   priority      优先级，缺省 "normal"；"highest" 保留给急停/取消类命令
+
 pick_place_demo:
   description: "V1 dry-run fixed place demonstration"
   need_confirm: true
   steps:
+    # 步骤 1：先运动到拍照位，便于相机确认抓取目标（运动类步骤需确认）。
     - intent: "move_named_pose"
       command: "move_named_pose"
       params:
-        name: "camera_pose"
+        name: "camera_pose"   # 命名位姿名，必须在 named_poses.yaml 中存在且被 safety_limits.yaml 的 allowed_named_poses 允许
       need_confirm: true
+    # 步骤 2：张开夹爪，准备就位抓取。
     - intent: "open_gripper"
       command: "set_gripper"
       params:
-        position: 0.09
-        max_effort: 0.5
+        position: 0.09        # 夹爪开口位置，单位米；0.09 为项目所用最大开口
+        max_effort: 0.5       # 最大夹持力（归一化，约 0~1）：越大夹得越紧，也越易压坏物体
       need_confirm: false
+    # 步骤 3：移动到左侧放置位。
     - intent: "move_named_pose"
       command: "move_named_pose"
       params:
-        name: "place_left"
+        name: "place_left"    # 命名位姿名，须在 named_poses.yaml 与允许清单中
       need_confirm: true
+    # 步骤 4：闭合夹爪（放置动作的对称收尾，按演示流程保持闭合）。
     - intent: "close_gripper"
       command: "set_gripper"
       params:
-        position: 0.0
-        max_effort: 0.5
+        position: 0.0         # 0.0 表示完全闭合
+        max_effort: 0.5       # 与张开步骤保持一致，避免力矩突变
       need_confirm: false
+    # 步骤 5：回到安全初始位（收尾必须回到基线位姿）。
     - intent: "safe_home"
       command: "safe_home"
       need_confirm: true

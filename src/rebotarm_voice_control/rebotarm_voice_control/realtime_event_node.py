@@ -1,3 +1,12 @@
+"""单条实时语音事件（JSON）的命令行入口。
+
+职责：读取一条实时事件 JSON，经 ``RealtimeToolBridge`` 过滤、解析、安全校验与
+执行模式路由后打印结果。适合把线上录到的一条事件单独拿来做回归验证。
+
+安全语义：``--mode`` 默认 "dry_run"；非函数调用完成事件返回 null，属正常结果
+而非错误。
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,6 +23,17 @@ def handle_realtime_event_json(
     config_root: str | Path,
     execution_mode: str = "dry_run",
 ) -> dict | None:
+    """处理一条实时事件 JSON。
+
+    参数：
+        payload：单条事件的 JSON 文本（字段 type / name / arguments / call_id）。
+        config_root：语音控制配置目录。
+        execution_mode：执行模式，默认 "dry_run"。
+
+    返回：被识别为工具调用的结果字典；事件类型不是函数调用完成时返回 None。
+
+    异常：JSON 非法、工具名不在白名单或安全校验失败时向上抛出。
+    """
     config = load_voice_control_config(config_root)
     return RealtimeToolBridge(config, execution_mode=execution_mode).handle_event_json(payload)
 

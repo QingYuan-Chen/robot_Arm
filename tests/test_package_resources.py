@@ -40,12 +40,11 @@ def test_internal_manifest_graph_is_acyclic():
         visit(package, [])
 
 
-def test_lower_layers_do_not_resolve_bringup_or_compat_resources():
+def test_lower_layers_do_not_resolve_bringup_resources():
     for package in ("rebotarm_dashboard", "rebotarm_simulation", "rebotarm_moveit_config"):
         for path in (ROOT / "src" / package).rglob("*.py"):
             source = path.read_text()
             assert "rebotarm_bringup" not in source, path
-            assert "rebotarm_interactive_control" not in source, path
 
 
 def test_motor_parameters_load_from_install_without_source_tree(tmp_path, monkeypatch):

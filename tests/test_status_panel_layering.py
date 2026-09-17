@@ -1,35 +1,35 @@
 from __future__ import annotations
 
-from rebotarm_interactive_control.arm_control_client import ArmControlClient
-from rebotarm_interactive_control.collision_precheck import (
+from rebotarm_dashboard.arm_control_client import ArmControlClient
+from rebotarm_motion.collision_precheck import (
     CollisionPrecheckConfig,
     CollisionPrechecker,
     select_collision_samples,
 )
-from rebotarm_interactive_control.replay_runtime_monitor import (
+from rebotarm_motion.replay_runtime_monitor import (
     ReplayRuntimeMonitor,
     ReplayRuntimeMonitorConfig,
 )
-from rebotarm_interactive_control.teach_record_client import TeachRecordClient
-from rebotarm_interactive_control.teach_replay_client import TeachReplayClient
-from rebotarm_interactive_control.teach_replay_coordinator import (
+from rebotarm_teach.teach_record_client import TeachRecordClient
+from rebotarm_teach.teach_replay_client import TeachReplayClient
+from rebotarm_teach.teach_replay_coordinator import (
     TeachReplayCoordinator,
     TeachReplayLimits,
 )
-from rebotarm_interactive_control.teach_replay_settings import TeachReplaySettingsProvider
-from rebotarm_interactive_control.teach_replay_start_align_precheck import (
+from rebotarm_teach.teach_replay_settings import TeachReplaySettingsProvider
+from rebotarm_motion.teach_replay_start_align_precheck import (
     MoveItStartAlignPrecheckConfig,
     MoveItStartAlignPrechecker,
 )
-from rebotarm_interactive_control.teach_replay_start_alignment import (
+from rebotarm_motion.teach_replay_start_alignment import (
     MoveItStartAlignmentConfig,
     MoveItStartAligner,
 )
-from rebotarm_interactive_control.teach_replay_trajectory_builder import (
+from rebotarm_teach.teach_replay_trajectory_builder import (
     TeachReplayTrajectoryBuilder,
     TeachReplayTrajectoryConfig,
 )
-from rebotarm_interactive_control.web_teleop_client import WebTeleopClient
+from rebotarm_teleop.web_teleop_client import WebTeleopClient
 
 
 class _Future:

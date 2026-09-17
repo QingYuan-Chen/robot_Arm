@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _read(relative: str) -> str:
-    if relative == "src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py":
+    if relative == "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py":
         return "\n".join(
             [
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py"),
@@ -24,17 +24,6 @@ def _read(relative: str) -> str:
 
 
 def _read_file(relative: str) -> str:
-    dashboard_path_map = {
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py": "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_page.py": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_page.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_http.py": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_http.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_assets/index.html": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html",
-        "src/rebotarm_interactive_control/setup.py": "src/rebotarm_dashboard/setup.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teach_recorder_node.py": "src/rebotarm_teach/rebotarm_teach/teach_recorder_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py": "src/rebotarm_teach/rebotarm_teach/teach_replay_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/gripper_visual_joint_state_node.py": "src/rebotarm_teleop/rebotarm_teleop/gripper_visual_joint_state_node.py",
-    }
-    relative = dashboard_path_map.get(relative, relative)
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
@@ -55,10 +44,10 @@ def _console_scripts(setup_relative: str) -> set[str]:
 
 
 def test_status_panel_page_is_split_from_ros_node():
-    panel_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    page_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_page.py")
-    html_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_assets/index.html")
-    setup_text = _read_file("src/rebotarm_interactive_control/setup.py")
+    panel_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    page_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_page.py")
+    html_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html")
+    setup_text = _read_file("src/rebotarm_dashboard/setup.py")
 
     assert "from .status_panel_page import HTML_PAGE" in panel_text
     assert "HTML_PAGE = r\"\"\"" not in panel_text
@@ -72,8 +61,8 @@ def test_status_panel_page_is_split_from_ros_node():
 
 
 def test_status_panel_http_server_is_split_from_ros_node():
-    panel_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    http_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_http.py")
+    panel_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    http_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_http.py")
 
     assert "from .status_panel_http import create_status_panel_server" in panel_text
     assert "BaseHTTPRequestHandler" not in panel_text
@@ -96,9 +85,10 @@ def test_rebotarm_vision_exposes_grasp_console_entrypoints():
         "rebotarm_visual_grasp_markers",
         "rebotarm_grasp_tcp_frame",
         "rebotarm_grasp_depth_probe",
-        "rebotarm_visual_ready",
         "rebotarm_visual_grasp_benchmark",
     }.issubset(scripts)
+    assert "rebotarm_visual_ready" not in scripts
+    assert "rebotarm_tcp_calibration" not in scripts
 
 
 def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
@@ -822,7 +812,7 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
 
 def test_gripper_visual_joint_state_node_rejects_empty_or_incomplete_arm_state():
     node_text = _read(
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/gripper_visual_joint_state_node.py"
+        "src/rebotarm_teleop/rebotarm_teleop/gripper_visual_joint_state_node.py"
     )
 
     assert '"required_arm_joint_names"' in node_text
@@ -937,7 +927,7 @@ def test_follow_joint_trajectory_keeps_running_until_goal_settles():
 
 
 def test_status_panel_stop_replay_falls_back_to_controller_stop():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     client_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_client.py")
 
     assert "self._trajectory_stop_client = self.create_client(" in panel_text
@@ -948,7 +938,7 @@ def test_status_panel_stop_replay_falls_back_to_controller_stop():
 
 
 def test_status_panel_web_stop_always_requests_controller_stop():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     client_text = _read("src/rebotarm_teleop/rebotarm_teleop/web_teleop_client.py")
     stop_body = panel_text.split("def _handle_stop_execute(self) -> dict:", 1)[1].split("\n    def ", 1)[0]
 
@@ -960,7 +950,7 @@ def test_status_panel_web_stop_always_requests_controller_stop():
 
 
 def test_status_panel_web_execute_settings_are_number_inputs_only():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'id="execute-max-delta" type="number"' in panel_text
     assert 'id="execute-duration" type="number"' in panel_text
@@ -972,7 +962,7 @@ def test_status_panel_web_execute_settings_are_number_inputs_only():
 
 
 def test_status_panel_exposes_arm_service_buttons():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'id="arm-safe-home"' in panel_text
     assert 'id="arm-enable"' in panel_text
@@ -990,7 +980,7 @@ def test_status_panel_exposes_arm_service_buttons():
 
 
 def test_status_panel_surfaces_gripper_motor_state():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     motor_body = panel_text.split("const updateMotorRows = (joints) => {", 1)[1].split(
         "const previewArmTargets = () => {", 1
     )[0]
@@ -1007,7 +997,7 @@ def test_status_panel_surfaces_gripper_motor_state():
 
 
 def test_web_execute_returns_to_live_feedback_after_sending_gripper():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     execute_body = panel_text.split("const executePreviewAndGripper = async () => {", 1)[1].split(
         "const runTeachDryRun = async () => {", 1
     )[0]
@@ -1034,7 +1024,7 @@ def test_gripper_action_aborts_when_target_is_not_reached():
 
 
 def test_arm_service_buttons_are_interlocked_during_replay():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     run_body = panel_text.split("const runArmCommand = async (command, label) => {", 1)[1].split(
         "const bindTeachReplaySetting", 1
     )[0]
@@ -1058,7 +1048,7 @@ def test_arm_service_buttons_are_interlocked_during_replay():
 
 
 def test_safety_stop_allows_operator_recovery_controls():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     lock_body = panel_text.split("const isReplayArmCommandLocked =", 1)[1].split("const addReplayEvent", 1)[0]
     dry_run_button_body = panel_text.split("const updateTeachDryRunButton = (info) => {", 1)[1].split(
         "const refreshTeachFileInfo", 1
@@ -1075,7 +1065,7 @@ def test_safety_stop_allows_operator_recovery_controls():
 
 
 def test_status_panel_defaults_cards_collapsed_and_removes_keyboard_sliders():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'class="panel collapsible-card collapsed" id="arm-status-card"' in panel_text
     assert 'class="panel slider-panel collapsible-card collapsed" id="web-teleop-card"' in panel_text
@@ -1088,7 +1078,7 @@ def test_status_panel_defaults_cards_collapsed_and_removes_keyboard_sliders():
 
 
 def test_status_panel_right_card_order_and_simplified_teach_card():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert panel_text.index('id="arm-status-card"') < panel_text.index('id="motor-state-card"')
     assert panel_text.index('id="motor-state-card"') < panel_text.index('id="web-teleop-card"')
@@ -1170,7 +1160,7 @@ def test_status_panel_right_card_order_and_simplified_teach_card():
 
 
 def test_teach_replay_dry_run_token_survives_live_start_error_drift():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     coordinator_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_coordinator.py")
 
     button_body = panel_text.split("const updateTeachDryRunButton = (info) => {", 1)[1].split(
@@ -1190,7 +1180,7 @@ def test_teach_replay_dry_run_token_survives_live_start_error_drift():
 
 
 def test_status_panel_throttles_heavy_browser_rendering():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "FAST_RENDER_INTERVAL_MS" in panel_text
     assert "const shouldRenderFastPanels = nowMs - lastFastRenderMs > FAST_RENDER_INTERVAL_MS;" in panel_text
@@ -1201,7 +1191,7 @@ def test_status_panel_throttles_heavy_browser_rendering():
 
 
 def test_status_panel_unloads_collapsed_details_and_reuses_motor_rows():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "isDetailsOpen(" in panel_text
     assert "attachDetailsUnloaders()" in panel_text
@@ -1213,7 +1203,7 @@ def test_status_panel_unloads_collapsed_details_and_reuses_motor_rows():
 
 
 def test_status_panel_control_cards_can_collapse_to_headers():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "collapsible-card" in panel_text
     assert "card-body" in panel_text
@@ -1225,7 +1215,7 @@ def test_status_panel_control_cards_can_collapse_to_headers():
 
 
 def test_status_panel_teach_info_accepts_record_path_alias_and_skips_collapsed_polling():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     teach_info_body = panel_text.split('if route == "/api/teach_record_info":', 1)[1].split('if route == "/api/teach_records":', 1)[0]
     refresh_body = panel_text.split("const refreshTeachFileInfo = async", 1)[1].split("const refreshTeachRecords", 1)[0]
 
@@ -1235,7 +1225,7 @@ def test_status_panel_teach_info_accepts_record_path_alias_and_skips_collapsed_p
 
 
 def test_status_panel_compacts_large_teach_replay_payloads_for_sse():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "def _compact_quality_payload" in panel_text
     assert "events_total" in panel_text
@@ -1246,7 +1236,7 @@ def test_status_panel_compacts_large_teach_replay_payloads_for_sse():
 
 
 def test_status_panel_check_mode_is_read_only_for_teach_actions():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'self.declare_parameter("panel_mode", "control")' in panel_text
     assert '"panel_mode": str(self.get_parameter("panel_mode").value)' in panel_text
@@ -1256,7 +1246,7 @@ def test_status_panel_check_mode_is_read_only_for_teach_actions():
 
 
 def test_status_panel_uses_workbench_cards_for_teleop_ui():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "teleop-workbench" in panel_text
     assert "robot-workspace" in panel_text
@@ -1281,10 +1271,10 @@ def test_status_panel_uses_workbench_cards_for_teleop_ui():
 
 
 def test_teach_recorder_exposes_service_controlled_start_stop():
-    recorder_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_recorder_node.py")
+    recorder_text = _read("src/rebotarm_teach/rebotarm_teach/teach_recorder_node.py")
     controller_text = _read("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
     teleop_launch_text = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     cmake_text = _read("src/rebotarm_msgs/CMakeLists.txt")
 
     assert 'self.declare_parameter("start_on_launch", True)' in recorder_text
@@ -1310,9 +1300,9 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
 
 def test_teach_replay_prepared_pipeline_defaults_to_150hz():
     replay_launch_text = _read("src/rebotarm_bringup/launch/teach_replay.launch.py")
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    profiles_text = _read("src/rebotarm_bringup/config/replay_profiles.yaml")
+    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    teach_config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
     assert 'DeclareLaunchArgument("filter_sample_rate_hz", default_value="150.0")' in replay_launch_text
     assert 'DeclareLaunchArgument("resample_rate_hz", default_value="150.0")' in replay_launch_text
@@ -1320,9 +1310,9 @@ def test_teach_replay_prepared_pipeline_defaults_to_150hz():
     assert 'self.declare_parameter("resample_rate_hz", 150.0)' in replay_node_text
     assert 'self.declare_parameter("filter_sample_rate_hz", 150.0)' in panel_text
     assert 'self.declare_parameter("resample_rate_hz", 150.0)' in panel_text
-    assert "filter_sample_rate_hz: 150.0" in profiles_text
-    assert "resample_rate_hz: 150.0" in profiles_text
-    assert "time_parameterization_method: auto" in profiles_text
+    assert "filter_sample_rate_hz: 150.0" in teach_config_text
+    assert "resample_rate_hz: 150.0" in teach_config_text
+    assert "time_parameterization_method: auto" in teach_config_text
     assert 'self.declare_parameter("time_parameterization_method", "auto")' in replay_node_text
     assert 'self.declare_parameter("time_parameterization_method", "auto")' in panel_text
 
@@ -1340,7 +1330,7 @@ def test_moveit_ompl_uses_ruckig_response_adapter_with_jerk_limits():
 
 
 def test_teach_replay_executes_prepared_retimed_points_directly():
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
+    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
 
     assert "def _append_prepared_replay_points(" in replay_node_text
     assert "for retimed in self._prepared_replay.retimed_points:" in replay_node_text
@@ -1348,10 +1338,10 @@ def test_teach_replay_executes_prepared_retimed_points_directly():
 
 
 def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     monitor_text = _read("src/rebotarm_motion/rebotarm_motion/replay_runtime_monitor.py")
-    config_text = _read("src/rebotarm_bringup/config/teleop_control.yaml")
+    config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
     assert "evaluate_replay_tracking" in replay_node_text
     assert "evaluate_replay_tracking" in monitor_text
@@ -1373,7 +1363,7 @@ def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
 
 
 def test_status_panel_preserves_runtime_safety_stop_result_reason():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     result_body = panel_text.split("def _on_teach_replay_result", 1)[1].split(
         "\n    def check_tracking", 1
     )[0]
@@ -1385,7 +1375,7 @@ def test_status_panel_preserves_runtime_safety_stop_result_reason():
 
 
 def test_status_panel_surfaces_time_parameterization_summary():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "time_parameterization" in panel_text
     assert "time_parameterization?.used_method" in panel_text
@@ -1393,7 +1383,7 @@ def test_status_panel_surfaces_time_parameterization_summary():
 
 
 def test_teach_trajectory_curve_card_shows_prepared_curve_without_duplicate_check_metrics():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     details_body = panel_text.split("const renderTeachTrajectoryDetails = (payload) => {", 1)[1].split(
         "const drawTeachTrajectoryChart = (payload) => {", 1
     )[0]

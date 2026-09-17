@@ -1,10 +1,35 @@
+# 语音控制的安全限制配置：决定"允不允许做"以及默认后端。
+#
+# 该文件由 config_loader.load_voice_control_config 读入 VoiceControlConfig.
+# safety_limits，被 SafetyGuard（命令白名单之外的专项校验）与
+# ExecutionModeRouter（后端选择）共同使用，是语音链路的最终安全边界。
+# 修改本文件即修改机器人的行为边界，务必谨慎。
+
+# 默认执行模式："dry_run" 只做意图→接口的映射、不下发任何调用；
+# "sim" 路由到 /rebotarm/sim 前缀的仿真动作；"real" 才可能下发真实调用。
+# 该键是启动参数 execution_mode 未提供时的回退值；启动参数优先级更高。
 execution_mode: "dry_run"
+
+# 真实 ROS 调用的总开关：false 时即使选了 real 模式也会被直接判为安全违规
+# （不会静默降级为演练或仿真）。默认 false，必须由人工显式改为 true 才可能
+# 驱动机器人，避免"启动即运动"的误操作。
 allow_real_ros_calls: false
+
+# 命名位姿白名单：move_named_pose 的 name 必须同时在此清单内、且在
+# named_poses.yaml 中有定义，否则被拒。新增位姿需两处同时维护。
 allowed_named_poses:
   - "home"
   - "camera_pose"
   - "place_left"
+
+# 工作空间轴对齐盒：命名位姿的位置必须落在三个轴的闭区间内（单位米，
+# 参考系为位姿自带的 frame_id，当前为 base_link）。区间按 [下限, 上限]
+# 给出，恰好等于边界视为通过；缺少任一轴的区间会被判为违规。
+# 该盒用于把语音指令限制在标定过的安全可达区域内，防止撞台面/自碰撞。
 workspace:
+  # 基座正前方 0.05~0.45 m
   x: [0.05, 0.45]
+  # 基座左右各 0.25 m
   y: [-0.25, 0.25]
+  # 台面上方 0.05~0.45 m
   z: [0.05, 0.45]

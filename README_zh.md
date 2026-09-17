@@ -38,7 +38,6 @@
 | `rebotarm_simulation` | MuJoCo 模型与仿真执行 |
 | `rebotarm_calibration` | 标定与 TF/TCP 验证 |
 | `rebotarm_voice_control` | 语音控制入口 |
-| `rebotarm_interactive_control` | 旧导入路径与脚本兼容层 |
 
 ---
 
@@ -499,7 +498,14 @@ ros2 topic pub --once /rebotarm/joints/joint1/cmd rebotarm_msgs/msg/JointMotorCm
 |---|---|
 | `arm.yaml` | 机械臂 6 个关节的电机、反馈 ID、控制参数 |
 | `gripper.yaml` | 夹爪电机配置 |
-| `driver_params.yaml` | ROS 参数示例 |
+| `operator_common.yaml` | 键盘、网页和示教共同使用的命名空间、关节名称与回退限位 |
+| `keyboard_control.yaml` | 终端键盘步长、轮询、输入超时与 `deadman` 参数；网页按钮不读取它 |
+| `web_teleop.yaml` | 网页执行、网页关节点动、网页夹爪及本机 HTTP/SSE 参数 |
+| `teach_control.yaml` | 示教录制、回放、滤波/重定时、MoveIt 对齐、碰撞与运行期跟踪参数 |
+
+配置按消费者分离：`teleop_keyboard.launch.py` 加载公共配置和键盘配置；网页面板加载
+公共、网页和示教配置；示教录制/回放加载公共和示教配置。旧的混合
+`teleop_control.yaml` 已移除，`deadman_key` 不影响网页端按钮操作。
 
 常用 launch 参数：
 

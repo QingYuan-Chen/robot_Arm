@@ -4,8 +4,7 @@
 
 当前支持的视觉路线是 Ubuntu 24.04 / ROS 2 Jazzy：原生 Gemini 2、本地 YOLO、ROS RGB-D/CameraInfo/检测结果，以及本机进程内 GraspNet。Windows、HTTP、MJPEG、远程 JSON 和独立 GraspNet 服务路线已经废弃，不得恢复。
 
-本仓库由分层 ROS2 包组成。新代码必须遵守以下职责边界，不得继续向旧版
-`rebotarm_interactive_control` package.
+本仓库由分层 ROS2 包组成。新代码必须遵守以下职责边界。
 
 ## 职责边界
 
@@ -198,21 +197,6 @@ It is responsible for:
 Calibration outputs should be consumed by vision and motion layers through
 configuration or TF, not copied into dashboard or controller code.
 
-### 兼容层
-
-`rebotarm_interactive_control` is now a compatibility layer.
-
-It keeps old imports and old console scripts working through wrappers. New
-implementation code must not be added there unless the change is explicitly a
-compatibility shim.
-
-Layered packages must not import rebotarm_interactive_control:
-
-- `rebotarm_motion`
-- `rebotarm_teach`
-- `rebotarm_teleop`
-- `rebotarm_dashboard`
-
 ## 依赖方向
 
 Allowed dependency direction:
@@ -244,13 +228,9 @@ Forbidden dependency direction:
 rebotarm_motion -> rebotarm_dashboard
 rebotarm_motion -> rebotarm_teach
 rebotarm_motion -> rebotarm_teleop
-rebotarm_motion -> rebotarm_interactive_control
-
 rebotarm_teach -> rebotarm_dashboard
-rebotarm_teach -> rebotarm_interactive_control
 
 rebotarm_teleop -> rebotarm_dashboard
-rebotarm_teleop -> rebotarm_interactive_control
 
 rebotarm_dashboard -> motor SDK
 rebotarm_vision -> motor SDK
@@ -273,7 +253,6 @@ rebotarm_bringup -> package implementation internals
 | `rebotarm_simulation` | simulated backend only | owns simulated equivalents | no direct planning policy | generated simulation artifacts only | no |
 | `rebotarm_bringup` | no | no business logic | no business logic | launch/config only | no |
 | `rebotarm_calibration` | no | no, except explicit validation tools | no, except validation tools | calibration outputs only | no |
-| `rebotarm_interactive_control` | no | no new logic | no new logic | compatibility only | no new logic |
 
 If a package needs authority outside its row, create a small interface in the
 owning package and call that interface. Do not copy the implementation across
@@ -349,7 +328,6 @@ Use this table before adding a file:
 | New MuJoCo model, simulated controller, physics metric, or contact feedback | `rebotarm_simulation` |
 | New launch composition or mutually exclusive backend selection | `rebotarm_bringup` |
 | New hand-eye/TCP/TF check tool | `rebotarm_calibration` |
-| Old import path compatibility only | `rebotarm_interactive_control` |
 
 If a feature seems to belong in multiple packages, split it by responsibility
 instead of making one large node own the whole workflow.
@@ -362,6 +340,5 @@ When adding new modules:
 
 - add unit tests for pure logic
 - add package-layering tests when changing ownership
-- keep legacy wrapper imports tested if an old path must continue working
 - run `python -m pytest tests -q`
 - run `python -m compileall` on changed Python packages

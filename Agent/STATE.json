@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-17T14:47:34+08:00",
+  "generated_at": "2026-09-17T23:36:21+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "4f9893c",
+    "head": "30c7e56",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-17T14:47:34+08:00 | actor=codex | event=complete | note=已提交并推送main；MotorBridge 0.4.7升级、RViz工作流与旧入口清理已发布，下一项测试rebotarm_app网页遥操作 | verification=origin/main=4f9893c; MotorBridge contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures"
+  "last_event": "- 2026-09-17T23:36:21+08:00 | actor=codex | event=start | note=先上传当前进度，再统一 launch 硬件底层结构并生成结构功能文档 | verification=-"
 }

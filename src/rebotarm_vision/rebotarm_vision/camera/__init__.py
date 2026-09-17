@@ -1,1 +1,6 @@
-"""Camera drivers for rebotarm_vision."""
+"""相机子包：深度相机的取流抽象与具体驱动实现（rebotarm_vision.camera）。
+
+``base`` 定义驱动协议（打开、预热、取帧、关闭），``gemini2_driver`` 提供本站
+Gemini2 相机的实现；上层视觉节点只依赖协议，便于替换设备或做离线回放。
+取帧返回的彩色与深度数组均为单帧快照，时间戳由驱动侧另行提供。
+"""

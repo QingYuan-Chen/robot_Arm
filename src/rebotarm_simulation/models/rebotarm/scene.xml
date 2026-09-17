@@ -1,34 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面工作台标准场景：机器人 + 桌子 + 作为抓取目标的瓶子代理 + 一个固定相机。
+     机器人本体由同目录的 robot.xml 提供，本文件只负责环境、光照、相机与初始关键帧。
+     单位：长度 m、角度 rad。 -->
 <mujoco model="rebotarm_tabletop_scene">
   <include file="robot.xml"/>
+  <!-- timestep=0.002 s 即 500 Hz 物理步长；重力为标准值 -9.81 m/s²（z 轴向下）；
+       implicitfast 积分器对阻尼与约束力做隐式处理，接触场景下比显式积分更稳定。 -->
   <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+  <!-- 自由相机与被动物体自动取景的统计中心（工作台附近）与范围（m）。
+       只影响 MuJoCo 查看器的默认视角，不影响物理与虚拟相机。 -->
   <statistic center="0.15 0 0.18" extent="0.8"/>
   <visual>
+    <!-- 默认头灯：环境光 0.25、漫反射 0.65、镜面 0.15，保证无额外光源时也能看清。
+         全局视角方位角 135°、俯仰 -22°，是打开查看器时的初始朝向。 -->
     <headlight ambient="0.25 0.25 0.25" diffuse="0.65 0.65 0.65" specular="0.15 0.15 0.15"/>
     <global azimuth="135" elevation="-22"/>
   </visual>
   <worldbody>
+    <!-- 主方向光：位置与方向定义了照射方向，directional 表示平行光（距离无关）。 -->
     <light name="key_light" pos="0.2 -0.5 1.5" dir="0.1 0.2 -1" directional="true"/>
+    <!-- 固定相机（场景内定义，供查看器或离屏渲染使用）。
+         pos 是相机光心在世界系的位置（m）；
+         xyaxes 依次给出相机 +x 与 +y 轴在世界系中的单位向量，+z 由叉乘得到，
+         即光轴指向。改这里会同时改变出图视角与虚拟相机外参。 -->
     <camera name="fixed_camera" pos="0.85 -0.90 0.55" xyaxes="0.727 0.686 0 -0.245 0.260 0.934"/>
+    <!-- 地面：位于 z=-0.75 m 的无限平面，contype/conaffinity=1 表示与默认碰撞组互相作用。
+         size 前两项是可视范围（m），最后一项为平面厚度提示（仅渲染用）。 -->
     <geom name="floor" type="plane" pos="0 0 -0.75" size="2 2 0.1" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="1"/>
+    <!-- 桌子：body 原点在桌面几何中心（z=-0.025），因此桌面顶面恰好在 z=0，
+         即机械臂基座与工作台面同高，抓取目标直接放在 z=0 平面上。 -->
     <body name="table" pos="0.20 0 -0.025">
+      <!-- 桌面：半尺寸 0.55 × 0.45 × 0.025 m；摩擦系数依次为滑动 0.9、扭转 0.02、滚动 0.001。 -->
       <geom name="table_top" type="box" size="0.55 0.45 0.025" rgba="0.48 0.34 0.22 1" contype="1" conaffinity="1" friction="0.9 0.02 0.001"/>
+      <!-- 四条桌腿：半尺寸 0.035 × 0.035 × 0.35 m，位于桌面四角（±0.48, ±0.38），
+           竖向中心 z=-0.375，与桌面下表面搭接。 -->
       <geom name="table_leg_front_left" type="box" pos="0.48 0.38 -0.375" size="0.035 0.035 0.35" rgba="0.34 0.23 0.14 1" contype="1" conaffinity="1"/>
       <geom name="table_leg_front_right" type="box" pos="0.48 -0.38 -0.375" size="0.035 0.035 0.35" rgba="0.34 0.23 0.14 1" contype="1" conaffinity="1"/>
       <geom name="table_leg_back_left" type="box" pos="-0.48 0.38 -0.375" size="0.035 0.035 0.35" rgba="0.34 0.23 0.14 1" contype="1" conaffinity="1"/>
       <geom name="table_leg_back_right" type="box" pos="-0.48 -0.38 -0.375" size="0.035 0.035 0.35" rgba="0.34 0.23 0.14 1" contype="1" conaffinity="1"/>
     </body>
-    <!-- Canonical tabletop target: a bottle proxy matching the current real-robot example. -->
+    <!-- 标准桌面目标物：与当前真机示例对应的瓶子代理。
+         freejoint 表示六自由度自由体，可被夹爪抓走、也会随重力下落；
+         pos 的 z=0 表示瓶底正好落在桌面（z=0）上。 -->
     <body name="bottle" pos="0.28 0 0.0">
       <freejoint/>
+      <!-- 整体质量 0.12 kg，质心在瓶身中部（z=0.095），对角惯量单位 kg·m²。 -->
       <inertial pos="0 0 0.095" mass="0.12" diaginertia="0.00023 0.00023 0.00009"/>
+      <!-- 瓶身：圆柱，半径 0.038 m、半高 0.065 m（z 向覆盖 0～0.13 m）。 -->
       <geom name="bottle_body" type="cylinder" pos="0 0 0.065" size="0.038 0.065" rgba="0.12 0.42 0.82 1" contype="1" conaffinity="1" friction="0.8 0.02 0.001"/>
+      <!-- 肩部：椭球过渡，三个半轴 0.038 / 0.038 / 0.020 m。 -->
       <geom name="bottle_shoulder" type="ellipsoid" pos="0 0 0.128" size="0.038 0.038 0.020" rgba="0.12 0.42 0.82 1" contype="1" conaffinity="1" friction="0.8 0.02 0.001"/>
+      <!-- 瓶颈：圆柱，半径 0.018 m、半高 0.015 m。 -->
       <geom name="bottle_neck" type="cylinder" pos="0 0 0.160" size="0.018 0.015" rgba="0.12 0.42 0.82 1" contype="1" conaffinity="1" friction="0.8 0.02 0.001"/>
+      <!-- 瓶盖：圆柱，半径 0.020 m、半高 0.010 m，颜色更深以示区分。 -->
       <geom name="bottle_cap" type="cylinder" pos="0 0 0.185" size="0.020 0.010" rgba="0.04 0.12 0.20 1" contype="1" conaffinity="1" friction="0.8 0.02 0.001"/>
     </body>
   </worldbody>
   <keyframe>
+    <!-- 初始关键帧 home：一键复位到抓取作业起点。
+         qpos 共 15 个数：0~5 为机械臂六关节角（rad），6~7 为左右手指滑移量
+         （0.03 / -0.03，即开口 0.06 m），8~14 为瓶子自由关节
+         （xyz = 0.28 0 0.0，四元数 wxyz = 1 0 0 0，即竖立在桌面上）。 -->
     <key name="home" qpos="0 -0.8 -1.0 0.3 0 0 0.03 -0.03 0.28 0 0.0 1 0 0 0"/>
   </keyframe>
 </mujoco>

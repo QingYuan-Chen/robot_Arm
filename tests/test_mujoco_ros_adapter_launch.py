@@ -123,3 +123,6 @@ def test_active_mujoco_cli_does_not_dispatch_to_current_legacy_runtime():
     assert "_dispatch_legacy_command" not in cli_text
     assert "mujoco_legacy_cli" not in cli_text
     assert "rebotarm_mujoco_legacy_cli" not in setup_text
+    assert not (
+        ROOT / "src/rebotarm_simulation/rebotarm_simulation/mujoco_legacy_cli.py"
+    ).exists()
