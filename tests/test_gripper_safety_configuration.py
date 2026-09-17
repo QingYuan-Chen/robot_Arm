@@ -73,12 +73,6 @@ def test_real_hardware_launches_expose_and_forward_gripper_safety_defaults() -> 
             assert float(defaults[name]) == expected, relative_path
             assert name in parameter_keys, relative_path
 
-    driver_only = (ROOT / "src/rebotarm_bringup/launch/driver_only.launch.py").read_text(
-        encoding="utf-8"
-    )
-    assert "hardware_controller.launch.py" in driver_only
-
-
 def test_controller_declares_gripper_safety_defaults() -> None:
     tree = _tree("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
     declared: dict[str, object] = {}

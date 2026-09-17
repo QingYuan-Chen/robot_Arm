@@ -1296,7 +1296,7 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
     assert 'package="rebotarm_teach"' in hardware_launch
     assert 'executable="TeachRecorderNode"' in hardware_launch
     assert '"start_on_launch": False' in teleop_launch_text
-    assert "UnlessCondition(use_hardware)" in teleop_launch_text
+    assert '"require_motor_status": ParameterValue(use_hardware, value_type=bool)' in teleop_launch_text
 
 
 def test_teach_replay_prepared_pipeline_defaults_to_150hz():

@@ -657,3 +657,5 @@
 - 2026-09-17T23:57:40+08:00 | actor=codex | event=start | note=安装 Pinocchio 依赖并解决用户级 OpenCV 覆盖冲突 | verification=-
 - 2026-09-18T00:05:52+08:00 | actor=codex | event=verified | note=Pinocchio依赖安装与OpenCV覆盖冲突已解决；无硬件操作 | verification=pinocchio/eigenpy/coal imports OK; calibration 6 passed; bringup build passed; full 764 passed 7 skipped 1 existing failure
 - 2026-09-18T00:13:29+08:00 | actor=codex | event=verified | note=启动结构功能文档已迁移到 bringup/launch/README.md 并纳入安装 | verification=package resources and layering 25 passed; bringup build passed; installed README verified
+- 2026-09-18T00:33:59+08:00 | actor=codex | event=start | note=Remove redundant driver_only launch, clarify launch entrypoint ownership, and audit repeated launch arguments | verification=-
+- 2026-09-18T00:39:18+08:00 | actor=codex | event=complete | note=Removed redundant driver_only launch, clarified MoveIt versus keyboard launch families, fixed teleop_system recorder wiring, and updated launch documentation | verification=layering 18 passed; full suite 765 passed, 7 skipped, 1 known MuJoCo interpreter failure; bringup build and five --show-args checks passed; compileall and diff check passed

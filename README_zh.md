@@ -224,7 +224,7 @@ ros2 launch rebotarm_bringup bringup.launch.py use_rviz:=true
 ### 只启动控制节点
 
 ```bash
-ros2 launch rebotarm_bringup driver_only.launch.py
+ros2 launch rebotarm_bringup hardware_controller.launch.py
 ```
 
 ### 直接运行控制节点

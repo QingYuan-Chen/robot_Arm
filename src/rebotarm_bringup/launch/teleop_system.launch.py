@@ -3,16 +3,14 @@
 启动用途：一次性拉起“人操作机械臂”这条最小链路，节点组合为——
   1. 包含 teleop_keyboard.launch.py：按需包含键盘节点、夹爪可视化状态桥接节点、
      关节状态发布节点与 RViz（该文件内部再决定真实/仿真后端）；
-  2. 示教录制节点（示教包）：仅在**仿真/无硬件**分支启动，用于在没有真机时也能演练
-     “录制 → 预处理 → 回放”；真机录制由硬件分支的启动文件负责，避免两个录制节点
-     同时往同一个 JSONL 里追加；
+  2. 示教录制节点（示教包）：真机和无硬件分支都启动，但默认不自动开始录制；
   3. 网页状态面板节点（网页面板包）：提供本机 HTTP/SSE 界面与命令入口。
 
 真实/仿真后端选择逻辑：
-  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起关节状态
-    发布器驱动，录制节点在此分支启动——这是无硬件也能跑的安全默认值；
-  - use_hardware=true：由 include 的启动文件启动真机控制器，本文件的录制节点被
-    UnlessCondition 屏蔽；真机上电后仍处于失能态，必须显式调用 enable 服务才会运动。
+  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起假关节状态
+    发布器，录制时不要求真实电机状态；
+  - use_hardware=true：由 include 的启动文件启动真机控制器，录制时要求有效电机状态。
+    真机上电后仍处于失能态，必须显式调用 enable 服务才会运动。
 
 参数来源：键盘、网页和示教分别加载自己的配置，并额外加载 operator_common.yaml。
 launch 参数只覆盖命名空间、记录路径与面板开关等运行期选择项。
@@ -24,10 +22,11 @@ channel 留空表示由机械臂配置文件或自动探测决定、use_local_rv
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -115,19 +114,16 @@ def generate_launch_description():
                     "keyboard_prefix": keyboard_prefix,
                 }.items(),
             ),
-            # 示教录制节点（示教包）。UnlessCondition(use_hardware) 是刻意的互斥条件：
-            # 真机录制由硬件分支的启动文件负责，这里只在仿真/无硬件分支启动，避免两个
-            # 录制节点同时向同一个 JSONL 追加样本。
+            # 示教录制节点在两种分支中都启动；本组合只创建这一个录制器。
             # 覆盖项含义：
             #   start_on_launch=False   不随启动自动开录，必须由操作者/面板显式发 start；
             #   keyboard_quit_enabled=False 本组合由 launch 管理生命周期，不监听终端退出键；
-            #   require_motor_status=False 仿真没有真实电机状态码，强制校验会一直拒绝写样本。
+            #   require_motor_status 真机为 true，无硬件演练为 false。
             Node(
                 package="rebotarm_teach",
                 executable="TeachRecorderNode",
                 name="teach_recorder_node",
                 output="screen",
-                condition=UnlessCondition(use_hardware),
                 parameters=[
                     common_config,
                     teach_config,
@@ -136,7 +132,7 @@ def generate_launch_description():
                         "record_path": record_path,
                         "start_on_launch": False,
                         "keyboard_quit_enabled": False,
-                        "require_motor_status": False,
+                        "require_motor_status": ParameterValue(use_hardware, value_type=bool),
                     },
                 ],
             ),

@@ -149,7 +149,6 @@ def test_bringup_has_one_real_hardware_controller_owner() -> None:
 
     hardware_consumers = {
         "bringup.launch.py",
-        "driver_only.launch.py",
         "interactive_system.launch.py",
         "moveit_hardware.launch.py",
         "teleop_keyboard.launch.py",

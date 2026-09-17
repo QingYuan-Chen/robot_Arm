@@ -632,3 +632,7 @@ P0 Gate B/C 在 Enable 后保持阶段首先出现 `dm-serial write failed: Oper
 ## 2026-09-18 Pinocchio 安装与 OpenCV 冲突解除
 
 用户已安装 `ros-jazzy-pinocchio 4.1.0`，apt 同步安装 `ros-jazzy-eigenpy 3.13.0` 与 `ros-jazzy-coal 3.0.3`；三者从 `/opt/ros/jazzy` Python 路径导入成功。用户目录中覆盖系统库且缺少 `calibrateHandEye` 的 `opencv-python 5.0.0.93` 已卸载，默认 Python 恢复使用 Ubuntu `python3-opencv 4.6.0`，手眼与 ArUco API 可用，标定聚焦 6 项通过；两个项目虚拟环境的 OpenCV 4.11 未修改。旧 bringup 构建缓存仍引用已删除的 `teleop_control.yaml`，已可恢复移至 `/tmp/rebotarm-bringup-stale.JpkLpA`，随后 `rebotarm_bringup` symlink build 成功。最终 layering 18 passed、全量 `764 passed, 7 skipped, 1 failed`，唯一失败为既有 `mujoco_sim.launch.py` 默认解释器断言；必需 compileall 通过。未启动节点、访问串口或操作真机。
+
+## 2026-09-18 bringup 入口去重与职责澄清
+
+`driver_only.launch.py` 在硬件片段统一后只是 `hardware_controller.launch.py` 的无行为包装，没有任何活跃 launch 消费者，因此删除；只启动控制器的公开命令改为 `hardware_controller.launch.py`。`moveit_hardware -> rebotarm_app` 是真机 MoveIt 工作台链，`teleop_keyboard -> teleop_system` 是不含 MoveIt 的键盘/软件演练链，两者不是重复执行后端且不应同时启动。同时修正 `teleop_system` 真机分支错误屏蔽示教录制器的旧逻辑：现在两种分支都只启动一个录制器，`require_motor_status` 跟随 `use_hardware`，仍默认不开始录制、不自动使能。重复的 `DeclareLaunchArgument` 是父 launch 向外重新导出子 launch 参数的显式接口；节点和硬件默认值的语义所有权仍在 `hardware_controller.launch.py`。旧 bringup build/install 缓存因仍引用已删除文件而阻断构建，已可恢复移至 `/tmp/rebotarm-bringup-driver-only-stale.WVTCin`，随后单包构建成功，5 个主要入口 `--show-args` 全部通过，安装空间不再含旧入口。layering `18 passed`，全量 `765 passed, 7 skipped, 1 failed`，唯一失败仍为既有 MuJoCo 默认解释器断言；必需 compileall 和 diff check 通过。本轮未启动控制器或访问串口。

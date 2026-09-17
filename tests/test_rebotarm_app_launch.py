@@ -96,7 +96,6 @@ def test_operator_configs_are_split_by_consumer() -> None:
 
     for launch_path in (
         "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
-        "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
         "src/rebotarm_bringup/launch/bringup.launch.py",
         "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",

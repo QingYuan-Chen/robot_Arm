@@ -2,7 +2,6 @@
 #
 #用途
 #    一次拉起真机硬件控制器、示教录制节点，以及 MoveIt 的规划与可视化栈，用于在真实机械臂上做规划与轨迹执行。
-#    本文件不实现任何规划或控制算法，只做启动组合与参数传递。
 #
 #节点组合
 #    1. 硬件控制器：唯一持有电机总线与执行安全的入口；
@@ -11,9 +10,7 @@
 #       并传入 ``use_fake_joint_states="false"``，即关节状态取真机反馈而不是假发布器。
 #
 #真实/仿真后端选择
-#    本文件是“真机”入口：控制器无条件启动，没有 use_hardware 开关。仿真链路请改用
-#    仿真包或混合链路启动文件。是否打开 RViz 由 “use_rviz” 控制。
-
+#    本文件是“真机”入口：控制器无条件启动，没有 use_hardware 开关。
 import os
 
 import yaml
@@ -86,20 +83,14 @@ def generate_launch_description():
             # joint_state_rate：关节状态发布频率（Hz）；越高越实时，总线负载越大。
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             # hardware_feedback_rate_hz：硬件层反馈刷新频率上限（Hz），必须在 [20, 100]，
-            #   超过硬件层会报错拒绝，低于 20 会影响跟踪监控的实时性。
             DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
-            # gripper_position_torque_cap_nm：夹爪位置指令的力矩上限（N·m），允许范围
-            #   [0.05, 1.5]；调大夹持更牢但堵转发热与夹伤风险更高。
+            # gripper_position_torque_cap_nm：夹爪位置指令的力矩上限（N·m），允许范围[0.05, 1.5]；调大夹持更牢但堵转发热与夹伤风险更高。
             DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
-            # gripper_position_max_speed_rad_s：夹爪开合角速度上限（rad/s），硬件层允许范围
-            #   [0.05, 3.0]；调大更快但冲击更大。控制器内置默认是 0.5，本文件取 1.5（真机
-            #   组合的既有基线），属于该组合里最"激进"的一项夹爪参数。
+            # gripper_position_max_speed_rad_s：夹爪开合角速度上限（rad/s），硬件层允许范围 [0.05, 3.0]；调大更快但冲击更大。控制器内置默认是 0.5，本文件取 1.5。
             DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="1.5"),
-            # gripper_position_timeout_margin_sec：夹爪到位超时余量（s），实际超时 =
-            #   行程/速度 + 该余量；允许范围 [0.1, 10.0]。
+            # gripper_position_timeout_margin_sec：夹爪到位超时余量（s），实际超时 = 行程/速度 + 该余量；允许范围 [0.1, 10.0]。
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
-            # gripper_feedback_stale_timeout_sec：夹爪反馈新鲜度阈值（s），超过即判反馈过期
-            #   并拒绝新的夹爪命令；允许范围 [0.05, 2.0]。
+            # gripper_feedback_stale_timeout_sec：夹爪反馈新鲜度阈值（s），超过即判反馈过期并拒绝新的夹爪命令；允许范围 [0.05, 2.0]。
             DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
             # teach_record_path：示教录制输出文件（JSONL）。
             DeclareLaunchArgument("teach_record_path", default_value="teleop_records/teach_record.jsonl"),
@@ -114,8 +105,7 @@ def generate_launch_description():
                 "teach_config",
                 default_value=PathJoinSubstitution([bringup_share, "config", "teach_control.yaml"]),
             ),
-            # cmd_arbitration：轨迹运行期间收到单关节透传指令时的仲裁策略。
-            #   "reject"=直接拒绝（默认，安全优先）；"preempt"=先停下轨迹再执行透传指令。
+            # cmd_arbitration：轨迹运行期间收到单关节透传指令时的仲裁策略。"reject"=直接拒绝（默认，安全优先）；"preempt"=先停下轨迹再执行透传指令。
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             # frame_id / ee_frame_id：对外位姿的参考坐标系与末端坐标系名称，需与 URDF 一致。
             DeclareLaunchArgument("frame_id", default_value="base_link"),
@@ -163,8 +153,7 @@ def generate_launch_description():
                     },
                 ],
             ),
-            # MoveIt 规划/可视化栈。use_fake_joint_states 固定为 "false"：关节状态必须来自
-            # 真机控制器，否则 RViz 与规划器看到的是假姿态，规划结果没有意义。
+            # MoveIt 规划/可视化栈。use_fake_joint_states 固定为 "false"：关节状态必须来自真机控制器，否则 RViz 与规划器看到的是假姿态，规划结果没有意义。
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(demo_launch),
                 launch_arguments={

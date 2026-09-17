@@ -10,7 +10,7 @@
 #
 # 真实/仿真后端选择逻辑：本文件是”真实硬件“入口，唯一包含的就是硬件控制器节点，没有仿真分支、也不会启动仿真轨迹控制器；
 # 因此与仿真执行后端互斥，任何时候不要与仿真启动文件同时拉起同名的关节状态与轨迹接口。
-# bringup.launch.py ≈ driver_only.launch.py 的硬件控制器 + 机器人状态发布链路 + 可选 RViz。
+# bringup.launch.py = hardware_controller.launch.py 的硬件控制器 + 机器人状态发布链路 + 可选 RViz。
 # 参数来源与安全默认值：
 #   - arm_config / gripper_config 默认指向启动组合包 config/ 下的 YAML；
 #   - channel 为空串表示沿用配置文件里的通道，不在这里硬编码设备名；

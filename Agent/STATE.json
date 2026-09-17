@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-18T00:13:29+08:00",
+  "generated_at": "2026-09-18T00:39:18+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "0f77cd3",
+    "head": "9fc2b3f",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-18T00:13:29+08:00 | actor=codex | event=verified | note=启动结构功能文档已迁移到 bringup/launch/README.md 并纳入安装 | verification=package resources and layering 25 passed; bringup build passed; installed README verified"
+  "last_event": "- 2026-09-18T00:39:18+08:00 | actor=codex | event=complete | note=Removed redundant driver_only launch, clarified MoveIt versus keyboard launch families, fixed teleop_system recorder wiring, and updated launch documentation | verification=layering 18 passed; full suite 765 passed, 7 skipped, 1 known MuJoCo interpreter failure; bringup build and five --show-args checks passed; compileall and diff check passed"
 }

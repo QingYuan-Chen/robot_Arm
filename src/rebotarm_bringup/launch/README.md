@@ -4,12 +4,19 @@
 同一个硬件底层片段，禁止在其它 bringup 启动文件中再次直接声明
 `reBotArmController`。
 
+`driver_only.launch.py` 已删除：它只是无附加行为地包含
+`hardware_controller.launch.py`，保留两个名字反而容易让人误以为有两种硬件启动方式。
+只启动底层控制器时直接使用：
+
+```bash
+ros2 launch rebotarm_bringup hardware_controller.launch.py
+```
+
 ## 结构总览
 
 ```text
 src/rebotarm_bringup/launch/
 ├── hardware_controller.launch.py
-├── driver_only.launch.py
 ├── bringup.launch.py
 ├── moveit_hardware.launch.py
 ├── interactive_system.launch.py
@@ -31,16 +38,15 @@ src/rebotarm_bringup/launch/
 
 ```text
 hardware_controller.launch.py                  唯一真实硬件控制器定义
-├── driver_only.launch.py                      兼容薄入口
 ├── bringup.launch.py                          + 状态发布 + 基础 RViz
 ├── moveit_hardware.launch.py                  + 示教录制 + MoveIt
-│   └── rebotarm_app.launch.py                 + Dashboard + 工作台 RViz
+│   └── rebotarm_app.launch.py                 + Dashboard + 状态 RViz（不含键盘）
 ├── interactive_system.launch.py               真机/无硬件状态源选择 + MoveIt/RViz
 │   ├── rviz_ee_drag_real.launch.py            真机 MotionPlanning 入口
 │   ├── rviz_ee_drag_sim.launch.py             仿真 MotionPlanning 入口
 │   └── visual_grasp_system.launch.py          完整视觉抓取组合
-├── teleop_keyboard.launch.py                  + 键盘 + 状态发布 + RViz
-│   └── teleop_system.launch.py                + 示教 + Dashboard
+├── teleop_keyboard.launch.py                  键盘 + 状态发布 + 基础 RViz（无 MoveIt）
+│   └── teleop_system.launch.py                + 示教录制 + Dashboard（仍无 MoveIt）
 └── visual_ready_hold.launch.py                + 一次摆位 + 常驻摆位服务
 
 visual_grasp_perception_preview.launch.py      只读感知预览，不含控制器
@@ -58,13 +64,12 @@ teach_replay.launch.py                         使用外部唯一执行后端回
 | 文件 | 类型 | 功能和边界 |
 |---|---|---|
 | `hardware_controller.launch.py` | 底层片段 | 唯一直接启动 `reBotArmController` 的文件；统一串口、反馈频率、夹爪保护、仲裁、命名空间和坐标系参数 |
-| `driver_only.launch.py` | 兼容入口 | 仅包含硬件片段，保持原启动命令兼容 |
 | `bringup.launch.py` | 基础真机入口 | 硬件、夹爪可视化状态桥、TF 和可选基础 RViz；不启动 MoveIt |
 | `moveit_hardware.launch.py` | 真机 MoveIt 入口 | 硬件、示教录制、`move_group` 和可选 MoveIt RViz |
 | `interactive_system.launch.py` | 共享组合 | 在真机硬件、无硬件状态源和 MoveIt 预览之间做互斥选择 |
-| `rebotarm_app.launch.py` | 完整真机入口 | 包含真机 MoveIt 组合，再增加 Dashboard 和工作台 RViz |
+| `rebotarm_app.launch.py` | 完整真机入口 | 包含真机 MoveIt 组合，再增加 Dashboard 和状态 RViz；不启动键盘节点 |
 | `teleop_keyboard.launch.py` | 遥操作入口 | 可选硬件、键盘关节点动、状态发布和 RViz；默认不接真机 |
-| `teleop_system.launch.py` | 遥操作组合 | 包含键盘入口，再增加示教录制和 Dashboard |
+| `teleop_system.launch.py` | 遥操作组合 | 包含键盘入口，再增加示教录制和默认只读 Dashboard；不启动 MoveIt，默认不接真机 |
 | `rviz_ee_drag_real.launch.py` | 真机规划入口 | 用 MoveIt MotionPlanning 交互目标进行 Plan/Execute |
 | `rviz_ee_drag_sim.launch.py` | 仿真规划入口 | 使用仿真轨迹控制器提供 Plan/Execute，不打开真机 |
 | `teach_record.launch.py` | 独立工具 | 只启动录制节点，依赖外部已有反馈，不拥有执行后端 |
@@ -75,9 +80,22 @@ teach_replay.launch.py                         使用外部唯一执行后端回
 | `mujoco_offline_perception.launch.py` | 离线仿真 | MuJoCo 虚拟相机驱动感知与候选规划，默认 plan-only |
 | `real_perception_sim_execution.launch.py` | 混合仿真 | 真实相机/感知连接 MuJoCo 执行，明确禁止真机控制器 |
 
+## 两组容易混淆的入口
+
+| 需求 | 应使用 | 不包含 |
+|---|---|---|
+| 只需真机 MoveIt 规划/执行和示教录制 | `moveit_hardware.launch.py` | Dashboard、键盘遥操 |
+| 需要真机 MoveIt + Dashboard 完整工作台 | `rebotarm_app.launch.py` | 键盘遥操 |
+| 只需键盘点动和基础 RViz | `teleop_keyboard.launch.py` | MoveIt、Dashboard、示教录制 |
+| 需要键盘 + 示教录制 + Dashboard，且不需要 MoveIt | `teleop_system.launch.py` | MoveIt |
+
+因此它们共享部分界面，但不是重复实现。`moveit_hardware.launch.py` 和
+`teleop_keyboard.launch.py` 是可独立使用的基础组合；各自的上层入口只叠加自己的功能。
+`rebotarm_app.launch.py` 与 `teleop_system.launch.py` 不应在同一命名空间同时启动。
+
 ## 硬件公共参数
 
-`hardware_controller.launch.py` 是以下默认值的唯一来源：
+`hardware_controller.launch.py` 是以下硬件默认值的权威定义：
 
 | 参数 | 默认值 | 含义 |
 |---|---:|---|
@@ -95,6 +113,19 @@ teach_replay.launch.py                         使用外部唯一执行后端回
 | `frame_id` / `ee_frame_id` | `base_link` / `end_link` | 基座和末端坐标系 |
 
 上层文件可以声明同名参数作为自己的公开接口并转发覆盖值，但不得复制控制器 `Node`。
+
+### 为什么 `DeclareLaunchArgument` 看起来重复
+
+ROS 2 的每个 launch 文件都有自己的命令行接口。子 launch 声明“我接受哪些参数”；
+父 launch 若希望用户仍能在最外层传该参数，需要将它作为自己的公开参数并转发。
+因此“同名声明 + 转发”是接口的逐层导出，不等于重复启动节点。
+
+本目录按以下规则维护：
+
+1. 控制器节点只由 `hardware_controller.launch.py` 拥有，硬件默认值以它为权威定义；
+2. 上层只重新声明需要从该入口命令行对外暴露或本层节点需要使用的参数；
+3. 父层可以选择更保守的场景默认值，但必须在文档中说明；
+4. 不为了减少几行声明而隐藏顶层入口的 `--show-args` 接口。
 
 ## 安全约束
 

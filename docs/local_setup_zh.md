@@ -301,7 +301,7 @@ cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
-ros2 launch rebotarm_bringup driver_only.launch.py \
+ros2 launch rebotarm_bringup hardware_controller.launch.py \
   channel:=/dev/ttyACM0 \
   joint_state_rate:=20.0
 ```
