@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-18T00:05:52+08:00",
+  "generated_at": "2026-09-18T00:13:29+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "617bf5c",
+    "head": "0f77cd3",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-18T00:05:52+08:00 | actor=codex | event=verified | note=Pinocchio依赖安装与OpenCV覆盖冲突已解决；无硬件操作 | verification=pinocchio/eigenpy/coal imports OK; calibration 6 passed; bringup build passed; full 764 passed 7 skipped 1 existing failure"
+  "last_event": "- 2026-09-18T00:13:29+08:00 | actor=codex | event=verified | note=启动结构功能文档已迁移到 bringup/launch/README.md 并纳入安装 | verification=package resources and layering 25 passed; bringup build passed; installed README verified"
 }

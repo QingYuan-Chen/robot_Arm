@@ -656,3 +656,4 @@
 - 2026-09-17T23:51:41+08:00 | actor=codex | event=checkpoint | note=完成并上传 bringup 硬件启动统一重构与结构功能文档 | verification=commit 9ab45be; focused 107 passed; layering 18 passed; show-args 7 entries passed; full 762 passed 7 skipped 3 existing failures
 - 2026-09-17T23:57:40+08:00 | actor=codex | event=start | note=安装 Pinocchio 依赖并解决用户级 OpenCV 覆盖冲突 | verification=-
 - 2026-09-18T00:05:52+08:00 | actor=codex | event=verified | note=Pinocchio依赖安装与OpenCV覆盖冲突已解决；无硬件操作 | verification=pinocchio/eigenpy/coal imports OK; calibration 6 passed; bringup build passed; full 764 passed 7 skipped 1 existing failure
+- 2026-09-18T00:13:29+08:00 | actor=codex | event=verified | note=启动结构功能文档已迁移到 bringup/launch/README.md 并纳入安装 | verification=package resources and layering 25 passed; bringup build passed; installed README verified

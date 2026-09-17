@@ -11,6 +11,17 @@ from rebotarm_simulation.motor_control import load_motor_control_parameters
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_bringup_installs_launch_structure_documentation():
+    launch_readme = ROOT / "src/rebotarm_bringup/launch/README.md"
+    setup_source = (ROOT / "src/rebotarm_bringup/setup.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert launch_readme.is_file()
+    assert "hardware_controller.launch.py" in launch_readme.read_text(encoding="utf-8")
+    assert 'glob("launch/*.md")' in setup_source
+
+
 def test_model_meshes_have_one_declared_owner():
     package = ROOT / "src/rebotarm_moveit_config"
     model = ET.parse(package / "config/rebotarm.urdf").getroot()

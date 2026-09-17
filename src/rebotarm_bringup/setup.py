@@ -19,8 +19,11 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         # 包清单，随共享目录一起安装
         (f"share/{package_name}", ["package.xml"]),
-        # 启动文件：所有 *.launch.py
-        (f"share/{package_name}/launch", glob("launch/*.launch.py")),
+        # 启动文件及同目录结构说明。
+        (
+            f"share/{package_name}/launch",
+            glob("launch/*.launch.py") + glob("launch/*.md"),
+        ),
         # 参数文件：所有 *.yaml（机械臂/夹爪/遥操作等）
         (f"share/{package_name}/config", glob("config/*.yaml")),
         # 可视化布局：所有 *.rviz
