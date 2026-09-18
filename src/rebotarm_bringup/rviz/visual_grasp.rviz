@@ -6,12 +6,9 @@
 # 使用前提：必须已有节点发布 /robot_description 与 /grasp/visual_markers；固定坐标系
 # 为 base_link，因此 TF 链必须从 base_link 出发。本配置只读不写，不产生任何控制命令。
 Panels:
-  # 左侧面板：Displays 为显示项列表（可勾选启停各显示），Views 为视角切换。
+  # 左侧面板只保留 Displays；下方 Views: Current 仍保存初始 Orbit 视角。
   - Class: rviz_common/Displays
     Name: Displays
-  # Views 面板用于保存/切换视图；当前只保存了一个 Orbit 视角（见文件末尾 Views 段）。
-  - Class: rviz_common/Views
-    Name: Views
 Visualization Manager:
   Class: ""
   Displays:
@@ -69,7 +66,7 @@ Visualization Manager:
     # 抓取候选标记数组：由视觉侧发布，用箭头/线框表达候选抓取位姿与接近方向。
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Marker Topic:
+      Topic:
         # 话题名是对外契约：视觉抓取标记节点发布到同一名称，改名会导致显示为空。
         Value: /grasp/visual_markers
       Name: Visual Grasp Markers
@@ -77,6 +74,26 @@ Visualization Manager:
       Namespaces:
         {}
       # Queue Size：消息队列深度；标记刷新很快时队列过小会丢帧，过大则占用内存。
+      Queue Size: 10
+    # YOLO 标注图：显示视觉节点已经绘制好的检测框、类别和掩膜。
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Topic:
+        Value: /camera/color/annotated
+      Name: YOLO Annotated Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+    # GraspNet 原始候选：默认显示前 5 个候选夹爪，可通过启动参数关闭。
+    - Class: rviz_default_plugins/MarkerArray
+      # 话题显示项保持启用；是否产生数据由 start_raw_candidate_markers 控制。
+      Enabled: true
+      Topic:
+        Value: /grasp/raw_candidate_markers
+      Name: Raw GraspNet Candidates
+      Namespaces:
+        {}
       Queue Size: 10
   Enabled: true
   Global Options:

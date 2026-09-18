@@ -27,6 +27,15 @@ export REBOTARM_VISION_PYTHON="$PWD/.venv-vision/bin/python"
 export GRASPNET_PYTHON="$PWD/.venv-graspnet/bin/python"
 ```
 
+日常使用也可以直接执行：
+
+```bash
+source tools/source_local_environment.bash
+```
+
+该脚本还会默认设置本工作区的 `GRASPNET_MODEL_ROOT` 和
+`GRASPNET_CHECKPOINT_PATH`；如果当前 shell 已经显式设置过这两个变量，则保留已有值。
+
 整合前的工作树分别使用 `install_decoupling` 和 `install_coupling_audit` 验证。
 整合后主目录独立构建全部包，不再依赖工作树overlay。主目录重建命令为：
 
@@ -51,7 +60,7 @@ MuJoCo 模型资源的选择方式保持原有契约；本次只解除解释器�
 覆盖入口：
 
 - `rebotarm_simulation`: `mujoco_sim.launch.py`、`mujoco_moveit_sim.launch.py`
-- `rebotarm_bringup`: `visual_grasp_system.launch.py`、`visual_grasp_perception_preview.launch.py`、`mujoco_offline_perception.launch.py`、`real_perception_sim_execution.launch.py`
+- `rebotarm_bringup`: `visual_grasp_system.launch.py`、`visual_grasp_perception_preview.launch.py`、`real_perception_sim_execution.launch.py`
 - `rebotarm_vision`: `vision.launch.py`、`vision_ubuntu.launch.py`
 
 旧 `mujoco_ros_adapter_node.py` 和快照进程转发器 `upstream_backend.py` 已退出

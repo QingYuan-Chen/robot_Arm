@@ -215,8 +215,8 @@ def generate_launch_description():
                 remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
                 condition=UnlessCondition(use_moveit_preview),
             ),
-            # 被动关节状态源：无硬件且显式开启时，按固定频率发布假关节状态，供 RViz 与 MoveIt 预览；
-            # 条件同时要求 “非硬件模式” 与 “start_passive_joint_state_publisher=true”
+            # 被动关节状态源：只在无硬件、非 MoveIt 预览且显式开启时发布假关节状态。
+            # MoveIt 预览由 demo.launch.py 自己提供同一话题，必须互斥，避免两个发布器竞争。
             Node(
                 package="joint_state_publisher",
                 executable="joint_state_publisher",
@@ -227,6 +227,8 @@ def generate_launch_description():
                         [
                             "'",
                             use_hardware,
+                            "'.lower() != 'true' and '",
+                            use_moveit_preview,
                             "'.lower() != 'true' and '",
                             start_passive_joint_state_publisher,
                             "'.lower() == 'true'",

@@ -609,6 +609,9 @@ class TeleopStatusPanelNode(Node):
         合并过 URDF 限位，``joint_velocity_limits`` 已回退过默认速度上限。
         """
         return {
+            # use_hardware 是前端功能裁剪的唯一后端类型依据：仿真模式隐藏只对真机有意义的
+            # Enable / Disable / Safe Home，仍允许网页键盘和仿真轨迹 Execute。
+            "use_hardware": bool(self.get_parameter("use_hardware").value),
             "joint_names": list(self._joint_names),
             "joint_limits": {
                 name: [float(lower), float(upper)]
@@ -827,6 +830,16 @@ class TeleopStatusPanelNode(Node):
         ``arm_status`` 反馈覆盖，界面因此不会出现按钮与状态互相矛盾的空窗期。
         """
         command = normalize_arm_command(command) or ""
+        if not self._use_hardware:
+            message = "hardware arm command unavailable in simulation mode"
+            result = {
+                "accepted": False,
+                "state": "blocked",
+                "command": command,
+                "message": message,
+            }
+            self._store.update_teleop_status("arm_command", result)
+            return result
         if not bool(self.get_parameter("web_execute_enabled").value):
             message = "web arm command disabled; launch with web_execute_enabled:=true"
             # 未打开开关时仍按意图归类：回原点算 move_home，其余算 stop_robot，便于前端统计。

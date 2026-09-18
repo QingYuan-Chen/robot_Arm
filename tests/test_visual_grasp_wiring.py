@@ -188,7 +188,7 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'DeclareLaunchArgument("start_visual_ready", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false")' in launch_text
     assert (
-        'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"'
+        'default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]"'
         in launch_text
     )
     assert 'DeclareLaunchArgument("visual_ready_startup_delay_sec", default_value="0.0")' in launch_text
@@ -209,7 +209,7 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'self.declare_parameter("exit_after_startup_move", False)' in node_text
     assert 'bool(node.get_parameter("exit_after_startup_move").value)' in node_text
     assert 'self.declare_parameter("startup_delay_sec", 0.0)' in node_text
-    assert "[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]" in node_text
+    assert "[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]" in node_text
     assert 'f"/{namespace}/visual_ready/move"' in node_text
     assert "create_service(" in node_text
     assert "Trigger," in node_text
@@ -258,6 +258,10 @@ def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack()
     assert 'executable="rebotarm_grasp_candidate_ik_filter"' in launch_text
     assert 'executable="rebotarm_visual_grasp_markers"' in launch_text
     assert 'executable="rviz2"' in launch_text
+    assert 'DeclareLaunchArgument("start_open3d_viewer", default_value="true")' in launch_text
+    assert 'executable="rebotarm_graspnet_open3d_viewer"' in launch_text
+    assert 'condition=IfCondition(start_open3d_viewer)' in launch_text
+    assert '"input_candidates_topic": graspnet_candidates_topic' in launch_text
     assert 'PathJoinSubstitution([bringup_share, "rviz", "visual_grasp.rviz"])' in launch_text
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose")' in launch_text
@@ -265,12 +269,15 @@ def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack()
     assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="0.0")' in launch_text
     assert '"max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
     assert '"input_topic": graspnet_candidates_topic' in launch_text
-    assert "interactive_system.launch.py" not in launch_text
+    assert "interactive_system.launch.py" in launch_text
+    assert 'DeclareLaunchArgument("start_moveit_preview", default_value="true")' in launch_text
+    assert '"use_hardware": "false"' in launch_text
+    assert '"use_moveit_preview": "true"' in launch_text
     assert "rebotarm_visual_ready" not in launch_text
     assert "rebotarm_sim_trajectory_controller" not in launch_text
     assert "PoseExecutionNode" not in launch_text
     assert "reBotArmController" not in launch_text
-    assert "move_group" not in launch_text
+    assert 'package="moveit_ros_move_group"' not in launch_text
 
 
 def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
@@ -441,7 +448,7 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert "rebotarm_graspnet_baseline_node" in setup_scripts
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates")' in launch_text
-    assert '"GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"' in launch_text
+    assert '"GRASPNET_MODEL_ROOT", "third_party/graspnet-baseline"' in launch_text
     assert '"GRASPNET_CHECKPOINT_PATH"' in launch_text
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
@@ -700,8 +707,8 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert "CandidateWorkspaceGateConfig" in gate_policy_text
     assert "candidate_workspace_gate(" in gate_policy_text
     assert 'self.declare_parameter("candidate_workspace_gate_enabled", False)' in node_text
-    assert 'self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])' in node_text
-    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])' in node_text
     assert 'self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)' in node_text
     assert "variants = self._candidate_target_variants(msg, candidate.pose)" in node_text
     assert "for pregrasp, grasp, variant_label in variants:" in node_text
@@ -758,10 +765,10 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120")' in launch_text
     assert 'DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120")' in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]")' in launch_text
-    assert 'DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]")' in launch_text
-    assert 'default_value="[0.0, 0.0, -0.707106781, 0.707106781]"' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]")' in launch_text
+    assert 'DeclareLaunchArgument("base_approach_axis_xyz", default_value="[1.0, 0.0, 0.0]")' in launch_text
+    assert 'default_value="[0.0, 0.0, 0.0, 1.0]"' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15")' in launch_text
     assert '"joint_state_topic": candidate_joint_state_topic' in launch_text
     assert '"service_timeout_sec": candidate_filter_service_timeout_sec' in launch_text
@@ -787,8 +794,8 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
     assert "tcp_offset_xyz: [-0.04, 0.0, 0.0]" in profile_text
     assert "target_base_offset_xyz: [0.0, 0.0, 0.0]" in profile_text
     assert "candidate_workspace_gate_enabled: true" in profile_text
-    assert "candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]" in profile_text
-    assert "candidate_workspace_max_xyz: [0.35, -0.18, 0.45]" in profile_text
+    assert "candidate_workspace_min_xyz: [0.18, -0.35, 0.0]" in profile_text
+    assert "candidate_workspace_max_xyz: [0.64, 0.35, 0.45]" in profile_text
     assert "candidate_max_grasp_to_object_center_m: 0.15" in profile_text
     assert "candidate_max_candidates_per_frame: 20" in profile_text
     assert "candidate_pregrasp_min_z_m: 0.120" in profile_text

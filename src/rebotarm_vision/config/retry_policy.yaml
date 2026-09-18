@@ -30,7 +30,7 @@ rebotarm_visual_grasp_executor:
     place_position_xyz: [-0.20, -0.20, 0.25]
     # 放置点姿态四元数 (x, y, z, w)，无量纲；默认绕 Z 轴 -90°，
     # 与本站抓取姿态一致，使松爪方向与目标摆放方向匹配
-    place_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
+    place_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
     # 放置点松爪的开口宽度（单位 m）；太小松不开、带动物体，太大可能碰倒目标
     place_open_position_m: 0.08
     # 放置点松爪的夹持力（归一化，不是牛顿）；松爪只需克服残余摩擦，故比抓取力小

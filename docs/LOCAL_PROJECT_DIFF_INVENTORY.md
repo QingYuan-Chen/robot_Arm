@@ -4,6 +4,8 @@
 > 2026-09-17 后续清理已退役旧交互兼容包、Vision 的 visual-ready/TCP 重复兼容入口、
 > 未接线的 driver/回放配置和 MuJoCo legacy CLI。当前发布树以 README 与
 > `docs/architecture.md` 为准；下方“旧版”段仍保留历史对比事实。
+> 2026-09-18 再次清理 `rebotarm_voice_control` 及其专属测试；本文件的“清理前新版快照”
+> 仍保留该包的历史路径，不能当作当前源码清单。
 
 本清单根据新旧工作树中的 Git 跟踪文件生成，并包含旧工作树未提交的修改。通过 Git 跟踪文件清单排除了 build/install/log/venv/cache 目录。仅路径发生的新增或删除可能只是资源移动，不代表功能新增或移除。
 

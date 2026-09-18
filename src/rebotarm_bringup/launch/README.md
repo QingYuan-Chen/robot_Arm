@@ -27,7 +27,6 @@ src/rebotarm_bringup/launch/
 ├── rviz_ee_drag_sim.launch.py
 ├── visual_grasp_system.launch.py
 ├── visual_grasp_perception_preview.launch.py
-├── mujoco_offline_perception.launch.py
 └── real_perception_sim_execution.launch.py
 ```
 
@@ -38,14 +37,13 @@ hardware_controller.launch.py                  唯一真实硬件控制器定义
 ├── bringup.launch.py                          + 状态发布 + 基础 RViz
 ├── moveit_hardware.launch.py                  + 示教录制 + MoveIt
 │   └── rebotarm_app.launch.py                 + Dashboard + 状态 RViz（不含键盘）
-├── interactive_system.launch.py               真机/无硬件状态源选择 + MoveIt/RViz
+├── interactive_system.launch.py               真机/无硬件状态源选择 + MoveIt/RViz（只能执行plan）
 │   ├── rviz_ee_drag_real.launch.py            真机 MotionPlanning 入口
 │   ├── rviz_ee_drag_sim.launch.py             仿真 MotionPlanning 入口
 │   └── visual_grasp_system.launch.py          完整视觉抓取组合
-├── teleop_keyboard.launch.py                  键盘 + 状态发布 + 基础 RViz（简化版关节空间运动规划）
-│   └── teleop_system.launch.py                + 示教录制 + Dashboard（简化版关节空间运动规划）
+├── teleop_keyboard.launch.py                  键盘 + 状态发布 + 基础 RViz（控制器点动适配）
+│   └── teleop_system.launch.py                + 示教录制 + Dashboard（控制器点动适配）
 visual_grasp_perception_preview.launch.py      只读感知预览，不含控制器
-mujoco_offline_perception.launch.py            虚拟 RGB-D + 离线感知/规划
 real_perception_sim_execution.launch.py        真实感知 + MuJoCo 执行
 ```
 
@@ -54,20 +52,18 @@ real_perception_sim_execution.launch.py        真实感知 + MuJoCo 执行
 
 ## 文件功能
 
-| 文件 | 类型 | 功能和边界 |
-|---|---|---|
+| 文件 | 类型 | 功能和边界 ||---|---|---|
 | `hardware_controller.launch.py` | 底层片段 | 唯一直接启动 `reBotArmController` 的文件；统一串口、反馈频率、夹爪保护、仲裁、命名空间和坐标系参数 |
 | `bringup.launch.py` | 基础真机入口 | 硬件、夹爪可视化状态桥、TF 和可选基础 RViz；不启动 MoveIt |
 | `moveit_hardware.launch.py` | 真机 MoveIt 入口 | 硬件、示教录制、`move_group` 和可选 MoveIt RViz |
 | `interactive_system.launch.py` | 共享组合 | 在真机硬件、无硬件状态源和 MoveIt 预览之间做互斥选择 |
 | `rebotarm_app.launch.py` | 完整真机入口 | 包含真机 MoveIt 组合，再增加 Dashboard 和状态 RViz；不启动键盘节点 |
-| `teleop_keyboard.launch.py` | 遥操作入口 | 可选硬件、键盘关节点动、状态发布和 RViz；默认不接真机 |
-| `teleop_system.launch.py` | 遥操作组合 | 包含键盘入口，再增加示教录制和默认只读 Dashboard；不启动 MoveIt，默认不接真机 |
+| `teleop_keyboard.launch.py` | 遥操作入口 | 可选硬件、键盘关节点动、状态发布和 RViz；默认不接真机。无硬件模式使用轻量仿真轨迹控制器，按键可以改变 RViz 姿态，但不代表物理仿真 |
+| `teleop_system.launch.py` | 遥操作组合 | 包含键盘入口，再增加示教录制和默认只读 Dashboard；不启动 MoveIt，默认不接真机。无硬件模式可驱动 RViz 仿真姿态，真机点动仍由控制器执行 |
 | `rviz_ee_drag_real.launch.py` | 真机规划入口 | 用 MoveIt MotionPlanning 交互目标进行 Plan/Execute |
 | `rviz_ee_drag_sim.launch.py` | 仿真规划入口 | 使用仿真轨迹控制器提供 Plan/Execute，不打开真机 |
 | `visual_grasp_system.launch.py` | 完整视觉组合 | MoveIt/后端、视觉就绪、相机、YOLO、GraspNet、候选过滤和受控执行 |
-| `visual_grasp_perception_preview.launch.py` | 只读预览 | 相机到候选可视化；不启动控制器、不规划、不执行 |
-| `mujoco_offline_perception.launch.py` | 离线仿真 | MuJoCo 虚拟相机驱动感知与候选规划，默认 plan-only |
+| `visual_grasp_perception_preview.launch.py` | 只读预览 | 默认包含无硬件 MoveIt/假关节状态/TF、RViz 和 Open3D 点云/原始夹爪查看器，提供相机到候选可视化和 IK 检查；无桌面环境用 `start_open3d_viewer:=false`，不启动真实控制器、不执行轨迹 |
 | `real_perception_sim_execution.launch.py` | 混合仿真 | 真实相机/感知连接 MuJoCo 执行，明确禁止真机控制器 |
 
 ## 两组容易混淆的入口
@@ -76,7 +72,7 @@ real_perception_sim_execution.launch.py        真实感知 + MuJoCo 执行
 |---|---|---|
 | 只需真机 MoveIt 规划/执行和示教录制 | `moveit_hardware.launch.py` | Dashboard、键盘遥操 |
 | 需要真机 MoveIt + Dashboard 完整工作台 | `rebotarm_app.launch.py` | 键盘遥操 |
-| 只需键盘点动和基础 RViz | `teleop_keyboard.launch.py` | MoveIt、Dashboard、示教录制 |
+| 只需键盘点动和基础 RViz | `teleop_keyboard.launch.py` | MoveIt、Dashboard、示教录制；无硬件模式使用轻量仿真执行键盘点动 |
 | 需要键盘 + 示教录制 + Dashboard，且不需要 MoveIt | `teleop_system.launch.py` | MoveIt |
 
 因此它们共享部分界面，但不是重复实现。`moveit_hardware.launch.py` 和

@@ -20,10 +20,10 @@ flat_graspnet:
   # 是否启用工作空间盒闸门。本档为 true，抓取点必须落在下面 min/max 构成的盒内，
   # 否则该候选直接判不可达（防止规划到工作区之外）。
   candidate_workspace_gate_enabled: true
-  # 工作空间盒最小角（基座系，单位 m）；本站工作区由上游 +X 布局绕基座 Z 轴旋转 -90° 得到
-  candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+  # 旧仓库 +X 工作空间盒最小角（基座系，单位 m）
+  candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
   # 工作空间盒最大角（基座系，单位 m）；与上一项共同定义允许抓取的盒范围
-  candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
+  candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
   # 抓取点到目标中心的最大允许偏差（单位 m，0.15 = 15 cm）；
   # 超出说明抓取点已明显偏离物体（深度或分割异常），判定该候选不可信。
   candidate_max_grasp_to_object_center_m: 0.15

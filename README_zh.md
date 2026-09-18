@@ -24,7 +24,7 @@
 `reBotArm_control_py` Python 控制库封装为 ROS2 topic、service 和 action，
 作为二次开发、上层规划、可视化和单电机调试的统一入口。
 
-当前工作空间包含12个 ROS2 包：
+当前工作空间包含11个 ROS2 包：
 
 | 包 | 作用 |
 |---|---|
@@ -39,7 +39,6 @@
 | `rebotarm_vision` | 相机、识别与抓取候选 |
 | `rebotarm_simulation` | MuJoCo 模型与仿真执行 |
 | `rebotarm_calibration` | 标定与 TF/TCP 验证 |
-| `rebotarm_voice_control` | 语音控制入口 |
 
 ---
 
@@ -48,6 +47,7 @@
 视觉只维护 Ubuntu 原生 Gemini 2、YOLO、ROS RGB-D/CameraInfo/detections、本机
 GraspNet、MoveIt 和 MuJoCo/真机后端。Windows、HTTP、MJPEG、远端 JSON 和独立
 GraspNet service 已删除。Dashboard HTTP 仅用于本机网页界面。
+语音控制包 `rebotarm_voice_control` 已从当前工作空间移除，不属于现行启动链。
 
 真机启动后默认保持失能，确认反馈和现场安全后显式执行：
 

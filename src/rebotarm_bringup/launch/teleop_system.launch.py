@@ -6,13 +6,15 @@
 #  3. 网页状态面板节点（网页面板包）：提供本机 HTTP/SSE 界面与命令入口。
 #
 #真实/仿真后端选择逻辑：
-#  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起假关节状态发布器，录制时不要求真实电机状态；
+#  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起轻量仿真轨迹控制器，
+#    键盘可以驱动 RViz 姿态，录制时不要求真实电机状态；
 #  - use_hardware=true：由 include 的启动文件启动真机控制器，录制时要求有效电机状态。真机上电后仍处于失能态，必须显式调用 enable 服务才会运动。
 #
 #参数来源：键盘、网页和示教分别加载自己的配置，并额外加载 operator_common.yaml。launch 参数只覆盖命名空间、记录路径与面板开关等运行期选择项。
 #
 #安全默认值：web_execute_enabled=false（网页不开放执行，只能看状态）、channel 留空表示由机械臂配置文件或自动探测决定、use_local_rviz=true 便于操作者直接看到机械臂状态。
-#这些开关的默认值都取“更保守”的一侧，需要执行动作时必须显式打开。
+#网页执行模式默认为 execute，但 web_execute_enabled 默认关闭；只有显式打开网页执行开关后，
+#Dashboard 才会把命令发送给当前后端（无硬件时为轻量仿真控制器，真机时为真实控制器）。
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -32,6 +34,7 @@ def generate_launch_description():
     channel = LaunchConfiguration("channel")
     panel = LaunchConfiguration("panel")
     web_execute_enabled = LaunchConfiguration("web_execute_enabled")
+    execution_mode = LaunchConfiguration("execution_mode")
     record_path = LaunchConfiguration("record_path")
     common_config = LaunchConfiguration("common_config")
     keyboard_config = LaunchConfiguration("keyboard_config")
@@ -56,6 +59,9 @@ def generate_launch_description():
             DeclareLaunchArgument("panel", default_value="true"),
             # web_execute_enabled：网页是否允许执行运动命令。默认 false = 只读面板，网页只能看状态；放开运动必须由操作者显式打开。
             DeclareLaunchArgument("web_execute_enabled", default_value="false"),
+            # execution_mode：网页命令网关模式。web_execute_enabled=false 时仍然不会执行；
+            # 显式打开网页执行后，默认 execute 让网页键盘与终端键盘共用同一个后端。
+            DeclareLaunchArgument("execution_mode", default_value="execute"),
             # record_path：示教记录 JSONL 输出路径；相对路径按各节点自己的工作目录解析。
             DeclareLaunchArgument("record_path", default_value="teleop_records/teach_record.jsonl"),
             # keyboard_prefix：键盘节点必须拿到真实 TTY 才能逐字符读键，这里用 bash -lc
@@ -131,6 +137,7 @@ def generate_launch_description():
             # 命令入口。IfCondition(panel) 关闭时整个面板不启动，也就没有任何网页入口。
             # 覆盖项含义：
             #   web_execute_enabled 是否允许网页执行运动（默认 false，只读状态）；
+            #   execution_mode    命令网关模式；默认 execute，但仍受 web_execute_enabled 总开关保护；
             #   record_path         与录制节点共用，面板据此展示/切换记录目标；
             #   use_hardware        面板据此判断“真实后端”语义（例如是否展示电机状态）。
             Node(
@@ -146,6 +153,7 @@ def generate_launch_description():
                     {
                         "arm_namespace": arm_namespace,
                         "web_execute_enabled": web_execute_enabled,
+                        "execution_mode": execution_mode,
                         "record_path": record_path,
                         "use_hardware": use_hardware,
                     },

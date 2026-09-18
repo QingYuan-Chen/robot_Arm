@@ -64,18 +64,17 @@ NEW 的构建、虚拟环境、MotorBridge 编译和本地依赖均重新生成�
 | `rebotarm_calibration` | ArUco 位姿、手眼求解/残差 CLI、TCP 标定工具 | geometry/handeye 配置校验和 TCP；节点已归属 calibration |
 | `rebotarm_vision` | Ubuntu 相机+YOLO、原生 ROS GraspNet、候选筛选/IK、视觉抓取状态机、标记/预览、离线检测、ordinary_grasp 适配 | Ubuntu 相机/独立 YOLO/GraspNet ROS 链、候选与抓取状态机；旧 Windows/HTTP 链已移除 |
 | `rebotarm_simulation` | 唯一活动 MuJoCo ROS 后端、fake trajectory、模型生成、健康检查、Viewer、指标、虚拟相机和离线检测接线 | 同类基础能力，加 Real2Sim、Sim2Real、Reach/Pick、Gym/vector 环境及批处理/验收工具 |
-| `rebotarm_voice_control` | 文本/语音文件/LLM tool-call/Realtime 网关、命令路由、安全门、模板展开和模拟动作执行 | 已从旧当前工作树删除；共享任务消息仍保留 |
 | `rebotarm_bringup` | 场景组合、互斥后端选择、逐进程解释器配置 | 同域，以 core.launch.py 及分离运行/安全配置组织 |
 | 独立 Star Arm 跟随 | SDK 跟随工具，部分 follower/hardware specs 变化 | 也存在；均非主 ROS 启动链，本轮不运行 |
 
-当前 NEW 为 12 包：已退役旧 import/console 兼容包；voice_control 仍保留，
+当前 NEW 为 11 包：已退役旧 import/console 兼容包；`rebotarm_voice_control`
+已于 2026-09-18 从当前工作树移除，语音控制不再属于当前 ROS 2 部署范围；
 description 能力归 `rebotarm_moveit_config`。
-NEW 有 9 个 voice console entries；全包精确入口映射列于完整清单。
 两边 ROS 应用主体为 Python，msgs 为 ament_cmake/rosidl 生成接口；没有把生成的 C/C++ 消息代码当成手写算法差异。MotorBridge Rust/C ABI 属第三方构建。
 
 ## 4. 新项目有、旧项目没有
 
-- `rebotarm_voice_control` 整套文本/语音/Realtime/tool-call 代码、配置、launch 和测试。
+- 语音控制包及其文本/语音/Realtime/tool-call 代码、配置、launch 和测试已在后续清理中移除；本报告中仍出现的 voice 描述属于清理前历史快照。
 - `Agent/` 状态刷新与活动日志、分层/资源测试、较大根测试集、许可/第三方来源记录。
 - `camera_ubuntu.yaml` / `graspnet_ubuntu.yaml`、`vision_ubuntu.launch.py` 和显式解释器选择；不再保留远端网络输入。
 - latest-wins 单槽队列和前置候选检查、离线 YOLO 节点、仿真虚拟相机及 `mujoco_offline_perception.launch.py`。
@@ -104,7 +103,7 @@ NEW bringup 18 个 launch；增加 `interactive_basic.launch.py`、`mujoco_offli
 共同入口包括 driver_only、bringup、interactive_system、moveit_hardware、app、RViz real/sim、teach、teleop、视觉预览/抓取及真实感知+仿真执行。
 NEW simulation 增加 `mujoco_moveit_sim.launch.py`，不提供 OLD 的 `real2sim_bridge.launch.py`。
 NEW vision 增加 `vision_ubuntu.launch.py`，不提供 OLD 的 `graspnet_viewer.launch.py`。
-voice 提供 voice_control/real/realtime/sim 四个入口，但本轮没有启动任何一个。
+清理前快照曾包含 voice_control/real/realtime/sim 四个入口；它们已不属于当前源码。
 旧 `rebotarm_rviz_fake_controller` console 别名不在 NEW；`rebotarm_sim_trajectory_controller` 保留。
 
 NEW 部分通用 app/driver 入口仍面向硬件；“视觉安全默认值”不是所有 launch 的总开关。
@@ -158,10 +157,10 @@ prepared trajectory、重定时、碰撞/对齐与运行跟踪能力两边都有
 
 ## 13. Command Router / Task Manager / Safety
 
-NEW voice 的 `DryRunCommandRouter` 映射意图到 ROS endpoint，`SafetyGuard` 检查白名单/命名姿态/workspace/相对移动上限，`TaskPlanner` 展开模板，另有 sim executor 与 action transport。
+清理前快照中的 voice `DryRunCommandRouter`、`SafetyGuard`、`TaskPlanner` 和 sim executor 已随包删除。
 当前没有独立通用 `task_manager.py` 或跨业务统一任务服务；不能把路由中 endpoint 名称当成所有真机 Action server 已实现。
 OLD 当前树无 voice 包，任务消息定义与视觉/示教各自状态机仍在。
-NEW 的 voice 安全门不替代 motion 或 controller 最终边界；ASR/LLM/Realtime 的在线服务和凭据本轮未配置、未调用。
+语音控制已退出当前范围；不要根据本报告中的历史描述恢复其入口或自动开放真机动作。
 
 ## 14. Simulation
 
@@ -237,7 +236,7 @@ SDK/MotorBridge 网络中断时仅复用了匹配新依赖清单固定提交的 
 ## 18. Tests 差异与证据边界
 
 NEW 根 tests 共 108 个受跟踪文件（含 conftest），OLD 7 个实际测试文件。
-NEW 覆盖硬件 fake、MotorBridge PTY 协议、motion/teach/Web/voice/vision/MuJoCo、资源/分层、安装/解释器与状态文件。
+NEW 覆盖硬件 fake、MotorBridge PTY 协议、motion/teach/Web/vision/MuJoCo、资源/分层、安装/解释器与状态文件；voice 测试随包删除。
 OLD 的严格架构 checker、自有 ROS perception/viewer、RViz execute workflow 与 functional fixes 回归未原样保留。
 新测试数量多不等于每项旧回归均被覆盖；A 类迁移建议首先比对断言与契约，不批量复制测试。
 本轮跳过所有真实机械臂/相机现场验收、实际轨迹/回放/抓取、标定写入和 motor enable。软件 fake/PTY/仿真结果仅证明软件路径。

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-18T12:53:22+08:00",
+  "generated_at": "2026-09-18T21:57:39+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "daf3b3f",
+    "head": "4d9ab47",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-18T12:53:22+08:00 | actor=codex | event=checkpoint | note=Removed standalone visual_ready_hold launch; retained visual_grasp_perception_preview and inline visual_ready nodes in visual_grasp_system | verification=focused 92 passed; bringup rebuild and visual launch show-args passed; compileall and diff check passed"
+  "last_event": "- 2026-09-18T21:57:39+08:00 | actor=codex | event=verified | note=清理删除入口对应的构建缓存后，bringup重新编译成功 | verification=105 focused tests passed; rebotarm_bringup build passed; launch compileall passed"
 }

@@ -84,8 +84,8 @@ candidate_score_joint6_weight: 0.35
 
 ```yaml
 candidate_workspace_gate_enabled: true
-candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
-candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
+candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
+candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
 candidate_min_grasp_z_m: 0.0
 candidate_safe_lift_min_z_m: 0.120
 safe_retreat_min_lift_z_m: 0.12
@@ -94,7 +94,7 @@ safe_retreat_min_lift_z_m: 0.12
 - 不再使用 `0.12m` 作为抓取点最低硬门槛，低高度物体可以进入候选。
 - `candidate_safe_lift_min_z_m` 和 `safe_retreat_min_lift_z_m` 仍用于抬升/撤退安全检查。
 - workspace 最大半径不超过机械臂约 64cm 工作范围。
-- 当前安装相对 upstream 初始方向绕 base Z 轴旋转了 `-90°`；因此 visual-ready joint1 为 `-π/2`，工作区长轴从 `+X` 同步旋转到 `-Y`。hand-eye/TCP 是 `end_link` 局部外参，不随安装方向修改。
+- 当前恢复旧仓库的 `+X` 工作区约定；visual-ready joint1 为 `0`。hand-eye/TCP 仍是相同的 `end_link` 局部外参。
 
 ## 第 6 层：Gripper Policy
 

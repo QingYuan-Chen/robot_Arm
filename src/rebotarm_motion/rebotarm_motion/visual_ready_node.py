@@ -105,10 +105,10 @@ class VisualReadyNode(Node):
         self.declare_parameter("exit_after_startup_move", False)
         self.declare_parameter("startup_delay_sec", 0.0)
         # 默认值即当前安装朝向下的观察位姿：相对原始上游姿态（joint1=0，朝 base +X）把 joint1
-        # 转 -90°，使机械臂朝向 base -Y 方向的视觉工作区。
+        # 沿用旧仓库视觉就绪位，joint1=0 使机械臂朝向 base +X 工作区。
         self.declare_parameter(
             "joint_positions",
-            [-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0],
+            [0.0, -0.1, -0.2, 0.2, 0.0, 0.0],
         )
         self.declare_parameter("duration_sec", 4.0)
         self.declare_parameter("wait_timeout_sec", 12.0)

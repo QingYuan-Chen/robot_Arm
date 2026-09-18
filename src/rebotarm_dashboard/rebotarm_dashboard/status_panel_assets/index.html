@@ -297,6 +297,7 @@
       opacity: 0.48;
       background: #f5f7fa;
     }
+    .robot-command-row[hidden] { display: none; }
     .preview-active input[type="range"] { accent-color: var(--warn); }
     .execute-row {
       border-top: 1px solid var(--line);
@@ -709,7 +710,7 @@
               <button class="tool-button" id="toggle-grid" type="button">网格</button>
             </div>
           </div>
-          <div class="button-row robot-command-row">
+          <div class="button-row robot-command-row" id="hardware-arm-command-row">
             <button class="tool-button execute-button" id="arm-safe-home" type="button">回安全位</button>
             <button class="tool-button" id="arm-enable" type="button">使能</button>
             <button class="tool-button stop-button" id="arm-disable" type="button">失能</button>
@@ -986,6 +987,11 @@
     const source = new EventSource('/events');
     const panelMode = String(panelConfig.panel_mode || 'control').toLowerCase();
     const isCheckMode = panelMode === 'check';
+    const useHardware = panelConfig.use_hardware === true;
+    // Enable / Disable / Safe Home 只属于真实控制器；仿真模式直接隐藏这一组，避免把
+    // web_execute_enabled 误解为已经开放真实硬件控制。网页键盘和仿真 Execute 不受影响。
+    const hardwareArmCommandRow = document.getElementById('hardware-arm-command-row');
+    if (hardwareArmCommandRow) hardwareArmCommandRow.hidden = !useHardware;
     const armJointNames = panelConfig.joint_names || ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'];
     const sliderNames = [...armJointNames, 'gripper'];
     const jointLimits = {
@@ -2273,7 +2279,7 @@
       const restoreArmButtons = () => {
         const replayStatus = statusObj(previewState.latestTeleop?.replay);
         buttons.forEach((button) => {
-          button.disabled = isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
+          button.disabled = !useHardware || isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
         });
       };
       const appendArmCommandMessage = (message) => {
@@ -2284,6 +2290,11 @@
       };
       if (!webExecuteEnabled) {
         appendArmCommandMessage('web_execute_enabled is false');
+        restoreArmButtons();
+        return;
+      }
+      if (!useHardware) {
+        appendArmCommandMessage('hardware arm commands are unavailable in simulation mode');
         restoreArmButtons();
         return;
       }
@@ -2521,7 +2532,7 @@
       document.getElementById('stop-execute').disabled = !['active', 'accepted'].includes(String(webExecuteState).toLowerCase());
       ['arm-safe-home', 'arm-enable', 'arm-disable'].forEach((id) => {
         const button = document.getElementById(id);
-        if (button) button.disabled = isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
+        if (button) button.disabled = !useHardware || isCheckMode || !webExecuteEnabled || isReplayArmCommandLocked(replayStatus);
       });
       updateTeachDryRunButton(latestTeachFileInfo);
       document.getElementById('updated').textContent = `已更新 ${new Date().toLocaleTimeString()}`;

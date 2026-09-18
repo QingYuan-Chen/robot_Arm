@@ -1,14 +1,16 @@
-#键盘遥操作启动文件：真机（可选）或无硬件仿真下的键盘关节增量控制。
+# 键盘遥操作启动文件：真机键盘点动，或无硬件时的仿真键盘点动。
 #
 #用途
-#    用键盘按固定增量点动机械臂，并把夹爪状态桥接成可视化关节状态、按需启动 RViz。
-#    既可在真机上使用（"use_hardware=true"），也可在完全没有硬件时用假关节状态在
-#    RViz 里验证姿态与可视化布局。本文件只做启动组合，遥操作逻辑在操作交互包里。
+#    真机模式用键盘按固定增量向控制器发送关节目标，并把夹爪状态桥接成可视化关节状态；
+#    无硬件模式启动轻量 FollowJointTrajectory 仿真服务端，按键目标由它插值执行并反馈到
+#    RViz；这不是 MuJoCo 物理仿真，只用于键盘、动作接口、关节状态和可视化联调。
+#    本文件只做启动组合，遥操作逻辑在操作交互包里。
 #
 #节点组合与真实/仿真后端选择
 #    - "use_hardware=true"：启动硬件控制器（唯一硬件入口）；robot_state_publisher订阅控制器发布的视觉关节状态；
-#    - "use_hardware=false"（默认）：不启动任何硬件节点，改由 joint_state_publisher发布假关节状态，整条链路纯软件、绝不会驱动真实电机；
-#    - 键盘节点与夹爪可视化关节节点始终启动：前者读键盘下发命令，后者补齐夹爪关节；
+#    - "use_hardware=false"（默认）：不启动硬件节点，由仿真轨迹控制器发布关节状态并提供
+#      FollowJointTrajectory 动作服务；按键会反馈到 RViz 姿态，也绝不会驱动真实电机；
+#    - 键盘节点与夹爪可视化关节节点始终启动：前者读取并尝试发送目标，后者补齐夹爪关节；
 #    - RViz 仅当 "use_local_rviz=true" 时启动。
 #
 #参数来源
@@ -19,7 +21,7 @@
 #    "use_hardware" 默认 "false"：不会因为顺手敲一条启动命令就驱动真机，真机必须显式传 "use_hardware:=true"。
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
@@ -29,7 +31,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    """构造键盘遥操作的启动描述：按 use_hardware 在真机与假关节状态之间二选一。"""
+    """构造键盘入口：在真机控制器与轻量仿真轨迹控制器之间二选一。"""
     arm_namespace = LaunchConfiguration("arm_namespace")
     use_hardware = LaunchConfiguration("use_hardware")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
@@ -52,9 +54,31 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            LogInfo(
+                msg=(
+                    "\n"
+                    "========== reBotArm 键盘遥操作 =========="
+                    "\n"
+                    "1 / q : joint1 正转 / 反转    2 / w : joint2 正转 / 反转"
+                    "\n"
+                    "3 / e : joint3 正转 / 反转    4 / r : joint4 正转 / 反转"
+                    "\n"
+                    "5 / t : joint5 正转 / 反转    6 / y : joint6 正转 / 反转"
+                    "\n"
+                    "每次按键约 0.02 rad；空格发送软件停止请求；Ctrl+C 退出。"
+                    "\n"
+                    "当前默认 use_hardware=false：只驱动 RViz 轻量仿真，不连接真机。"
+                    "\n"
+                    "真机使用前必须确认现场安全，并显式 use_hardware:=true 后再 Enable。"
+                    "\n"
+                    "RViz 相机：左键旋转，中键平移，滚轮缩放；工具栏可选择 MoveCamera。"
+                    "\n"
+                    "=========================================="
+                )
+            ),
             # arm_namespace：话题/服务/动作的命名空间前缀，必须与控制器一致。
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
-            # use_hardware：true=驱动真机（启动控制器与示教录制）；false=只用假关节状态做纯软件验证。默认 false，防止误启动真机。
+            # use_hardware：true=驱动真机；false=启动轻量仿真轨迹控制器。默认 false，防止误启动真机。
             DeclareLaunchArgument("use_hardware", default_value="false"),
             # use_local_rviz：是否启动 RViz 可视化。
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
@@ -108,6 +132,16 @@ def generate_launch_description():
                     "arm_namespace": arm_namespace,
                 }.items(),
             ),
+            # 无硬件分支的轨迹服务端：提供键盘所需的 FollowJointTrajectory，并发布可视化用的
+            # /<arm_namespace>/joint_states；它不加载物理引擎、不接触真实电机。
+            Node(
+                package="rebotarm_simulation",
+                executable="rebotarm_sim_trajectory_controller",
+                name="rebotarm_sim_trajectory_controller",
+                output="screen",
+                condition=UnlessCondition(use_hardware),
+                parameters=[{"arm_namespace": arm_namespace}],
+            ),
             # 夹爪可视化关节状态：把夹爪宽度映射成 URDF 里的左右指关节角，供 RViz 显示。
             Node(
                 package="rebotarm_teleop",
@@ -124,16 +158,6 @@ def generate_launch_description():
                 output="screen",
                 parameters=[{"robot_description": robot_description}],
                 remappings=[("/joint_states", ["/", arm_namespace, "/visual_joint_states"])],
-            ),
-            # 无硬件时的假关节状态源，30 Hz 足够让 RViz 显示平滑；与上面互斥，不会同时存在。
-            Node(
-                package="joint_state_publisher",
-                executable="joint_state_publisher",
-                name="teleop_joint_state_publisher",
-                output="screen",
-                condition=UnlessCondition(use_hardware),
-                parameters=[{"robot_description": robot_description}, {"rate": 30.0}],
-                remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
             ),
             # 键盘输入节点：读取键盘增量并通过 prefix 保证能拿到终端 stdin。
             Node(

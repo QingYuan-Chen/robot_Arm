@@ -76,7 +76,7 @@ class CandidateTargetPolicyConfig:
     # 也是姿态策略全不命中时的最终兜底。默认 (0, 0, 0, 1) 即与基准坐标系对齐。
     fixed_grasp_orientation_xyzw: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
     # 末端接近方向单位向量 (x, y, z)，表达在基准坐标系；预抓取点 = 抓取点沿该方向后退。
-    # 现场安装把上游 +X 工作区旋转了 -90 度，因此实际配置为 (0, -1, 0)。
+    # 默认沿用旧仓库 +X 工作区，因此实际配置为 (1, 0, 0)。
     base_approach_axis_xyz: tuple[float, float, float] = (1.0, 0.0, 0.0)
     # 预抓取点相对抓取点沿接近轴后退的距离（m），默认 0.08。
     base_pregrasp_distance_m: float = 0.08

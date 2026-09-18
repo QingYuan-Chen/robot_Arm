@@ -163,11 +163,11 @@ class VisualGraspExecutorNode(Node):
         # 使夹爪闭合方向与目标摆放方向一致
         self.declare_parameter(
             "fixed_grasp_orientation_xyzw",
-            [0.0, 0.0, -0.707106781, 0.707106781],
+            [0.0, 0.0, 0.0, 1.0],
         )
         # 基座系下的接近方向单位向量（会归一化）：接近点 = 抓取点沿该轴反向退开一段距离。
         # 默认 [0, -1, 0] 表示从 -Y 侧进给
-        self.declare_parameter("base_approach_axis_xyz", [0.0, -1.0, 0.0])
+        self.declare_parameter("base_approach_axis_xyz", [1.0, 0.0, 0.0])
         # 接近点与抓取点的距离（m），越大越保守，但要求工作空间更大
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         # 抓取点 z 下限（m），低于此值直接判序列构建失败，属桌面碰撞护栏
@@ -317,7 +317,7 @@ class VisualGraspExecutorNode(Node):
         # 放置点姿态四元数 xyzw，默认同样是绕 Z 转 -90°，与抓取姿态保持一致
         self.declare_parameter(
             "place_orientation_xyzw",
-            [0.0, 0.0, -0.707106781, 0.707106781],
+            [0.0, 0.0, 0.0, 1.0],
         )
         # 放置点松开夹爪的开口宽度（m）
         self.declare_parameter("place_open_position_m", 0.08)

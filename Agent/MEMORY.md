@@ -14,6 +14,8 @@
 
 ## 当前事实
 
+- 2026-09-18：为图片列出的包新增包级 `README.md`，随后按用户要求删除 `rebotarm_voice_control` 及其 25 个专属测试；当前保留 10 份新增包 README（其余包为 `rebotarm_calibration`、`rebotarm_dashboard`、`rebotarm_motion`、`rebotarm_moveit_config`、`rebotarm_msgs`、`rebotarm_simulation`、`rebotarm_teach`、`rebotarm_teleop`、`rebotarm_vision`、`rebotarmcontroller`）。根 README、文档索引和当前包说明已更新；历史迁移清单保留删除前快照并加注释。删除后分层测试 `18 passed`、四组 compileall 通过；全量回归 `683 passed, 7 skipped, 1 failed`，唯一失败仍为既有 `tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]` 的 MuJoCo 默认解释器断言。
+
 - 2026-09-17 为 `src/` 全部 12 个包补全阅读用中文注释（文件级职责说明 + 关键类/函数 + 参数与算法要点），只改注释与 docstring，代码语义、命名、导入与全部字符串字面量均未变动。308/309 个可注释文件已覆盖；唯一跳过 `src/rebotarm_simulation/config/mujoco_collision_baseline.json`（JSON 不支持注释，且它是带内容哈希的基准记录）。改动以 AST（剥离 docstring 与 `pass` 后比对）与 HTML/CSS/JS 注释剥离两种方式双向校验全部通过；全量回归 17 failed / 745 passed / 7 skipped，失败集合与改动前逐条一致。本轮顺带修复三项既有缺陷：`src/rebotarm_bringup/launch/{bringup,teleop_keyboard,interactive_system}.launch.py` 自初始导入提交 `921588b` 起即带 UTF-8 BOM，其中 `bringup.launch.py` 第 1 行中文注释还被 GBK 误解码损坏（含私有区字符，无法字节级还原），三个文件此前 `ast.parse` 全部失败、根本无法作为 launch 文件使用；已去除 BOM 并按还原语义重写该行注释。注意 `src/rebotarm_simulation/models/rebotarm/robot.xml` 是 AUTO-GENERATED 文件，`urdf_to_mjcf.check_generated_model` 按字节全等比对，任何手改（含加注释）都会让 `--check` 判为 stale；本轮曾误加注释，已回退为与生成器一致并排除在注释范围之外，后续如需给 MJCF 加说明应改生成器而不是提交文件。
 
 - 2026-09-13：用户进一步确认移除旧跨主机 HTTP/JSON/MJPEG 视觉兼容链。已删除远端相机/检测/GraspNet 客户端、网络 camera 配置、本机 HTTP GraspNet 回退服务与无消费者的 HTTP contract/client；保留本机推理 backend、ROS RGB-D/CameraInfo/detection 同步与候选发布。vision 默认配置改为 camera_ubuntu，主组合默认 ubuntu_native，移除 URL/轮询参数；Dashboard HTTP 与 ROS DDS 不在删除范围。此前 762 passed/7 skipped，新增缺失路径防回归与构建待本轮最终核验；未访问硬件或启动相机。

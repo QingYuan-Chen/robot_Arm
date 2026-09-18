@@ -662,3 +662,37 @@
 - 2026-09-18T11:59:08+08:00 | actor=codex | event=checkpoint | note=Unified teach replay around Dashboard TeachReplayWorkflow; retired TeachReplayNode, teach_replay.launch.py, and its console entry; retained teach_record.launch.py | verification=focused 101 passed; layering 18 passed; full 765 passed, 7 skipped, 1 known MuJoCo interpreter failure; teach and bringup rebuild passed
 - 2026-09-18T12:09:57+08:00 | actor=codex | event=checkpoint | note=Retired standalone teach_record.launch.py; Dashboard remains the only recording and replay entrypoint while TeachRecorderNode stays in app and teleop_system compositions | verification=bringup rebuild pending; diff check pending
 - 2026-09-18T12:53:22+08:00 | actor=codex | event=checkpoint | note=Removed standalone visual_ready_hold launch; retained visual_grasp_perception_preview and inline visual_ready nodes in visual_grasp_system | verification=focused 92 passed; bringup rebuild and visual launch show-args passed; compileall and diff check passed
+- 2026-09-18T14:01:43+08:00 | actor=codex | event=start | note=输出结构调整后的 launch 文件测试顺序 | verification=-
+- 2026-09-18T14:35:21+08:00 | actor=codex-docs | event=start | note=为图片中的 11 个 ROS 2 包补充包级 Markdown 文档，记录脚本结构、入口与功能 | verification=-
+- 2026-09-18T14:50:38+08:00 | actor=codex-docs | event=verified | note=11 个包 README.md 已补齐，完成入口/文件名自检；分层测试与 compileall 通过，全量测试保留既有解释器断言失败 | verification=layering: 18 passed; compileall: passed; full pytest: 764 passed, 7 skipped, 1 failed at tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]
+- 2026-09-18T15:04:31+08:00 | actor=codex-docs | event=verified | note=按用户要求可恢复移除 rebotarm_voice_control 及 25 个专属测试，更新活动 Markdown；历史迁移清单保留删除前快照并已标注 | verification=package absent; voice tests absent; layering 18 passed; compileall passed; full pytest 683 passed, 7 skipped, 1 known failure at tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]
+- 2026-09-18T15:14:22+08:00 | actor=codex | event=start | note=重新编译当前结构调整后的 ROS 2 工作区 | verification=-
+- 2026-09-18T15:31:02+08:00 | actor=codex | event=start | note=诊断无硬件键盘遥操作下 RViz 模型不动 | verification=-
+- 2026-09-18T15:35:43+08:00 | actor=codex | event=verified | note=修正 teleop_keyboard 无硬件模式的注释与 launch 结构说明 | verification=python3 -m py_compile src/rebotarm_bringup/launch/teleop_keyboard.launch.py && git diff --check
+- 2026-09-18T16:20:52+08:00 | actor=codex | event=start | note=检查并修复视觉只读预览退出后的当前启动缺陷 | verification=-
+- 2026-09-18T16:27:51+08:00 | actor=codex | event=verified | note=修复视觉预览默认状态源、GraspNet模型路径和MoveIt预览假关节重复发布 | verification=rebotarm_bringup/rebotarm_vision build; test_package_layering; launch compileall; isolated no-camera preview
+- 2026-09-18T16:40:59+08:00 | actor=codex | event=verified | note=统一视觉环境脚本与GraspNet默认资源路径 | verification=visual wiring/layering tests; launch compileall; rebotarm_bringup build
+- 2026-09-18T17:27:08+08:00 | actor=codex | event=start | note=将视觉workspace与抓取坐标约定恢复为旧仓库数据 | verification=-
+- 2026-09-18T17:32:22+08:00 | actor=codex | event=verified | note=视觉workspace、抓取方向和visual-ready恢复旧仓库+X坐标约定 | verification=89 focused tests; compileall; 3 packages built; both launch show-args
+- 2026-09-18T17:36:43+08:00 | actor=codex | event=start | note=诊断只读视觉预览缺少 YOLO 检测框和 GraspNet 抓取框 | verification=-
+- 2026-09-18T17:43:53+08:00 | actor=codex | event=start | note=增加视觉预览中的YOLO标注图和GraspNet原始候选可视化 | verification=-
+- 2026-09-18T17:49:00+08:00 | actor=codex | event=verified | note=增加YOLO标注图RViz显示与GraspNet原始候选Marker可视化；新增start_raw_candidate_markers开关；编译完成 | verification=-
+- 2026-09-18T17:51:42+08:00 | actor=codex | event=start | note=将只读视觉预览的GraspNet原始候选标记改为默认启用 | verification=-
+- 2026-09-18T17:52:18+08:00 | actor=codex | event=verified | note=start_raw_candidate_markers默认值已改为true；bringup编译、启动参数和检查通过 | verification=-
+- 2026-09-18T18:01:17+08:00 | actor=codex | event=verified | note=修复视觉预览子launch的RViz参数污染、RViz Topic配置及原始候选节点SIGINT退出；两包build、视觉71、layering18通过；无相机短时验证RViz和Marker订阅成功 | verification=-
+- 2026-09-18T18:07:33+08:00 | actor=codex | event=start | note=简化视觉预览RViz布局与抓取目标示意标记 | verification=-
+- 2026-09-18T18:10:08+08:00 | actor=codex | event=verified | note=只读预览隐藏示意瓶子圆柱并缩小标签，移除Views面板保留初始视角；视觉/bringup重编译、聚焦93通过，全量684通过7跳过1项既存MuJoCo解释器失败 | verification=-
+- 2026-09-18T18:13:54+08:00 | actor=codex | event=start | note=只读视觉预览默认弹出Open3D点云与GraspNet夹爪查看器 | verification=-
+- 2026-09-18T18:16:43+08:00 | actor=codex | event=verified | note=只读视觉预览默认启动Open3D订阅查看器；两包编译、93聚焦测试通过，GUI无相机短时启动与Ctrl-C退出通过；全量684通过7跳过1项既存MuJoCo测试失败 | verification=-
+- 2026-09-18T18:21:08+08:00 | actor=codex | event=start | note=从只读视觉预览移除RViz目标绿点和类别置信度文字 | verification=-
+- 2026-09-18T18:22:46+08:00 | actor=codex | event=verified | note=只读预览RViz移除物体示意圆柱、绿点和类别置信度文字；两包编译、93聚焦通过，全量684通过7跳过1项既存MuJoCo失败 | verification=-
+- 2026-09-18T18:26:52+08:00 | actor=codex | event=start | note=给出视觉抓取重构后的下一阶段测试顺序 | verification=-
+- 2026-09-18T18:27:32+08:00 | actor=codex | event=start | note=整理 launch 文件分层测试顺序和验收点 | verification=-
+- 2026-09-18T20:57:29+08:00 | actor=codex | event=start | note=将无硬件键盘入口接入仿真轨迹控制器 | verification=-
+- 2026-09-18T21:02:31+08:00 | actor=codex | event=verified | note=无硬件键盘入口已接入轻量仿真轨迹控制器；动作服务器与小目标运行态验证通过 | verification=25 focused tests passed; rebotarm_bringup build passed; simulated FollowJointTrajectory goal SUCCEEDED
+- 2026-09-18T21:20:50+08:00 | actor=codex | event=start | note=统一终端键盘与Dashboard网页键盘的无硬件仿真执行逻辑 | verification=-
+- 2026-09-18T21:26:15+08:00 | actor=codex | event=verified | note=teleop_system 已向Dashboard转发 execution_mode，网页键盘与终端键盘统一使用仿真FollowJointTrajectory后端 | verification=26 focused tests passed; rebotarm_bringup build passed
+- 2026-09-18T21:37:13+08:00 | actor=codex | event=start | note=按use_hardware和web_execute_enabled简化Dashboard按钮门控 | verification=-
+- 2026-09-18T21:38:20+08:00 | actor=codex | event=verified | note=Dashboard按use_hardware裁剪控制：仿真隐藏并后端阻断Enable/Disable/Safe Home，网页键盘与仿真Execute保留 | verification=98 focused tests passed; dashboard and bringup build passed
+- 2026-09-18T21:54:36+08:00 | actor=codex | event=start | note=删除未采用的mujoco_offline_perception入口并同步文档 | verification=-
+- 2026-09-18T21:57:39+08:00 | actor=codex | event=verified | note=清理删除入口对应的构建缓存后，bringup重新编译成功 | verification=105 focused tests passed; rebotarm_bringup build passed; launch compileall passed

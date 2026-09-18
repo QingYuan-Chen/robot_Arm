@@ -1,19 +1,21 @@
-#视觉抓取感知链路的“只读预览”启动文件：不起控制器、不做规划、不使能硬件。
+#视觉抓取感知链路的“只读预览”启动文件：不启动真实控制器、不执行轨迹、不使能硬件。
 #
 #用途
 #把“相机 → YOLO 检测 → GraspNet 候选 → 逆解过滤 → 可视化标记”这条感知与候选链路单独拉起来，配合本地 RViz 看抓取候选与夹爪位姿。用于装机与标定后的只读验收：确认相机、深度、检测、候选与坐标系朝向是否合理，不代表抓取一定可执行。
 #
 #启动内容（节点组合）
 #1. 主视觉链路：以子启动方式引入视觉包的视觉启动文件（start_vision，默认 true），参数透传相机配置、手眼配置、YOLO 权重与普通抓取开关；
-#2. 抓取候选推理节点：以 graspnet_python_executable 指定的独立解释器前缀运行，模型路径由环境变量或工作区相对路径给出（start_graspnet_baseline，默认 true）；
-#3. 候选逆解过滤节点：先订阅候选话题做逆解与（可选）碰撞检查，再发布过滤后的候选与抓取计划（start_candidate_ik_filter，默认 true）；该节点只调用逆解与状态有效性服务，不产生运动；
-#4. 可视化标记节点：把抓取计划画成标记数组，供 RViz 查看（start_visual_grasp_markers，默认 true）；
-#5. 本地 RViz（use_local_rviz，默认 true），加载本包的抓取预览配置文件。
+#2. 无硬件 MoveIt 预览：默认启动 MoveIt、假关节状态和机器人 TF，为候选逆解提供服务（start_moveit_preview，默认 true）；
+#3. 抓取候选推理节点：以 graspnet_python_executable 指定的独立解释器前缀运行，模型路径由环境变量或工作区相对路径给出（start_graspnet_baseline，默认 true）；
+#4. 候选逆解过滤节点：先订阅候选话题做逆解与（可选）碰撞检查，再发布过滤后的候选与抓取计划（start_candidate_ik_filter，默认 true）；该节点只调用逆解与状态有效性服务，不产生运动；
+#5. 可视化标记节点：把抓取计划画成标记数组，供 RViz 查看（start_visual_grasp_markers，默认 true）；
+#6. 本地 RViz（use_local_rviz，默认 true），加载本包的抓取预览配置文件；
+#7. Open3D 点云查看器（start_open3d_viewer，默认 true），只订阅 RGB-D/内参/检测/原始候选，显示目标点云和夹爪姿态，不再打开相机。
 #
 #真实/仿真后端选择逻辑
-#本文件刻意不启动任何执行后端：既不启动真实硬件控制器，也不启动仿真的轨迹控制器、规划节点或任何执行入口。
-#唯一的"后端相关性"来自两个坐标/话题约定：候选过滤节点的目标坐标系固定为"base_link"，关节状态来自 "candidate_joint_state_topic" 指向的话题（默认/rebotarm/visual_joint_states，由外部真机或仿真侧提供）。
-#因此本预览在真机与仿真下都能用，但都必须保证该话题有有效关节反馈，否则逆解会因缺少种子状态而失败。
+#本文件默认启动无硬件 MoveIt 预览栈，提供假关节状态、机器人 TF 与 IK 服务；它不启动真实硬件控制器，也不启动真实或仿真的轨迹执行后端。
+#关闭 start_moveit_preview 后，才改为由外部真机或仿真侧提供这些状态。候选过滤节点的目标坐标系固定为"base_link"，关节状态来自 candidate_joint_state_topic（默认/rebotarm/visual_joint_states）。
+#因此默认单条命令即可完成软件只读预览；若关闭该开关，必须先启动外部状态源，否则会出现 base_link/IK 服务缺失。
 #
 #参数来源与优先级
 #- 参数文件：抓取姿态策略、台面安全两份配置加载到逆解过滤节点，GraspNet 配置单独加载到推理节点；参数文件里的键若在下面的节点参数字典中再次出现，以本文件的取值为准；
@@ -24,17 +26,17 @@
 #
 #安全默认值
 #----------
-#- 预览链路不产生运动，默认全开也只是“看图”；要真正执行抓取必须使用带执行门的启动入口；
+#- 预览链路不产生运动，默认全开也只是“看图”和软件规划检查；要真正执行抓取必须使用带执行门的启动入口；
 #- ``start_ordinary_grasp`` 默认 false：普通抓取通道（YOLO + 深度）只在显式指定 root 时才启用；
 #- 预览不启动硬件，故没有“使能/失能”状态；真机测试前仍需按项目规则人工确认现场安全。
 #
-#说明：本文件不启动任何执行后端，也没有实现电机控制、运动规划或感知算法，这些分别属于控制器、运动、视觉包与标定包的职责。
+#说明：本文件不启动真实执行后端，也没有实现电机控制、运动规划或感知算法；MoveIt 仅作为无硬件规划服务被组合进来，具体算法仍属于运动、视觉包与标定包的职责。
 
 import os
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
@@ -65,7 +67,7 @@ def _workspace_path(environment_name: str, relative_path: str) -> str:
 
 
 def generate_launch_description():
-    """组装本预览链路的启动描述：声明全部启动参数，再按条件启动 4 个节点与本地 RViz。
+    """组装本预览链路：声明参数，按条件启动无硬件 MoveIt 预览、视觉节点和本地 RViz。
 
     参数与节点组合见模块 docstring；``generate_launch_description`` 在解析阶段执行一次，
     因此这里只做订阅替换（如 ``PathJoinSubstitution``）与参数声明，具体路径在启动时才展开。
@@ -80,6 +82,7 @@ def generate_launch_description():
     graspnet_ubuntu_params = PathJoinSubstitution([vision_share, "config", "graspnet_ubuntu.yaml"])
 
     use_local_rviz = LaunchConfiguration("use_local_rviz")
+    start_moveit_preview = LaunchConfiguration("start_moveit_preview")
     ordinary_depth_quality_enabled = LaunchConfiguration("ordinary_depth_quality_enabled")
     start_vision = LaunchConfiguration("start_vision")
     vision_camera_config = LaunchConfiguration("vision_camera_config")
@@ -90,6 +93,8 @@ def generate_launch_description():
     start_graspnet_baseline = LaunchConfiguration("start_graspnet_baseline")
     start_candidate_ik_filter = LaunchConfiguration("start_candidate_ik_filter")
     start_visual_grasp_markers = LaunchConfiguration("start_visual_grasp_markers")
+    start_raw_candidate_markers = LaunchConfiguration("start_raw_candidate_markers")
+    start_open3d_viewer = LaunchConfiguration("start_open3d_viewer")
 
     # GraspNet 推理输出与逆解过滤输入的话题（默认 /grasp/graspnet_candidates），两者必须同名衔接
     graspnet_candidates_topic = LaunchConfiguration("graspnet_candidates_topic")
@@ -111,8 +116,8 @@ def generate_launch_description():
     candidate_collision_check_service = LaunchConfiguration("candidate_collision_check_service")
     candidate_collision_group_name = LaunchConfiguration("candidate_collision_group_name")
     candidate_pose_policy = LaunchConfiguration("candidate_pose_policy")
-    # 固定抓取姿态（四元数 x,y,z,w）与基座接近轴：本站安装把上游 +X 工作区绕 Z 旋转 -90° 到 -Y，
-    # 两者是同一朝向的两种表达，必须同时改才自洽
+    # 固定抓取姿态（四元数 x,y,z,w）与基座接近轴：沿用旧仓库的 +X 工作区坐标约定，
+    # 两者是同一朝向的两种表达，必须同时改才自洽。
     fixed_grasp_orientation_xyzw = LaunchConfiguration("fixed_grasp_orientation_xyzw")
     base_approach_axis_xyz = LaunchConfiguration("base_approach_axis_xyz")
     base_pregrasp_distance_m = LaunchConfiguration("base_pregrasp_distance_m")
@@ -150,6 +155,8 @@ def generate_launch_description():
         [
             # ---- 界面与主视觉链路开关 ----
             DeclareLaunchArgument("use_local_rviz", default_value="true"),
+            # 默认提供无硬件 MoveIt/TF/假关节状态；关闭后要求外部提供相同接口。
+            DeclareLaunchArgument("start_moveit_preview", default_value="true"),
             DeclareLaunchArgument("start_vision", default_value="true"),
             DeclareLaunchArgument(
                 "vision_camera_config",
@@ -177,6 +184,9 @@ def generate_launch_description():
             DeclareLaunchArgument("start_graspnet_baseline", default_value="true"),
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),
+            DeclareLaunchArgument("start_raw_candidate_markers", default_value="true"),
+            # 桌面环境额外显示点云与原始夹爪；无 DISPLAY 时显式设为 false。
+            DeclareLaunchArgument("start_open3d_viewer", default_value="true"),
             # ---- GraspNet 推理：话题、解释器、模型路径与设备 ----
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
             DeclareLaunchArgument(
@@ -190,7 +200,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "graspnet_model_root",
                 default_value=_workspace_path(
-                    "GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"
+                    "GRASPNET_MODEL_ROOT", "third_party/graspnet-baseline"
                 ),
             ),
             DeclareLaunchArgument(
@@ -218,9 +228,9 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose"),
             DeclareLaunchArgument(
                 "fixed_grasp_orientation_xyzw",
-                default_value="[0.0, 0.0, -0.707106781, 0.707106781]",
+                default_value="[0.0, 0.0, 0.0, 1.0]",
             ),
-            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]"),
+            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[1.0, 0.0, 0.0]"),
             DeclareLaunchArgument("base_pregrasp_distance_m", default_value="0.06"),
             DeclareLaunchArgument("candidate_orientation_yaw_offsets_rad", default_value="[0.0]"),
             DeclareLaunchArgument("candidate_grasp_z_offsets_m", default_value="[0.0]"),
@@ -235,8 +245,8 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),
             # ---- 工作空间盒闸门：本预览显式打开（参数文件里是关闭），抓取点必须落在下面的盒内 ----
             DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true"),
-            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]"),
-            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]"),
+            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]"),
+            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]"),
             # 抓取点到物体中心的最大偏差（m）：超出说明抓取点已偏离物体，判为不可信
             DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15"),
             # ---- 候选打分权重：关节总位移与末轴（joint6）旋转各自的代价系数，越大越偏好动作小 ----
@@ -273,6 +283,23 @@ def generate_launch_description():
                     "ordinary_grasp_root": ordinary_grasp_root,
                     "ordinary_depth_quality_enabled": ordinary_depth_quality_enabled,
                 }.items(),
+            ),
+            # 无硬件 MoveIt 预览：只提供 move_group、假关节状态和机器人 TF，不启动真实控制器或轨迹执行。
+            GroupAction(
+                scoped=True,
+                condition=IfCondition(start_moveit_preview),
+                actions=[
+                    IncludeLaunchDescription(
+                        PythonLaunchDescriptionSource(
+                            PathJoinSubstitution([bringup_share, "launch", "interactive_system.launch.py"])
+                        ),
+                        launch_arguments={
+                            "use_hardware": "false",
+                            "use_moveit_preview": "true",
+                            "use_local_rviz": "false",
+                        }.items(),
+                    )
+                ],
             ),
             # GraspNet 候选推理节点：独立进程内推理，输入彩色/深度/检测，输出候选数组。
             # 用单独的解释器前缀是为了让带推理依赖的虚拟环境与系统解释器解耦
@@ -360,8 +387,8 @@ def generate_launch_description():
                     },
                 ],
             ),
-            # 可视化标记节点：把抓取计划画成标记数组（物体、接近点、抓取点、TCP、接近轴、开合轴）。
-            # object_min_* 是标记的显示下限，只影响 RViz 观感，不改变真实抓取尺寸
+            # 可视化标记节点：预览只画抓取点、TCP、接近轴和开合轴。
+            # 不画示意物体、候选绿点和文字；目标类别与置信度直接看 YOLO 标注图。
             Node(
                 package="rebotarm_vision",
                 executable="rebotarm_visual_grasp_markers",
@@ -378,6 +405,10 @@ def generate_launch_description():
                         "object_min_diameter_m": 0.06,
                         "object_min_height_m": 0.12,
                         "upright_object_marker": True,
+                        # 只读预览不把夹爪开口误画成瓶子尺寸；只显示定位点和抓取位姿。
+                        "show_object_marker": False,
+                        "show_object_center_marker": False,
+                        "show_object_label": False,
                         "tcp_offset_xyz": tcp_offset_xyz,
                         "gripper_open_axis_local_xyz": gripper_open_axis_local_xyz,
                         "show_tcp_markers": show_tcp_markers,
@@ -385,6 +416,36 @@ def generate_launch_description():
                         "show_gripper_open_axis": show_gripper_open_axis,
                     },
                 ],
+            ),
+            Node(
+                package="rebotarm_vision",
+                executable="rebotarm_grasp_candidate_markers",
+                name="rebotarm_grasp_candidate_markers",
+                output="screen",
+                condition=IfCondition(start_raw_candidate_markers),
+                parameters=[
+                    {
+                        "input_topic": graspnet_candidates_topic,
+                        "output_topic": "/grasp/raw_candidate_markers",
+                        "target_frame": "base_link",
+                        "max_candidates": 5,
+                    }
+                ],
+            ),
+            # 独立的只读 GUI 订阅者：复用相机、GraspNet 的现有话题，不加载第二份模型/相机。
+            Node(
+                package="rebotarm_vision",
+                executable="rebotarm_graspnet_open3d_viewer",
+                name="rebotarm_graspnet_open3d_viewer",
+                output="screen",
+                prefix=graspnet_python_executable,
+                condition=IfCondition(start_open3d_viewer),
+                parameters=[{
+                    "input_color_topic": "/camera/color/image_raw",
+                    "input_depth_topic": "/camera/depth/image_raw",
+                    "input_camera_info_topic": "/camera/depth/camera_info",
+                    "input_candidates_topic": graspnet_candidates_topic,
+                }],
             ),
             # 本地 RViz：加载本包的抓取预览配置（仅机器人模型、TF、标记数组，不含运动规划面板）
             Node(

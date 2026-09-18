@@ -94,7 +94,7 @@ def generate_launch_description():
             #   默认 joint1=-π/2，使机械臂朝向视觉工作区；改错可能让首个抓取目标不可达。
             DeclareLaunchArgument(
                 "initial_joint_positions",
-                default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]",
+                default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]",
             ),
             # mujoco_python_executable：MuJoCo 节点使用的 Python 解释器（含 MuJoCo 依赖）。
             #   优先级：命令行参数 > 环境变量 REBOTARM_MUJOCO_PYTHON > 上面的虚拟环境默认值。

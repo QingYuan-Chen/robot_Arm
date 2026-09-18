@@ -122,11 +122,11 @@ class CandidateIkFilterNode(Node):
         # 旋转了 -90°，因此默认值是绕 Z 轴 -90° 的四元数；只在 base_axis 及其回退变体中生效
         self.declare_parameter(
             "fixed_grasp_orientation_xyzw",
-            [0.0, 0.0, -0.707106781, 0.707106781],
+            [0.0, 0.0, 0.0, 1.0],
         )
         # 基座系进给轴方向（单位向量）：接近点 = 抓取点沿该方向后退 base_pregrasp_distance_m，
         # 默认沿基座 -Y 进入，与上面旋转后的工作区朝向一致
-        self.declare_parameter("base_approach_axis_xyz", [0.0, -1.0, 0.0])
+        self.declare_parameter("base_approach_axis_xyz", [1.0, 0.0, 0.0])
         # 接近点到抓取点的距离，单位 m：太小会侧向蹭到目标，太大会拉长接近行程与节拍
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         # 偏航角偏移列表，单位 rad；每个元素生成一组姿态变体，用于绕竖直轴尝试不同抓取朝向
@@ -163,10 +163,10 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_safe_lift_min_z_m", 0.120)
         # 是否启用工作空间盒闸门；默认关闭，启用后抓取点必须落在下面的盒范围内
         self.declare_parameter("candidate_workspace_gate_enabled", False)
-        # 工作空间盒最小角（基座系，单位 m）；默认对应上游 +X 工作区绕 Z 旋转 -90° 后的范围
-        self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])
+        # 工作空间盒最小角（基座系，单位 m）；沿用旧仓库 +X 工作区。
+        self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])
         # 工作空间盒最大角（基座系，单位 m）
-        self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])
+        self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])
         # 抓取点到目标中心的最大允许距离，单位 m；超出说明抓取点已偏离物体（深度或分割异常）
         self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)
         # 关节位移在评分中的权重（每 rad 的扣分）；越大越偏好关节动作小的解

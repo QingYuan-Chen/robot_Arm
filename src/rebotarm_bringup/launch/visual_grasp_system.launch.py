@@ -678,12 +678,12 @@ def generate_launch_description():
                 "vision_python_executable",
                 default_value=EnvironmentVariable("REBOTARM_VISION_PYTHON", default_value="python3"),
             ),
-            # 抓取网络模型代码根目录；默认按工作区相对路径 .local-models/graspnet-baseline 解析，
+            # 抓取网络模型代码根目录；默认按工作区相对路径 third_party/graspnet-baseline 解析，
             # 可用环境变量 GRASPNET_MODEL_ROOT 覆盖；解析不到时为空串，由节点报未配置。
             DeclareLaunchArgument(
                 "graspnet_model_root",
                 default_value=_workspace_path(
-                    "GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"
+                    "GRASPNET_MODEL_ROOT", "third_party/graspnet-baseline"
                 ),
             ),
             # 模型权重文件路径；默认 .local-models/checkpoints/checkpoint-rs.tar，
@@ -708,7 +708,7 @@ def generate_launch_description():
             # joint1=-pi/2 表示本站工作区在 base 的 -Y 方向，必须与手眼标定所用位姿一致。
             DeclareLaunchArgument(
                 "visual_ready_joint_positions",
-                default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]",
+                default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]",
             ),
             DeclareLaunchArgument("visual_ready_duration_sec", default_value="4.0"),  # 就绪轨迹总时长（s），节点内部下限 0.2 s；调小会提高关节速度与加速度
             DeclareLaunchArgument("visual_ready_wait_timeout_sec", default_value="12.0"),  # 等待首帧关节反馈与动作服务上线的时间上限（s）；超时即失败且不自动重试
@@ -744,14 +744,13 @@ def generate_launch_description():
             DeclareLaunchArgument("min_target_z_m", default_value="0.0"),  # 预览/执行允许的最低目标高度（m）；大于 0 时把目标抬高到该值，0 表示不做下限抬升
             DeclareLaunchArgument("grasp_base_z_offset_m", default_value="0.0"),  # 抓取位姿在 base Z 方向的额外偏移（m）；0 表示取深度反投影的原始高度
             DeclareLaunchArgument("pose_policy", default_value="base_axis"),  # 执行器使用的姿态策略；base_axis = 按 base 接近轴构造确定姿态（候选过滤节点另用混合策略）
-            # 固定抓取姿态四元数 (x, y, z, w)；本站把上游 +X 工作区绕基座 Z 旋转 -90 度，
-            # 对应 z=-0.707106781、w=0.707106781。
+            # 固定抓取姿态四元数 (x, y, z, w)；沿用旧仓库 +X 工作区的单位姿态。
             # 它与 base_approach_axis_xyz 是同一安装朝向的两种表达，必须保持一致。
             DeclareLaunchArgument(
                 "fixed_grasp_orientation_xyzw",
-                default_value="[0.0, 0.0, -0.707106781, 0.707106781]",
+                default_value="[0.0, 0.0, 0.0, 1.0]",
             ),
-            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]"),  # base 系下的接近方向单位向量（本站沿 -Y 进入）；与固定抓取姿态是同一安装朝向的两种表达
+            DeclareLaunchArgument("base_approach_axis_xyz", default_value="[1.0, 0.0, 0.0]"),  # base 系下的接近方向单位向量（旧仓库沿 +X 进入）
             DeclareLaunchArgument("base_pregrasp_distance_m", default_value="0.06"),  # 预抓取点沿接近轴后退的距离（m）；本启动档取 6 cm，覆盖策略档中的 8 cm
             DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose"),  # 候选姿态策略；preserve_candidate_pose = 原样保留网络给出的 6D 姿态，由下游闸门统一过滤
             DeclareLaunchArgument("candidate_orientation_yaw_offsets_rad", default_value="[0.0]"),  # 绕竖直轴尝试的偏航角偏移列表（rad）；[0.0] 表示不做偏航试探
@@ -764,8 +763,8 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120"),  # 接近点最低高度钳位（m，12 cm）；低于会被抬高，保证从目标上方进入而不是贴台面平推
             DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),  # 抬升与撤退前的最低高度（m，12 cm）；保证先离开台面再水平移动
             DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true"),  # 是否启用工作空间包围盒闸门；本档为 true，候选必须落在下面的盒内
-            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]"),  # 工作空间盒最小角（m，base 系）；本站工作区由上游 +X 布局绕基座 Z 旋转 -90 度得到
-            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]"),  # 工作空间盒最大角（m，base 系）；与上一项共同定义允许抓取的范围
+            DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]"),  # 旧仓库工作空间盒最小角（m，base 系）
+            DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]"),  # 旧仓库工作空间盒最大角（m，base 系）
             DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15"),  # 抓取点到物体中心的最大允许偏差（m，15 cm）；超出判该候选不可信
             DeclareLaunchArgument("candidate_score_joint_distance_weight", default_value="0.15"),  # 候选评分中关节位移的权重（每 rad 扣分）；调大更偏好动作幅度小的解
             DeclareLaunchArgument("candidate_score_joint6_weight", default_value="0.35"),  # 候选评分中 joint6 变化量的独立权重；调大更倾向保持腕部姿态、抑制绕线
@@ -816,7 +815,7 @@ def generate_launch_description():
             # 使松爪方向与目标摆放方向匹配。
             DeclareLaunchArgument(
                 "place_orientation_xyzw",
-                default_value="[0.0, 0.0, -0.707106781, 0.707106781]",
+                default_value="[0.0, 0.0, 0.0, 1.0]",
             ),
             DeclareLaunchArgument("place_open_position_m", default_value="0.08"),  # 放置点松爪开口宽度（m）；太小松不开带动物体，太大可能碰倒目标
             DeclareLaunchArgument("place_open_max_effort", default_value="0.25"),  # 放置点松爪夹持力（归一化，非牛顿）；松爪只需克服残余摩擦，故小于抓取力

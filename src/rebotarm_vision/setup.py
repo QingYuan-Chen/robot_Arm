@@ -88,6 +88,7 @@ setup(
             "rebotarm_graspnet_baseline_node = rebotarm_vision.graspnet_baseline_node:main",
             "rebotarm_send_grasp_preview = rebotarm_vision.grasp_preview_sender_node:main",
             "rebotarm_visual_grasp_markers = rebotarm_vision.visual_grasp_marker_node:main",
+            "rebotarm_grasp_candidate_markers = rebotarm_vision.grasp_candidate_marker_node:main",
             "rebotarm_visual_grasp_executor = rebotarm_vision.visual_grasp_executor_node:main",
             "rebotarm_grasp_candidate_ik_filter = rebotarm_vision.candidate_ik_filter_node:main",
             "rebotarm_grasp_tcp_frame = rebotarm_vision.grasp_tcp_frame_node:main",

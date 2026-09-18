@@ -15,7 +15,7 @@
    （默认 ``base_link``）不一致时，用 TF 把候选位姿、接近点位姿与抓取点位姿一起变换到
    目标坐标系；TF 暂时查询失败时保留原坐标系继续发布，只在日志中告警——可视化不应
    因为缺一帧变换而拖住或中断抓取流程；
-2. ``VisualGraspMarkerBuilder`` 生成标记：目标圆柱、目标中心点、接近点、抓取点、叠加
+2. ``VisualGraspMarkerBuilder`` 生成标记：可选示意圆柱、候选位置点、接近点、抓取点、叠加
    TCP 偏移后的实际夹持点、接近方向箭头、夹爪张开方向线段，以及类别与置信度文字；
 3. 计划 ``valid`` 为假时默认只发一个删除标记，清掉画面上的旧计划，避免把上一次的位姿
    误读成当前计划。
@@ -185,6 +185,10 @@ class VisualGraspMarkerBuilder:
         object_min_diameter_m: float = 0.06,
         object_min_height_m: float = 0.12,
         upright_object_marker: bool = True,
+        show_object_marker: bool = True,
+        show_object_center_marker: bool = True,
+        show_object_label: bool = True,
+        label_height_m: float = 0.055,
         tcp_offset_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0),
         gripper_open_axis_local_xyz: tuple[float, float, float] = (0.0, 1.0, 0.0),
         show_tcp_markers: bool = True,
@@ -196,6 +200,10 @@ class VisualGraspMarkerBuilder:
         - ``object_min_diameter_m``：目标圆柱的最小直径，单位 m（默认 0.06）；
         - ``object_min_height_m``：目标圆柱的最小高度，单位 m（默认 0.12）；
         - ``upright_object_marker``：为真时目标圆柱与文字标签强制竖直，忽略抓取姿态；
+        - ``show_object_marker``：控制示意圆柱显示；不改变候选或计划内容；
+        - ``show_object_center_marker``：控制候选位置绿点显示；
+        - ``show_object_label``：控制类别与置信度文字显示；
+        - ``label_height_m``：类别文字的显示高度，单位 m；
         - ``tcp_offset_xyz``：TCP 相对计划位姿所描述的末端坐标系的局部安装偏移，单位 m，
           默认全零（即计划位姿本身就是夹持点）；用于把计划位姿换算成实际夹持点位置；
         - ``gripper_open_axis_local_xyz``：夹爪张开方向（两指连线方向）在 TCP 局部坐标系
@@ -206,6 +214,12 @@ class VisualGraspMarkerBuilder:
         self._object_min_diameter_m = float(object_min_diameter_m)
         self._object_min_height_m = float(object_min_height_m)
         self._upright_object_marker = bool(upright_object_marker)
+        self._show_object_marker = bool(show_object_marker)
+        self._show_object_center_marker = bool(show_object_center_marker)
+        self._show_object_label = bool(show_object_label)
+        self._label_height_m = float(label_height_m)
+        if self._label_height_m <= 0:
+            raise ValueError("label_height_m must be positive")
         self._tcp_offset_xyz = tuple(float(v) for v in tcp_offset_xyz)
         self._gripper_open_axis_local_xyz = tuple(float(v) for v in gripper_open_axis_local_xyz)
         self._show_tcp_markers = bool(show_tcp_markers)
@@ -220,7 +234,7 @@ class VisualGraspMarkerBuilder:
         - ``frame_id``：所有标记的参考坐标系，应为已与计划对齐的目标坐标系；
         - ``stamp``：写入标记头的时间戳；节点侧传零时刻，表示"始终按最新可用变换显示"。
 
-        标记清单：``visual_object`` 目标圆柱、``visual_object_center`` 目标中心、
+        标记清单：可选 ``visual_object`` 示意圆柱、``visual_object_center`` 候选位置、
         ``visual_pregrasp``/``visual_grasp`` 计划给出的接近点与抓取点、
         ``visual_pregrasp_tcp``/``visual_grasp_tcp`` 叠加 TCP 偏移后的实际夹持点、
         ``visual_approach_arrow`` 接近方向箭头、``visual_gripper_open_axis`` 夹爪张开方向
@@ -237,28 +251,30 @@ class VisualGraspMarkerBuilder:
             candidate_pose = identity_orientation(candidate_pose)
 
         # 计划未填 jaw_width（此时为 0，假值）时回退到候选自身的夹爪宽度，保证尺寸可用。
-        markers.markers.append(
-            self._object_marker(
-                frame_id,
-                stamp,
-                candidate_pose,
-                jaw_width=float(plan.jaw_width or plan.candidate.jaw_width),
-                object_length=float(plan.candidate.object_length),
+        if self._show_object_marker:
+            markers.markers.append(
+                self._object_marker(
+                    frame_id,
+                    stamp,
+                    candidate_pose,
+                    jaw_width=float(plan.jaw_width or plan.candidate.jaw_width),
+                    object_length=float(plan.candidate.object_length),
+                )
             )
-        )
         # 球标记的尺寸参数是直径（单位 m），自小而大依次为：目标中心 0.025、接近点 0.035、
         # 抓取点 0.04；接近点用蓝色、抓取点用红色，便于一眼区分两个关键位姿。
-        markers.markers.append(
-            self._sphere_marker(
-                frame_id,
-                stamp,
-                4,
-                identity_orientation(plan.candidate.pose),
-                "visual_object_center",
-                0.025,
-                (0.0, 1.0, 0.18, 1.0),
+        if self._show_object_center_marker:
+            markers.markers.append(
+                self._sphere_marker(
+                    frame_id,
+                    stamp,
+                    4,
+                    identity_orientation(plan.candidate.pose),
+                    "visual_object_center",
+                    0.025,
+                    (0.0, 1.0, 0.18, 1.0),
+                )
             )
-        )
         markers.markers.append(
             self._sphere_marker(
                 frame_id,
@@ -320,7 +336,8 @@ class VisualGraspMarkerBuilder:
                     jaw_width=float(plan.jaw_width or plan.candidate.jaw_width),
                 )
             )
-        markers.markers.append(self._text_marker(frame_id, stamp, plan))
+        if self._show_object_label:
+            markers.markers.append(self._text_marker(frame_id, stamp, plan))
         return markers
 
     def _base_marker(self, frame_id: str, stamp, marker_id: int, marker_type: int, ns: str) -> Marker:
@@ -445,15 +462,15 @@ class VisualGraspMarkerBuilder:
     def _text_marker(self, frame_id: str, stamp, plan: GraspPlan) -> Marker:
         """生成类别与置信度文字（名称空间 ``visual_object_label``、编号 3）。
 
-        文字贴在目标正上方：位置 z 抬升"半个圆柱高 + 0.055 m"留出间隙（0.055 m 也是文字
-        高度，写在 ``scale.z``）；置信度固定保留两位小数，类别为空时由 ``strip()`` 去掉多余
+        文字贴在候选点上方；显示圆柱时另外抬升半个示意高度；字体高度由
+        ``label_height_m`` 控制。置信度固定保留两位小数，类别为空时由 ``strip()`` 去掉多余
         空格。``TEXT_VIEW_FACING`` 让文字始终正对相机，便于任意视角阅读。
         """
         marker = self._base_marker(frame_id, stamp, 3, Marker.TEXT_VIEW_FACING, "visual_object_label")
         marker.pose = identity_orientation(plan.candidate.pose)
         height = object_height(float(plan.candidate.object_length), self._object_min_height_m)
-        marker.pose.position.z += height * 0.5 + 0.055
-        marker.scale.z = 0.055
+        marker.pose.position.z += (height * 0.5 if self._show_object_marker else 0.0) + self._label_height_m
+        marker.scale.z = self._label_height_m
         marker.color.r = 1.0
         marker.color.g = 1.0
         marker.color.b = 1.0
@@ -481,6 +498,10 @@ class VisualGraspMarkerNode(Node):
         self.declare_parameter("object_min_diameter_m", 0.06)
         self.declare_parameter("object_min_height_m", 0.12)
         self.declare_parameter("upright_object_marker", True)
+        self.declare_parameter("show_object_marker", True)
+        self.declare_parameter("show_object_center_marker", True)
+        self.declare_parameter("show_object_label", True)
+        self.declare_parameter("label_height_m", 0.055)
         self.declare_parameter("tcp_offset_xyz", [0.0, 0.0, 0.0])
         self.declare_parameter("gripper_open_axis_local_xyz", [0.0, 1.0, 0.0])
         self.declare_parameter("show_tcp_markers", True)
@@ -498,6 +519,10 @@ class VisualGraspMarkerNode(Node):
             object_min_diameter_m=float(self.get_parameter("object_min_diameter_m").value),
             object_min_height_m=float(self.get_parameter("object_min_height_m").value),
             upright_object_marker=bool(self.get_parameter("upright_object_marker").value),
+            show_object_marker=bool(self.get_parameter("show_object_marker").value),
+            show_object_center_marker=bool(self.get_parameter("show_object_center_marker").value),
+            show_object_label=bool(self.get_parameter("show_object_label").value),
+            label_height_m=float(self.get_parameter("label_height_m").value),
             tcp_offset_xyz=self._tuple3("tcp_offset_xyz"),
             gripper_open_axis_local_xyz=self._tuple3("gripper_open_axis_local_xyz"),
             show_tcp_markers=bool(self.get_parameter("show_tcp_markers").value),

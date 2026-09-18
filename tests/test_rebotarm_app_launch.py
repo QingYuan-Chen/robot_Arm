@@ -118,6 +118,43 @@ def test_launches_reference_consumer_specific_operator_configs() -> None:
     for text in (keyboard, system, app):
         assert "teleop_control.yaml" not in text
 
+
+def test_keyboard_no_hardware_mode_uses_one_simulated_trajectory_backend() -> None:
+    keyboard = _read("src/rebotarm_bringup/launch/teleop_keyboard.launch.py")
+
+    assert keyboard.count('executable="rebotarm_sim_trajectory_controller"') == 1
+    assert "condition=UnlessCondition(use_hardware)" in keyboard
+    assert 'executable="joint_state_publisher"' not in keyboard
+    assert 'executable="reBotArmController"' not in keyboard
+    assert "hardware_controller.launch.py" in keyboard
+    assert 'parameters=[{"arm_namespace": arm_namespace}]' in keyboard
+
+
+def test_teleop_system_forwards_execution_mode_to_dashboard() -> None:
+    system = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
+
+    assert 'DeclareLaunchArgument("execution_mode", default_value="execute")' in system
+    assert 'execution_mode = LaunchConfiguration("execution_mode")' in system
+    assert '"execution_mode": execution_mode' in system
+    assert '"web_execute_enabled": web_execute_enabled' in system
+
+
+def test_dashboard_hides_and_blocks_hardware_only_commands_in_simulation() -> None:
+    node = _read(
+        "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py"
+    )
+    html = _read(
+        "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html"
+    )
+
+    assert '"use_hardware": bool(self.get_parameter("use_hardware").value)' in node
+    assert 'if not self._use_hardware:' in node
+    assert "hardware arm command unavailable in simulation mode" in node
+    assert 'id="hardware-arm-command-row"' in html
+    assert "const useHardware = panelConfig.use_hardware === true;" in html
+    assert "hardwareArmCommandRow.hidden = !useHardware" in html
+    assert "button.disabled = !useHardware ||" in html
+
 def test_common_commands_document_recommends_one_entrypoint() -> None:
     doc = _read("docs/rebotarm_common_commands.md")
 

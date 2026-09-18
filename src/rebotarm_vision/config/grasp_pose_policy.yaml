@@ -8,15 +8,12 @@ rebotarm_grasp_candidate_ik_filter:
     # 候选姿态生成策略。hybrid_geometry_with_base_axis_fallback = 先按候选自身几何构造抓取姿态，
     # 几何不可用时回退到"沿 base 接近轴"的固定姿态。改动会改变所有候选的姿态来源。
     pose_policy: hybrid_geometry_with_base_axis_fallback
-    # Current installation rotates the upstream +X workcell by -90 deg to -Y.
-    # Current installation rotates the upstream +X workcell by -90 deg to -Y.
-    # 固定抓取姿态四元数 (x, y, z, w)：本安装把上游 +X 朝向的工作区整体绕 Z 旋转 -90° 到 -Y 方向，
-    # 对应 -90°/2 = -45° 的 z 分量（-0.707106781）与 w=0.707106781（即绕 Z 转 -90°）。
+    # 固定抓取姿态四元数 (x, y, z, w)：沿用旧仓库 +X 工作区的单位姿态。
     # 这是"夹爪朝哪一边"的基准姿态，改动会让所有抓取姿态整体转向。
-    fixed_grasp_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
-    # 在 base_link 下的接近轴方向单位向量：末端沿 -Y 方向接近物体。
+    fixed_grasp_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    # 在 base_link 下的接近轴方向单位向量：末端沿 +X 方向接近物体。
     # 与 fixed_grasp_orientation_xyzw 是同一安装朝向的两种表达，需保持一致。
-    base_approach_axis_xyz: [0.0, -1.0, 0.0]
+    base_approach_axis_xyz: [1.0, 0.0, 0.0]
     # 预抓取点沿接近轴后退的距离，单位米（0.08 m = 8 cm）。调大更保守但空行程变长。
     base_pregrasp_distance_m: 0.08
     # 额外尝试的绕接近轴偏航角列表，单位弧度。[0.0] 表示只试基准朝向；
@@ -45,10 +42,10 @@ rebotarm_grasp_candidate_ik_filter:
     # 是否启用工作空间包围盒闸门，false 表示不按坐标范围过滤候选（当前默认关闭）。
     candidate_workspace_gate_enabled: false
     # 包围盒最小角点 (x, y, z)，单位米，仅在上一项为 true 时生效。
-    # 注意这里的区间是 x∈[-0.35,0.35]、y∈[-0.64,-0.18]，即"以前方 -Y 为主"的安装朝向。
-    candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
+    # 旧仓库的区间是 x∈[0.18,0.64]、y∈[-0.35,0.35]，即以前方 +X 为主。
+    candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
     # 包围盒最大角点 (x, y, z)，单位米，与上一项成对使用。
-    candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
+    candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
     # 抓取点到物体中心的最大允许距离，单位米（0.15 m = 15 cm）；
     # 防止抓取点落到物体轮廓之外（深度分割边缘的离群点）。仅在闸门启用且该值 > 0 时生效。
     candidate_max_grasp_to_object_center_m: 0.15
@@ -83,9 +80,9 @@ rebotarm_visual_grasp_executor:
     # 不采用候选自身几何（执行阶段要求姿态确定、可复现）。
     pose_policy: base_axis
     # 固定抓取姿态四元数 (x, y, z, w)，含义同候选过滤节点的同名参数（绕 Z 转 -90°）。
-    fixed_grasp_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
+    fixed_grasp_orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
     # 接近轴方向单位向量（base_link 下的 -Y）。
-    base_approach_axis_xyz: [0.0, -1.0, 0.0]
+    base_approach_axis_xyz: [1.0, 0.0, 0.0]
     # 预抓取点沿接近轴后退的距离，单位米（0.08 m = 8 cm）。
     base_pregrasp_distance_m: 0.08
     # 允许的最低抓取高度，单位米；低于此值拒绝执行（防撞台面的硬门限）。
