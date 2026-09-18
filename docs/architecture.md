@@ -58,14 +58,19 @@
 - gravity-comp teach recording
 - teach record file format and file listing
 - prepared trajectory generation
-- teach replay service / node entry points
+- teach replay workflow entry point
 - teach replay dry-run / execute gating
 - teach replay settings and replay status payloads
 
-`TeachReplayWorkflow` owns the dashboard-triggered replay lifecycle, including
+`TeachReplayWorkflow` is the sole replay implementation and owns the replay lifecycle, including
 preparation, dry-run tokens, alignment, collision checks, action callbacks and
 tracking state. It receives explicit snapshot/status callbacks and ROS adapters;
 it neither imports dashboard modules nor controls HTTP command authorization.
+
+The retired `TeachReplayNode`, `teach_replay.launch.py`, and standalone recording
+launch are intentionally not maintained as parallel command-line paths. Both
+recording and replay are initiated from the Dashboard composition so the same
+safety gates and authorization state are always used.
 
 `TeachRecorderNode` is the only recording service/file owner. The controller
 publishes an atomic verified batch with a stable timestamp for its receive

@@ -4,12 +4,12 @@
 #
 #后端选择逻辑（互斥，同一条启动里只会生效一个）：
 #
-#- use_moveit_preview=true：包含 MoveIt 配置包自带的 demo 启动文件，由它提供“move_group”、假的关节状态与规划能力（纯预览，不接硬件）；
-#- use_moveit_preview=false：本文件自己拉起机器人状态发布、被动关节状态发布与可选的真实控制器节点，由 “use_hardware” 决定是否打开硬件通道。
+#- use_moveit_preview=true：包含 MoveIt 配置包自带的 demo 启动文件，由它提供"move_group"、假的关节状态与规划能力（纯预览，不接硬件）；
+#- use_moveit_preview=false：本文件自己拉起机器人状态发布、被动关节状态发布与可选的真实控制器节点，由 "use_hardware" 决定是否打开硬件通道。
 #
-#关键话题约定：机器人模型订阅 ”/<arm_namespace>/visual_joint_states“（可视化用的关节状态，可能来自控制器反馈，也可能由假状态源填充）；”/<arm_namespace>/joint_states“则是控制器/仿真后端发布的执行侧关节状态。
+#关键话题约定：机器人模型订阅 "/<arm_namespace>/visual_joint_states"（可视化用的关节状态，可能来自控制器反馈，也可能由假状态源填充）；"/<arm_namespace>/joint_states"则是控制器/仿真后端发布的执行侧关节状态。
 #
-#安全默认值：”use_hardware=false“、“shutdown_safe_home=false”、“cmd_arbitration=reject”，即默认不碰真机、退出时不自动回安全位、多路命令冲突时直接拒绝。
+#安全默认值："use_hardware=false"、"shutdown_safe_home=false"、"cmd_arbitration=reject"，即默认不碰真机、退出时不自动回安全位、多路命令冲突时直接拒绝。
 #抓爪的力矩上限、速度上限与反馈新鲜度阈值都在本文件显式声明并下发，不依赖节点内默认值。
 
 import os

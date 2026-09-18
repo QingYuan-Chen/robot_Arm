@@ -1,23 +1,15 @@
-"""真实机械臂「一体化工作台」启动入口：MoveIt + 网页遥操作面板 + 可选 RViz。
-
-用途：面向真机的单命令入口。它包含完整的硬件与 MoveIt 栈（由本包的硬件启动文件组装），
-再叠加一个网页遥操作状态面板；示教录制/检查/回放由网页界面里的示教卡片驱动，本文件
-**不再直接拉起录制或回放节点**，也不提供 ``mode``/``profile`` 之类的分支参数。
-
-启动组合与后端选择：
-
-- 先包含 ``moveit_hardware.launch.py``（真机控制器 + MoveIt ``move_group``），
-  统一传入串口通道与抓爪安全阈值；
-- 可选启动 RViz（``use_rviz``，使用网页遥操作专用的只读状态布局）；
-- ``panel=true`` 时启动网页遥操作状态面板节点，参数里的 ``panel_mode="control"``
-  表示面板处于可下发控制命令的模式（``web_execute_enabled`` 再叠加一层执行许可）。
-
-安全语义：这是**真机全量启动**，因此 ``use_hardware`` 默认 ``true`` 且在
-``_launch_setup`` 中强制校验——传 ``use_hardware:=false`` 会直接抛错拒绝启动，
-避免有人误把真机入口当仿真入口用；``execution_mode`` 默认 ``execute``，
-``web_execute_enabled`` 默认 ``true``。串口通道 ``auto`` 会在检测到设备后解析为
-具体路径（优先 ttyACM0，其次 ttyACM1）。
-"""
+#真实机械臂「一体化工作台」启动入口：MoveIt + 网页遥操作面板 + 可选 RViz。
+#
+#用途：面向真机的单命令入口。它包含完整的硬件与 MoveIt 栈（由本包的硬件启动文件组装），再叠加一个网页遥操作状态面板；示教录制/检查/回放由网页界面里的示教卡片驱动，本文件不再直接拉起录制或回放节点，也不提供 mode/profile 之类的分支参数。
+#
+#启动组合与后端选择：
+#
+#- 先包含 "moveit_hardware.launch.py"（真机控制器 + MoveIt "move_group"），统一传入串口通道与抓爪安全阈值；
+#- 可选启动 RViz（"use_rviz"，使用网页遥操作专用的只读状态布局）；
+#- "panel=true" 时启动网页遥操作状态面板节点，参数里的 "panel_mode="control"" 表示面板处于可下发控制命令的模式（"web_execute_enabled” 再叠加一层执行许可）。
+#
+#安全语义：这是"真机全量启动"，因此 "use_hardware" 默认 "true" 且在"_launch_setup" 中强制校验——传 "use_hardware:=false" 会直接抛错拒绝启动，避免有人误把真机入口当仿真入口用；
+#"execution_mode" 默认 "execute"，"web_execute_enabled" 默认 "true："。串口通道 "auto" 会在检测到设备后解析为具体路径（优先 ttyACM0，其次 ttyACM1）。
 
 import os
 

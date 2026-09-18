@@ -1,26 +1,22 @@
-"""键盘遥操作启动文件：真机（可选）或无硬件仿真下的键盘关节增量控制。
-
-用途
-    用键盘按固定增量点动机械臂，并把夹爪状态桥接成可视化关节状态、按需启动 RViz。
-    既可在真机上使用（``use_hardware=true``），也可在完全没有硬件时用假关节状态在
-    RViz 里验证姿态与可视化布局。本文件只做启动组合，遥操作逻辑在操作交互包里。
-
-节点组合与真实/仿真后端选择
-    - ``use_hardware=true``：启动硬件控制器（唯一硬件入口）；robot_state_publisher
-      订阅控制器发布的视觉关节状态；
-    - ``use_hardware=false``（默认）：不启动任何硬件节点，改由 joint_state_publisher
-      发布假关节状态，整条链路纯软件、绝不会驱动真实电机；
-    - 键盘节点与夹爪可视化关节节点始终启动：前者读键盘下发命令，后者补齐夹爪关节；
-    - RViz 仅当 ``use_local_rviz=true`` 时启动。
-
-参数来源
-    ``common_config`` 提供关节名称/限位，``keyboard_config`` 只提供终端键盘参数。
-    示教录制不在本启动文件中启动；需要示教时使用 ``teach_record.launch.py`` 或组合入口。
-
-安全默认值
-    ``use_hardware`` 默认 ``false``：不会因为顺手敲一条启动命令就驱动真机，真机必须显式
-    传 ``use_hardware:=true``。
-"""
+#键盘遥操作启动文件：真机（可选）或无硬件仿真下的键盘关节增量控制。
+#
+#用途
+#    用键盘按固定增量点动机械臂，并把夹爪状态桥接成可视化关节状态、按需启动 RViz。
+#    既可在真机上使用（"use_hardware=true"），也可在完全没有硬件时用假关节状态在
+#    RViz 里验证姿态与可视化布局。本文件只做启动组合，遥操作逻辑在操作交互包里。
+#
+#节点组合与真实/仿真后端选择
+#    - "use_hardware=true"：启动硬件控制器（唯一硬件入口）；robot_state_publisher订阅控制器发布的视觉关节状态；
+#    - "use_hardware=false"（默认）：不启动任何硬件节点，改由 joint_state_publisher发布假关节状态，整条链路纯软件、绝不会驱动真实电机；
+#    - 键盘节点与夹爪可视化关节节点始终启动：前者读键盘下发命令，后者补齐夹爪关节；
+#    - RViz 仅当 "use_local_rviz=true" 时启动。
+#
+#参数来源
+#    "common_config" 提供关节名称/限位，"keyboard_config" 只提供终端键盘参数。
+#    示教录制不在本启动文件中启动；由组合入口的 Dashboard 提供录制和回放。
+#
+#安全默认值
+#    "use_hardware" 默认 "false"：不会因为顺手敲一条启动命令就驱动真机，真机必须显式传 "use_hardware:=true"。
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -44,8 +40,7 @@ def generate_launch_description():
     common_config = LaunchConfiguration("common_config")
     keyboard_config = LaunchConfiguration("keyboard_config")
     keyboard_prefix = LaunchConfiguration("keyboard_prefix")
-    # bringup_share 用于定位 RViz 布局；config_share 用于定位 YAML 参数文件，两者都是
-    # 本启动组合包的 share 目录。
+    # bringup_share 用于定位 RViz 布局；config_share 用于定位 YAML 参数文件，两者都是本启动组合包的 share 目录。
     bringup_share = FindPackageShare("rebotarm_bringup")
     config_share = FindPackageShare("rebotarm_bringup")
     urdf_file = PathJoinSubstitution(
@@ -59,8 +54,7 @@ def generate_launch_description():
         [
             # arm_namespace：话题/服务/动作的命名空间前缀，必须与控制器一致。
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
-            # use_hardware：true=驱动真机（启动控制器与示教录制）；false=只用假关节状态做
-            #   纯软件验证。默认 false，防止误启动真机。
+            # use_hardware：true=驱动真机（启动控制器与示教录制）；false=只用假关节状态做纯软件验证。默认 false，防止误启动真机。
             DeclareLaunchArgument("use_hardware", default_value="false"),
             # use_local_rviz：是否启动 RViz 可视化。
             DeclareLaunchArgument("use_local_rviz", default_value="true"),

@@ -273,22 +273,6 @@ def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack()
     assert "move_group" not in launch_text
 
 
-def test_visual_ready_hold_launch_starts_real_controller_without_moveit_stack():
-    launch_text = _read("src/rebotarm_bringup/launch/visual_ready_hold.launch.py")
-
-    assert "hardware_controller.launch.py" in launch_text
-    assert 'executable="reBotArmController"' not in launch_text
-    assert 'executable="rebotarm_visual_ready"' in launch_text
-    assert 'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"' in launch_text
-    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in launch_text
-    assert '"auto_move_on_start": True' in launch_text
-    assert '"exit_after_startup_move": True' in launch_text
-    assert "interactive_system.launch.py" not in launch_text
-    assert "move_group" not in launch_text
-    assert "PoseExecutionNode" not in launch_text
-    assert "rebotarm_sim_trajectory_controller" not in launch_text
-
-
 def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
     launch_text = _read("src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py")
 
@@ -1300,21 +1284,17 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
 
 
 def test_teach_replay_prepared_pipeline_defaults_to_150hz():
-    replay_launch_text = _read("src/rebotarm_bringup/launch/teach_replay.launch.py")
-    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
+    workflow_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_workflow.py")
     panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     teach_config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
-    assert 'DeclareLaunchArgument("filter_sample_rate_hz", default_value="150.0")' in replay_launch_text
-    assert 'DeclareLaunchArgument("resample_rate_hz", default_value="150.0")' in replay_launch_text
-    assert 'self.declare_parameter("filter_sample_rate_hz", 150.0)' in replay_node_text
-    assert 'self.declare_parameter("resample_rate_hz", 150.0)' in replay_node_text
+    assert '"filter_sample_rate_hz"' in workflow_text
+    assert '"resample_rate_hz"' in workflow_text
     assert 'self.declare_parameter("filter_sample_rate_hz", 150.0)' in panel_text
     assert 'self.declare_parameter("resample_rate_hz", 150.0)' in panel_text
     assert "filter_sample_rate_hz: 150.0" in teach_config_text
     assert "resample_rate_hz: 150.0" in teach_config_text
     assert "time_parameterization_method: auto" in teach_config_text
-    assert 'self.declare_parameter("time_parameterization_method", "auto")' in replay_node_text
     assert 'self.declare_parameter("time_parameterization_method", "auto")' in panel_text
 
 
@@ -1331,30 +1311,26 @@ def test_moveit_ompl_uses_ruckig_response_adapter_with_jerk_limits():
 
 
 def test_teach_replay_executes_prepared_retimed_points_directly():
-    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
+    builder_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_trajectory_builder.py")
 
-    assert "def _append_prepared_replay_points(" in replay_node_text
-    assert "for retimed in self._prepared_replay.retimed_points:" in replay_node_text
-    assert "self._append_prepared_replay_points(trajectory, elapsed=elapsed)" in replay_node_text
+    assert "retimed_points" in builder_text
+    assert "trajectory.points.append(point)" in builder_text
 
 
-def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
-    replay_node_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_node.py")
+def test_teach_replay_has_runtime_tracking_guard_for_web():
     panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     monitor_text = _read("src/rebotarm_motion/rebotarm_motion/replay_runtime_monitor.py")
     config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
-    assert "evaluate_replay_tracking" in replay_node_text
     assert "evaluate_replay_tracking" in monitor_text
     assert "ReplayRuntimeMonitor" in panel_text
     assert "_replay_runtime_monitor.check(" in panel_text
-    for text in (replay_node_text, panel_text):
-        assert 'self.declare_parameter("replay_monitor_enabled", True)' in text
-        assert 'self.declare_parameter("max_tracking_error_rad", 0.25)' in text
-        assert 'self.declare_parameter("max_live_velocity_rad_s", 3.0)' in text
-        assert "def _check_active_replay_tracking" in text or "def check_tracking" in text
-        assert "self._request_controller_trajectory_stop" in text
-    for text in (replay_node_text, monitor_text):
+    assert 'self.declare_parameter("replay_monitor_enabled", True)' in panel_text
+    assert 'self.declare_parameter("max_tracking_error_rad", 0.25)' in panel_text
+    assert 'self.declare_parameter("max_live_velocity_rad_s", 3.0)' in panel_text
+    assert "def check_tracking" in panel_text
+    assert "self._request_controller_trajectory_stop" in panel_text
+    for text in (panel_text, monitor_text):
         assert "tracking_error" in text
         assert "live_velocity" in text
 

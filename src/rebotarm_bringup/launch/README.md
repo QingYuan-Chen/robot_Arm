@@ -25,9 +25,6 @@ src/rebotarm_bringup/launch/
 ├── teleop_system.launch.py
 ├── rviz_ee_drag_real.launch.py
 ├── rviz_ee_drag_sim.launch.py
-├── teach_record.launch.py
-├── teach_replay.launch.py
-├── visual_ready_hold.launch.py
 ├── visual_grasp_system.launch.py
 ├── visual_grasp_perception_preview.launch.py
 ├── mujoco_offline_perception.launch.py
@@ -45,15 +42,11 @@ hardware_controller.launch.py                  唯一真实硬件控制器定义
 │   ├── rviz_ee_drag_real.launch.py            真机 MotionPlanning 入口
 │   ├── rviz_ee_drag_sim.launch.py             仿真 MotionPlanning 入口
 │   └── visual_grasp_system.launch.py          完整视觉抓取组合
-├── teleop_keyboard.launch.py                  键盘 + 状态发布 + 基础 RViz（无 MoveIt）
-│   └── teleop_system.launch.py                + 示教录制 + Dashboard（仍无 MoveIt）
-└── visual_ready_hold.launch.py                + 一次摆位 + 常驻摆位服务
-
+├── teleop_keyboard.launch.py                  键盘 + 状态发布 + 基础 RViz（简化版关节空间运动规划）
+│   └── teleop_system.launch.py                + 示教录制 + Dashboard（简化版关节空间运动规划）
 visual_grasp_perception_preview.launch.py      只读感知预览，不含控制器
 mujoco_offline_perception.launch.py            虚拟 RGB-D + 离线感知/规划
 real_perception_sim_execution.launch.py        真实感知 + MuJoCo 执行
-teach_record.launch.py                         只观察并录制已有反馈
-teach_replay.launch.py                         使用外部唯一执行后端回放
 ```
 
 `interactive_system.launch.py` 只有在 `use_hardware=true` 时才包含硬件片段；纯预览和仿真
@@ -72,9 +65,6 @@ teach_replay.launch.py                         使用外部唯一执行后端回
 | `teleop_system.launch.py` | 遥操作组合 | 包含键盘入口，再增加示教录制和默认只读 Dashboard；不启动 MoveIt，默认不接真机 |
 | `rviz_ee_drag_real.launch.py` | 真机规划入口 | 用 MoveIt MotionPlanning 交互目标进行 Plan/Execute |
 | `rviz_ee_drag_sim.launch.py` | 仿真规划入口 | 使用仿真轨迹控制器提供 Plan/Execute，不打开真机 |
-| `teach_record.launch.py` | 独立工具 | 只启动录制节点，依赖外部已有反馈，不拥有执行后端 |
-| `teach_replay.launch.py` | 独立工具 | 分析、预处理并向外部唯一后端回放轨迹 |
-| `visual_ready_hold.launch.py` | 真机专用入口 | 硬件 + 一次视觉观察位摆位 + 常驻摆位服务 |
 | `visual_grasp_system.launch.py` | 完整视觉组合 | MoveIt/后端、视觉就绪、相机、YOLO、GraspNet、候选过滤和受控执行 |
 | `visual_grasp_perception_preview.launch.py` | 只读预览 | 相机到候选可视化；不启动控制器、不规划、不执行 |
 | `mujoco_offline_perception.launch.py` | 离线仿真 | MuJoCo 虚拟相机驱动感知与候选规划，默认 plan-only |
@@ -92,6 +82,10 @@ teach_replay.launch.py                         使用外部唯一执行后端回
 因此它们共享部分界面，但不是重复实现。`moveit_hardware.launch.py` 和
 `teleop_keyboard.launch.py` 是可独立使用的基础组合；各自的上层入口只叠加自己的功能。
 `rebotarm_app.launch.py` 与 `teleop_system.launch.py` 不应在同一命名空间同时启动。
+
+### 示教回放入口
+
+Dashboard 的 `TeachReplayWorkflow` 是唯一正式回放实现，负责质量分析、预处理、dry-run 令牌、MoveIt 起点对齐、碰撞预检和运行期跟踪监控。旧的 `TeachReplayNode` 和 `teach_replay.launch.py` 已删除，避免两套回放策略产生分歧。示教回放使用完整工作台的 Teach Trajectory 卡片：先 Check/Dry-run，再在显式执行授权下 Replay。
 
 ## 硬件公共参数
 

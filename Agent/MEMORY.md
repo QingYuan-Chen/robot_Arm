@@ -636,3 +636,10 @@ P0 Gate B/C 在 Enable 后保持阶段首先出现 `dm-serial write failed: Oper
 ## 2026-09-18 bringup 入口去重与职责澄清
 
 `driver_only.launch.py` 在硬件片段统一后只是 `hardware_controller.launch.py` 的无行为包装，没有任何活跃 launch 消费者，因此删除；只启动控制器的公开命令改为 `hardware_controller.launch.py`。`moveit_hardware -> rebotarm_app` 是真机 MoveIt 工作台链，`teleop_keyboard -> teleop_system` 是不含 MoveIt 的键盘/软件演练链，两者不是重复执行后端且不应同时启动。同时修正 `teleop_system` 真机分支错误屏蔽示教录制器的旧逻辑：现在两种分支都只启动一个录制器，`require_motor_status` 跟随 `use_hardware`，仍默认不开始录制、不自动使能。重复的 `DeclareLaunchArgument` 是父 launch 向外重新导出子 launch 参数的显式接口；节点和硬件默认值的语义所有权仍在 `hardware_controller.launch.py`。旧 bringup build/install 缓存因仍引用已删除文件而阻断构建，已可恢复移至 `/tmp/rebotarm-bringup-driver-only-stale.WVTCin`，随后单包构建成功，5 个主要入口 `--show-args` 全部通过，安装空间不再含旧入口。layering `18 passed`，全量 `765 passed, 7 skipped, 1 failed`，唯一失败仍为既有 MuJoCo 默认解释器断言；必需 compileall 和 diff check 通过。本轮未启动控制器或访问串口。
+
+## 2026-09-18 统一示教回放实现
+
+Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，保留质量分析、预处理、dry-run 令牌、MoveIt 起点对齐、碰撞预检和运行期跟踪监控。删除重复的 `TeachReplayNode`、`teach_replay.launch.py` 和 `TeachReplayNode` console entry；当前不再提供第二套命令行回放编排，命令行仅保留 `teach_record.launch.py` 独立录制。回放所需保护逻辑已由 Dashboard 使用的 workflow 统一承载。聚焦测试 `101 passed`，分层 `18 passed`，全量 `765 passed, 7 skipped, 1 known MuJoCo interpreter failure`；重建 `rebotarm_teach` 和 `rebotarm_bringup` 成功，安装空间不再包含旧回放 launch 或 console entry，未启动控制器、访问串口或运动。
+Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，保留质量分析、预处理、dry-run 令牌、MoveIt 起点对齐、碰撞预检和运行期跟踪监控。删除重复的 `TeachReplayNode`、`teach_replay.launch.py` 和 `TeachReplayNode` console entry；同一轮又删除无网页独立的 `teach_record.launch.py`，保留 `TeachRecorderNode` 供 `rebotarm_app` 和 `teleop_system` 组合使用。回放和录制均由 Dashboard 工作台统一提供，未启动控制器、访问串口或运动。
+
+2026-09-18 同意删除独立的 `visual_ready_hold.launch.py`；它只是真机视觉就绪摆位与常驻服务的单独包装，完整 `visual_grasp_system.launch.py` 内部已保留同一个 `rebotarm_visual_ready` 节点链。保留 `visual_grasp_perception_preview.launch.py`，用于不启动控制器的视觉只读验收。独立文件删除后，bringup 重建与两个视觉 launch 的 `--show-args` 通过，聚焦测试 `92 passed`，未启动控制器或访问串口。

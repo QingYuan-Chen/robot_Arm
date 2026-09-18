@@ -24,10 +24,8 @@ setup(
     entry_points={
         # 控制台入口：安装后可执行文件名 -> 模块:入口函数。
         # TeachRecorderNode：示教录制节点（重力补偿示教，写 JSONL 记录）。
-        # TeachReplayNode：示教回放节点（检查/预处理/门控/下发轨迹）。
         "console_scripts": [
             "TeachRecorderNode = rebotarm_teach.teach_recorder_node:main",
-            "TeachReplayNode = rebotarm_teach.teach_replay_node:main",
         ],
     },
 )

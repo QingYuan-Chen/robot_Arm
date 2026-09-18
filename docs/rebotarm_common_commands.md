@@ -235,38 +235,8 @@ teleop_records/my_teach_01.jsonl
 10. 检查通过后点击 Replay
 ```
 
-如果需要不用网页、单独用终端录制，也可以保留下面的命令方式。
-
-录制新轨迹：
-
-```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 launch rebotarm_bringup teach_record.launch.py \
-  record_path:=teleop_records/new_teach.jsonl \
-  auto_start_gravity_comp:=true
-```
-
-操作流程：
-
-```text
-1. 等待机械臂进入 GRAVITY_COMP
-2. 人手拖动机械臂完成示教
-3. 按 q 结束录制
-4. 回到网页选择 new_teach.jsonl
-5. 先 Check Trajectory
-6. 再 Replay
-```
-
-如果录制后文件大小是 0，说明没有真正写入样本，通常是：
-
-```text
-没有进入 GRAVITY_COMP
-没有收到 /rebotarm/joint_states
-录制时间太短
-```
+示教录制和回放统一通过 Dashboard 的 Teach Trajectory 卡片完成，请使用
+`rebotarm_app.launch.py` 并在网页中点击 Start Teach。
 
 ## 6. RViz 显示
 

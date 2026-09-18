@@ -7,10 +7,10 @@
 #    1. 硬件控制器：唯一持有电机总线与执行安全的入口；
 #    2. 示教录制节点：默认不自动开始录制，只等待操作者显式开始；
 #    3. 包含 MoveIt 配置包提供的 demo 启动文件，由它拉起 move_group、RViz 等规划栈；
-#       并传入 ``use_fake_joint_states="false"``，即关节状态取真机反馈而不是假发布器。
+#       并传入 "use_fake_joint_states="false""，即关节状态取真机反馈而不是假发布器。
 #
 #真实/仿真后端选择
-#    本文件是“真机”入口：控制器无条件启动，没有 use_hardware 开关。
+#    本文件是"真机"入口：控制器无条件启动，没有 use_hardware 开关。
 import os
 
 import yaml
@@ -82,7 +82,7 @@ def generate_launch_description():
             DeclareLaunchArgument("channel", default_value=""),
             # joint_state_rate：关节状态发布频率（Hz）；越高越实时，总线负载越大。
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
-            # hardware_feedback_rate_hz：硬件层反馈刷新频率上限（Hz），必须在 [20, 100]，
+            # hardware_feedback_rate_hz：硬件层反馈刷新频率上限（Hz），必须在 [20, 100]。
             DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             # gripper_position_torque_cap_nm：夹爪位置指令的力矩上限（N·m），允许范围[0.05, 1.5]；调大夹持更牢但堵转发热与夹伤风险更高。
             DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),

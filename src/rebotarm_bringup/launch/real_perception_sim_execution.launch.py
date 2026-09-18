@@ -1,32 +1,21 @@
-"""真实感知 + MuJoCo 仿真执行（混合链路）启动文件。
-
-用途
-    用**真实相机与真实感知**（Ubuntu 原生视觉输入、GraspNet 抓取候选）驱动
-    **MuJoCo 物理仿真**中的机械臂执行抓取，在没有真实机械臂的条件下端到端验证
-    整条视觉抓取链路。真机控制器绝不会被本文件拉起：``use_hardware`` 被固定传成
-    "false"。
-
-节点组合
-    1. MuJoCo 仿真后端节点：headless 运行，占用独立命名空间（``sim_arm_namespace``，
-       默认 rebotarm_sim），参数取自仿真包安装目录下的 mujoco_sim.yaml；
-    2. 通过 IncludeLaunchDescription 引入「视觉抓取系统」启动文件，由它再拉起相机、
-       检测、GraspNet、候选 IK 筛选、抓取执行器与可选 RViz。
-
-真实/仿真后端选择逻辑
-    整条链路包在同一个进程组（GroupAction）里，统一设置 ``use_sim_time`` 并显式覆盖
-    被包含启动文件的默认值，使"谁拥有该命名空间的执行权"没有歧义：
-      - ``use_hardware="false"``：不启动真机硬件控制器；
-      - ``start_sim_trajectory_controller="false"``：不启动那个"仅 RViz 的运动学动作
-        服务"（它本来的语义是"没有外部仿真后端拥有该命名空间时才启动"），因为此处的
-        执行权已经交给 MuJoCo 节点；
-      - ``execution_mode="execute"``：允许真正下发运动（只不过下发给仿真的机械臂）；
-      - ``start_visual_ready="false"``：仿真侧初始位形已由 ``initial_joint_positions``
-        给定，不再额外触发视觉就绪摆位动作。
-
-安全默认值
-    MuJoCo 节点以 ``headless=True`` 启动，不弹图形界面；仿真命名空间与真机默认命名
-    空间隔离，便于两条链路并存而互不干扰。
-"""
+#真实感知 + MuJoCo 仿真执行（混合链路）启动文件。
+#
+#用途
+#    用真实相机与真实感知（Ubuntu 原生视觉输入、GraspNet 抓取候选）驱动MuJoCo 物理仿真中的机械臂执行抓取，在没有真实机械臂的条件下端到端验证整条视觉抓取链路。真机控制器绝不会被本文件拉起："use_hardware" 被固定传成"false"。
+#
+#节点组合
+#    1. MuJoCo 仿真后端节点：headless 运行，占用独立命名空间（"sim_arm_namespace"，默认 rebotarm_sim），参数取自仿真包安装目录下的 mujoco_sim.yaml；
+#    2. 通过 IncludeLaunchDescription 引入「视觉抓取系统」启动文件，由它再拉起相机、检测、GraspNet、候选 IK 筛选、抓取执行器与可选 RViz。
+#
+#真实/仿真后端选择逻辑
+#    整条链路包在同一个进程组（GroupAction）里，统一设置 "use_sim_time" 并显式覆盖被包含启动文件的默认值，使"谁拥有该命名空间的执行权"没有歧义：
+#      - use_hardware="false"：不启动真机硬件控制器；
+#      - start_sim_trajectory_controller="false"：不启动那个"仅 RViz 的运动学动作服务"，因为此处的执行权已经交给 MuJoCo 节点；
+#      - execution_mode="execute"：允许真正下发运动（只不过下发给仿真的机械臂）；
+#      - start_visual_ready="false"：仿真侧初始位形已由 "initial_joint_positions"给定，不再额外触发视觉就绪摆位动作。
+#
+#安全默认值
+#    MuJoCo 节点以 "headless=True" 启动，不弹图形界面；仿真命名空间与真机默认命名空间隔离，便于两条链路并存而互不干扰。
 
 from pathlib import Path
 

@@ -1,25 +1,16 @@
-"""把 MuJoCo 虚拟 RGB-D 相机与本机「只规划」感知链路组合起来的离线启动文件。
-
-用途：在没有真实相机、也不驱动真实机械臂的前提下，用 MuJoCo 物理模型渲染出虚拟
-RGB-D 图像与真值标注，喂给本机 YOLO 与 GraspNet 候选生成，再走一遍候选 IK/碰撞
-过滤与夹爪几何闸门，从而离线验证整条视觉抓取链路。
-
-节点组合与数据流：
-
-1. 仿真节点（可执行文件 ``rebotarm_mujoco_node``）：以 ``backend=mujoco``、
-   ``headless=True`` 运行，提供仿真关节状态与 ``FollowJointTrajectory`` 后端，
-   并按 ``virtual_camera.*`` 参数发布彩色/深度图与真值检测；
-2. 离线 YOLO 节点（可执行文件 ``rebotarm_offline_yolo_node``）：订阅虚拟彩图，
-   发布检测结果，用于替代真机视觉前端；
-3. 本包内的视觉抓取系统（``visual_grasp_system.launch.py``）：只启用 GraspNet
-   候选生成 + 候选 IK/碰撞过滤，其它视觉入口一律关闭。
-
-后端选择与安全默认值：本文件**固定不启动真实硬件控制器**（向下传递
-``use_hardware=false``），``execution_mode`` 默认 ``plan_only``，
-``start_visual_grasp_executor`` 与 ``start_motion_execution`` 默认均为 ``false``，
-即默认连仿真轨迹下发都不开启，只做规划干跑；``use_sim_time`` 默认 ``true``，
-保证整棵树共用仿真时钟。
-"""
+#把 MuJoCo 虚拟 RGB-D 相机与本机「只规划」感知链路组合起来的离线启动文件。
+#
+#用途：在没有真实相机、也不驱动真实机械臂的前提下，用 MuJoCo 物理模型渲染出虚拟RGB-D 图像与真值标注，喂给本机 YOLO 与 GraspNet 候选生成，再走一遍候选 IK/碰撞过滤与夹爪几何闸门，从而离线验证整条视觉抓取链路。
+#
+#节点组合与数据流：
+#
+#1. 仿真节点（可执行文件 "rebotarm_mujoco_node"）：以 "backend=mujoco"、"headless=True" 运行，提供仿真关节状态与 "FollowJointTrajectory" 后端，并按 "virtual_camera.*" 参数发布彩色/深度图与真值检测；
+#2. 离线 YOLO 节点（可执行文件 "rebotarm_offline_yolo_node"）：订阅虚拟彩图，发布检测结果，用于替代真机视觉前端；
+#3. 本包内的视觉抓取系统（"visual_grasp_system.launch.py"）：只启用 GraspNet候选生成 + 候选 IK/碰撞过滤，其它视觉入口一律关闭。
+#
+#后端选择与安全默认值：本文件固定不启动真实硬件控制器（向下传递"use_hardware=false"），"execution_mode" 默认 "plan_only"，
+#"start_visual_grasp_executor" 与 "start_motion_execution" 默认均为 "false"，即默认连仿真轨迹下发都不开启，只做规划干跑；
+#"use_sim_time" 默认 "true"，保证整棵树共用仿真时钟。
 
 from __future__ import annotations
 

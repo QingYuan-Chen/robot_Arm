@@ -1,26 +1,17 @@
-"""真实硬件下的 RViz 末端拖动入口（MoveIt 原生交互标记 + 真机执行）。
-
-用途：在 RViz 里用 MoveIt 原生的交互标记拖动机械臂末端，由规划层生成轨迹后交给真实
-控制器执行。这是“人给出末端目标 → 规划 → 真机运动”的完整链路入口，不接仿真执行后端。
-
-启动组合：
-    1. 本包内的交互系统共享启动文件（真机 / 仿真二选一的后端选择逻辑都在其中），
-       这里显式选择「真机」一侧；
-    2. 真机控制器节点由该共享启动文件拉起，串口通道由本文件解析后传入。
-
-真实/仿真后端选择逻辑：``use_hardware=true`` 打开真实电机通道；``use_local_rviz=true``
-让共享启动文件拉起 RViz（末端拖动界面所在）；``use_moveit_preview=true`` 使用规划包自带
-的预览栈提供规划能力；``start_passive_joint_state_publisher=false`` 抑制额外的关节状态源，
-``use_moveit_fake_joint_states=false`` 让规划器读取真实控制器的关节状态——两者必须同时为
-假，否则规划器会看到与真机不一致的关节状态。
-
-通道解析：``channel`` 默认 ``auto``，按 /dev/ttyACM0、/dev/ttyACM1 的顺序探测第一个存在
-的串口桥；都找不到时回落为 /dev/ttyACM0，由控制器在连接阶段如实报错退出，而不是静默换口。
-
-安全默认值：本文件不做任何自动使能。共享启动文件侧的默认值仍是 ``cmd_arbitration=reject``
-与 ``shutdown_safe_home=false``：命令冲突时拒绝，退出时不自动回安全位。真机上电后必须由
-操作者显式调用 enable 服务，且在确认工作空间无人后才会真正运动。
-"""
+#真实硬件下的 RViz 末端拖动入口（MoveIt 原生交互标记 + 真机执行）。（已测）
+#
+#用途：在 RViz 里用 MoveIt 原生的交互标记拖动机械臂末端，由规划层生成轨迹后交给真实控制器执行。这是“人给出末端目标 → 规划 → 真机运动”的完整链路入口，不接仿真执行后端。
+#
+#启动组合：
+#    1. 本包内的交互系统共享启动文件（真机 / 仿真二选一的后端选择逻辑都在其中），这里显式选择「真机」一侧；
+#    2. 真机控制器节点由该共享启动文件拉起，串口通道由本文件解析后传入。
+#
+#真实/仿真后端选择逻辑："use_hardware=true" 打开真实电机通道；"use_local_rviz=true"让共享启动文件拉起 RViz（末端拖动界面所在）；"use_moveit_preview=true" 使用规划包自带的预览栈提供规划能力；
+#"start_passive_joint_state_publisher=false" 抑制额外的关节状态源，"use_moveit_fake_joint_states=false" 让规划器读取真实控制器的关节状态——两者必须同时为假，否则规划器会看到与真机不一致的关节状态。
+#
+#通道解析："channel" 默认 "auto"，按 /dev/ttyACM0、/dev/ttyACM1 的顺序探测第一个存在的串口桥；都找不到时回落为 /dev/ttyACM0，由控制器在连接阶段如实报错退出，而不是静默换口。
+#
+#安全默认值：本文件不做任何自动使能。共享启动文件侧的默认值仍是 "cmd_arbitration=reject"与 "shutdown_safe_home=false"：命令冲突时拒绝，退出时不自动回安全位。真机上电后必须由操作者显式调用 enable 服务，且在确认工作空间无人后才会真正运动。
 
 from __future__ import annotations
 

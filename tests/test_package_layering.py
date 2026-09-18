@@ -112,8 +112,6 @@ def test_primary_bringup_launches_dashboard_package_directly() -> None:
 
 def test_teach_launches_use_teach_package_directly() -> None:
     launch_expectations = [
-        (ROOT / "src/rebotarm_bringup/launch/teach_record.launch.py", "TeachRecorderNode"),
-        (ROOT / "src/rebotarm_bringup/launch/teach_replay.launch.py", "TeachReplayNode"),
         (ROOT / "src/rebotarm_bringup/launch/teleop_system.launch.py", "TeachRecorderNode"),
     ]
 
@@ -152,7 +150,6 @@ def test_bringup_has_one_real_hardware_controller_owner() -> None:
         "interactive_system.launch.py",
         "moveit_hardware.launch.py",
         "teleop_keyboard.launch.py",
-        "visual_ready_hold.launch.py",
     }
     for name in hardware_consumers:
         assert "hardware_controller.launch.py" in (launch_dir / name).read_text(

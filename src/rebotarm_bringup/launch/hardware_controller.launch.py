@@ -1,6 +1,6 @@
 #真实机械臂控制器的唯一底层启动片段。
 #
-#本文件只声明硬件公共参数并启动 “reBotArmController”。它不启动 MoveIt、RViz、robot_state_publisher、示教、遥操作、视觉或网页节点。
+#本文件只声明硬件公共参数并启动 "reBotArmController"。它不启动 MoveIt、RViz、robot_state_publisher、示教、遥操作、视觉或网页节点。
 #所有需要真实硬件的 bringup组合都应包含本文件，避免复制控制器节点和安全参数。
 #
 #安全语义保持不变：控制器启动后处于失能状态，必须获得新鲜反馈、完成现场检查并显式调用 "/<arm_namespace>/enable" 后才允许运动；默认退出不自动回位。

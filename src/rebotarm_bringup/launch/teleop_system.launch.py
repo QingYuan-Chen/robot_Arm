@@ -1,24 +1,18 @@
-"""遥操作组合启动文件：键盘遥操作 + 示教录制 + 网页状态面板。
-
-启动用途：一次性拉起“人操作机械臂”这条最小链路，节点组合为——
-  1. 包含 teleop_keyboard.launch.py：按需包含键盘节点、夹爪可视化状态桥接节点、
-     关节状态发布节点与 RViz（该文件内部再决定真实/仿真后端）；
-  2. 示教录制节点（示教包）：真机和无硬件分支都启动，但默认不自动开始录制；
-  3. 网页状态面板节点（网页面板包）：提供本机 HTTP/SSE 界面与命令入口。
-
-真实/仿真后端选择逻辑：
-  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起假关节状态
-    发布器，录制时不要求真实电机状态；
-  - use_hardware=true：由 include 的启动文件启动真机控制器，录制时要求有效电机状态。
-    真机上电后仍处于失能态，必须显式调用 enable 服务才会运动。
-
-参数来源：键盘、网页和示教分别加载自己的配置，并额外加载 operator_common.yaml。
-launch 参数只覆盖命名空间、记录路径与面板开关等运行期选择项。
-
-安全默认值：web_execute_enabled=false（网页不开放执行，只能看状态）、
-channel 留空表示由机械臂配置文件或自动探测决定、use_local_rviz=true 便于操作者直接
-看到机械臂状态。这些开关的默认值都取“更保守”的一侧，需要执行动作时必须显式打开。
-"""
+#遥操作组合启动文件：键盘遥操作 + 示教录制 + 网页状态面板。
+#
+#启动用途：一次性拉起“人操作机械臂”这条最小链路，节点组合为——
+#  1. 包含 teleop_keyboard.launch.py：按需包含键盘节点、夹爪可视化状态桥接节点、关节状态发布节点与 RViz（该文件内部再决定真实/仿真后端）；
+#  2. 示教录制节点（示教包）：真机和无硬件分支都启动，但默认不自动开始录制；
+#  3. 网页状态面板节点（网页面板包）：提供本机 HTTP/SSE 界面与命令入口。
+#
+#真实/仿真后端选择逻辑：
+#  - use_hardware=false（默认）：不启动硬件控制器，由 include 的启动文件拉起假关节状态发布器，录制时不要求真实电机状态；
+#  - use_hardware=true：由 include 的启动文件启动真机控制器，录制时要求有效电机状态。真机上电后仍处于失能态，必须显式调用 enable 服务才会运动。
+#
+#参数来源：键盘、网页和示教分别加载自己的配置，并额外加载 operator_common.yaml。launch 参数只覆盖命名空间、记录路径与面板开关等运行期选择项。
+#
+#安全默认值：web_execute_enabled=false（网页不开放执行，只能看状态）、channel 留空表示由机械臂配置文件或自动探测决定、use_local_rviz=true 便于操作者直接看到机械臂状态。
+#这些开关的默认值都取“更保守”的一侧，需要执行动作时必须显式打开。
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -31,8 +25,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    # 先取出全部 LaunchConfiguration 句柄：它们是“延迟求值”的替换表达式，在声明
-    # DeclareLaunchArgument 之前就可以安全引用，真正取值发生在启动阶段。
+    # 先取出全部 LaunchConfiguration 句柄：它们是“延迟求值”的替换表达式，在声明DeclareLaunchArgument 之前就可以安全引用，真正取值发生在启动阶段。
     arm_namespace = LaunchConfiguration("arm_namespace")
     use_hardware = LaunchConfiguration("use_hardware")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
@@ -50,8 +43,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            # arm_namespace：所有话题/服务/动作的命名空间段，必须与被包含的启动文件
-            # 和控制器保持一致。
+            # arm_namespace：所有话题/服务/动作的命名空间段，必须与被包含的启动文件和控制器保持一致。
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             # use_hardware=false（默认）：无真机/只演练流程；true 时才由被包含的启动
             # 文件拉起硬件控制器。真机分支不会自动使能电机。
@@ -62,8 +54,7 @@ def generate_launch_description():
             DeclareLaunchArgument("channel", default_value=""),
             # panel：是否启动网页状态面板；关掉后没有任何 HTTP 界面与命令入口。
             DeclareLaunchArgument("panel", default_value="true"),
-            # web_execute_enabled：网页是否允许执行运动命令。默认 false = 只读面板，
-            # 网页只能看状态；放开运动必须由操作者显式打开。
+            # web_execute_enabled：网页是否允许执行运动命令。默认 false = 只读面板，网页只能看状态；放开运动必须由操作者显式打开。
             DeclareLaunchArgument("web_execute_enabled", default_value="false"),
             # record_path：示教记录 JSONL 输出路径；相对路径按各节点自己的工作目录解析。
             DeclareLaunchArgument("record_path", default_value="teleop_records/teach_record.jsonl"),

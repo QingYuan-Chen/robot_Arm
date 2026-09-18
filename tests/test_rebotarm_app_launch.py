@@ -105,23 +105,17 @@ def test_operator_configs_are_split_by_consumer() -> None:
 
 def test_launches_reference_consumer_specific_operator_configs() -> None:
     keyboard = _read("src/rebotarm_bringup/launch/teleop_keyboard.launch.py")
-    teach_record = _read("src/rebotarm_bringup/launch/teach_record.launch.py")
-    teach_replay = _read("src/rebotarm_bringup/launch/teach_replay.launch.py")
     system = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
     app = _read("src/rebotarm_bringup/launch/rebotarm_app.launch.py")
 
     assert "keyboard_control.yaml" in keyboard
     assert "operator_common.yaml" in keyboard
-    assert "teach_control.yaml" in teach_record
-    assert "operator_common.yaml" in teach_record
-    assert "teach_control.yaml" in teach_replay
-    assert "operator_common.yaml" in teach_replay
     assert "keyboard_control.yaml" in system
     for text in (system, app):
         assert "web_teleop.yaml" in text
         assert "teach_control.yaml" in text
         assert "operator_common.yaml" in text
-    for text in (keyboard, teach_record, teach_replay, system, app):
+    for text in (keyboard, system, app):
         assert "teleop_control.yaml" not in text
 
 def test_common_commands_document_recommends_one_entrypoint() -> None:
