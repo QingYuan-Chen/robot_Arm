@@ -696,3 +696,89 @@
 - 2026-09-18T21:38:20+08:00 | actor=codex | event=verified | note=Dashboard按use_hardware裁剪控制：仿真隐藏并后端阻断Enable/Disable/Safe Home，网页键盘与仿真Execute保留 | verification=98 focused tests passed; dashboard and bringup build passed
 - 2026-09-18T21:54:36+08:00 | actor=codex | event=start | note=删除未采用的mujoco_offline_perception入口并同步文档 | verification=-
 - 2026-09-18T21:57:39+08:00 | actor=codex | event=verified | note=清理删除入口对应的构建缓存后，bringup重新编译成功 | verification=105 focused tests passed; rebotarm_bringup build passed; launch compileall passed
+- 2026-09-18T22:14:56+08:00 | actor=codex | event=start | note=删除 real_perception_sim_execution.launch.py 并同步文档测试后重新编译 | verification=-
+- 2026-09-18T22:24:23+08:00 | actor=codex | event=verified | note=删除混合真实感知+MuJoCo顶层入口，文档测试同步，rebotarm_bringup重编译成功 | verification=colcon build --packages-select rebotarm_bringup --symlink-install; pytest layering 18 passed; visual wiring 71 passed; full 683 passed, 7 skipped, 1 pre-existing failure
+- 2026-09-18T22:52:49+08:00 | actor=codex | event=start | note=修复 visual_grasp_system 无硬件 plan-only 启动时 MoveIt 收不到关节状态的问题 | verification=-
+- 2026-09-18T22:58:21+08:00 | actor=codex | event=verified | note=修复 visual_grasp_system 无硬件 plan-only 关节状态与 visual_ready 启动死锁；完成构建、冒烟和回归验证 | verification=82 focused passed; layering 18 passed; full 684 passed 7 skipped 1 known MuJoCo interpreter failure; rebotarm_bringup build passed; MoveIt smoke reached You can start planning now
+- 2026-09-18T23:02:26+08:00 | actor=codex | event=start | note=诊断 visual_grasp_system RViz 目标位置偏差和 execute 服务无新鲜计划 | verification=-
+- 2026-09-18T23:08:44+08:00 | actor=codex | event=verified | note=修复视觉抓取纯规划计划时效与误导性目标标记，并澄清无硬件眼在手坐标限制 | verification=rebotarm_bringup build passed; focused 83 passed; layering 18 passed; full 685 passed 7 skipped 1 known MuJoCo interpreter failure; compileall and diff check passed; plan_only runtime max_plan_age_sec=3.0; MoveIt smoke ready
+- 2026-09-18T23:16:34+08:00 | actor=codex | event=start | note=诊断视觉抓取 plan_only 成功但 RViz 无规划动画 | verification=-
+- 2026-09-18T23:17:21+08:00 | actor=codex | event=verified | note=确认视觉抓取 plan_only 仅计算并回传轨迹，当前未发布 RViz DisplayTrajectory，且不更新仿真关节状态 | verification=source inspection only; no code change or hardware access
+- 2026-09-18T23:20:51+08:00 | actor=codex | event=start | note=实现视觉抓取真正的纯规划轨迹预览与连续阶段规划 | verification=-
+- 2026-09-18T23:30:27+08:00 | actor=codex | event=verified | note=完成视觉抓取连续纯规划RViz轨迹预览并保持控制器零下发 | verification=4 packages rebuilt; 96 focused passed; layering 18 passed; full 690 passed 7 skipped 1 known MuJoCo interpreter failure; runtime two-stage plan 9+5 points, display messages published, joint state unchanged; RViz plugin smoke passed
+- 2026-09-18T23:53:17+08:00 | actor=codex | event=verified | note=修复纯规划预览因视觉管线耗时超过3秒而拒绝有效计划 | verification=latest executor logs showed age 3.02-4.69s at arrival; plan_only 10s and execute 1s; bringup+vision build; focused 79 passed; layering 18 passed; full 691 passed 7 skipped 1 pre-existing MuJoCo interpreter failure; compileall and diff check passed
+- 2026-09-19T00:36:45+08:00 | actor=codex | event=start | note=诊断视觉纯规划预览动画中途卡顿 | verification=-
+- 2026-09-19T00:50:32+08:00 | actor=codex | event=start | note=将视觉纯规划预览改为完整轨迹连续播放 | verification=-
+- 2026-09-19T00:56:08+08:00 | actor=codex | event=verified | note=视觉纯规划预览改为全阶段成功后单条DisplayTrajectory连续播放；默认阶段停顿0秒，RViz显示间隔0.03秒；未启动或移动真机 | verification=4 packages built; focused 82 passed; layering 18 passed; full 694 passed, 7 skipped, 1 known mujoco interpreter failure; compileall and diff check passed
+- 2026-09-19T01:52:04+08:00 | actor=codex | event=start | note=核对并提供真机测试指令（只读核验，不启动硬件） | verification=-
+- 2026-09-19T02:16:40+08:00 | actor=codex | event=start | note=删除 P0 Gate B/C 专用验收工具及孤立判据、入口和文档，保留历史证据 | verification=-
+- 2026-09-19T02:18:04+08:00 | actor=codex | event=complete | note=已移除 P0 Gate B/C 工具、孤立判据、专属测试、入口与现行文档调用；历史报告保留，未操作硬件 | verification=controller build passed; layering 18 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall and diff check passed; ROS executable removed
+- 2026-09-19T13:58:29+08:00 | actor=codex | event=start | note=收敛真机 MoveIt 启动分支：删除 rviz_ee_drag_real，将示教录制移入 rebotarm_app，并同步文档测试 | verification=-
+- 2026-09-19T14:09:01+08:00 | actor=codex | event=complete | note=完成真机 MoveIt 分支收敛：删除 rviz_ee_drag_real，moveit_hardware 仅负责硬件+MoveIt，rebotarm_app 接管示教录制；文档测试同步 | verification=bringup build passed; focused 100 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall and diff check passed; no hardware runtime
+- 2026-09-19T14:09:14+08:00 | actor=root | event=start | note=分析 rebotarm_calibration 包代码质量、问题与改进方向 | verification=-
+- 2026-09-19T14:12:42+08:00 | actor=root | event=checkpoint | note=rebotarm_calibration 只读审查完成：确认 ArUco 无帧等待无总超时、TF 时间/帧校验缺失、手眼单轴退化可误通过；未修改包代码或进行硬件操作 | verification=标定相关23 passed；分层18 passed；全量686 passed,7 skipped,1 failed（MuJoCo默认解释器）；compileall通过
+- 2026-09-19T14:18:48+08:00 | actor=codex | event=start | note=统一 moveit_hardware 与 interactive_system 的 MoveIt 实现，保留真机薄包装入口 | verification=-
+- 2026-09-19T14:24:42+08:00 | actor=codex | event=complete | note=完成 moveit_hardware 真机薄包装重构，MoveIt/状态源/RViz 共享实现统一归 interactive_system | verification=bringup build and show-args passed; focused 102 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall/diff check passed; no hardware runtime
+- 2026-09-19T14:30:04+08:00 | actor=root | event=start | note=实现 rebotarm_calibration 的采集超时、时间同步、ArUco质量门、手眼退化检查与测试 | verification=-
+- 2026-09-19T14:34:57+08:00 | actor=root | event=verified | note=完成 calibration 采集与质量防护、单轴退化门及回归测试；未触碰硬件 | verification=标定34 passed；分层18 passed；全量697 passed,7 skipped,1既有MuJoCo解释器失败；compileall/diff/build通过
+- 2026-09-19T14:43:36+08:00 | actor=Codex | event=start | note=Provide next real-robot test sequence after teach workflow passed | verification=-
+- 2026-09-19T14:45:05+08:00 | actor=Codex | event=verified | note=User confirmed Dashboard teach workflow passed; next recommended validation is visual_grasp_system real-camera plan_only with hardware disabled | verification=operator-reported teach workflow pass
+- 2026-09-19T14:46:45+08:00 | actor=Codex | event=start | note=Diagnose missing /rebotarm/arm_status during visual plan-only test | verification=-
+- 2026-09-19T14:48:44+08:00 | actor=root | event=verified | note=复核并修正 TF 按时间查询遗漏 lookup_timeout_sec；现有 calibration 防护测试仍全通过 | verification=标定34 passed；compileall/diff通过
+- 2026-09-19T14:59:13+08:00 | actor=root | event=start | note=规划并启动网页手眼标定：审查dashboard现状、定义校准接口与分阶段实现方案 | verification=-
+- 2026-09-19T15:00:49+08:00 | actor=root | event=checkpoint | note=完成网页标定 Phase 0：技术路线文档与纯会话状态机；未接入ROS/网页/硬件 | verification=calibration session及相关32 passed；calibration build、compileall、diff通过
+- 2026-09-19T15:09:23+08:00 | actor=root | event=start | note=继续网页标定目标：实现独立留出验证、多算法报告与原子持久化离线入口 | verification=-
+- 2026-09-19T15:09:57+08:00 | actor=Codex | event=start | note=Inspect whether ROS_DOMAIN_ID is required and remove unnecessary visual-test domain override | verification=-
+- 2026-09-19T15:11:17+08:00 | actor=Codex | event=complete | note=Removed unnecessary fixed ROS_DOMAIN_ID values from visual-grasp daily commands | verification=layering 18 passed; full 699 passed 7 skipped 1 pre-existing MuJoCo interpreter failure; compileall and diff check passed
+- 2026-09-19T15:11:53+08:00 | actor=root | event=checkpoint | note=网页标定离线求解和原子报告已实现；继续ROS适配器与Dashboard接入，目标未完成 | verification=手眼13 passed；layering18；全量703 passed/7 skipped/1既有失败；build/help/compileall/diff通过
+- 2026-09-19T15:14:37+08:00 | actor=root | event=checkpoint | note=完成持久会话和CalibrationCommand ROS接口定义，继续只读采集节点与Dashboard接入 | verification=SessionStore2通过；全量705 passed/7 skipped/1既有失败；分层18；两包build与接口导入/compileall/diff通过
+- 2026-09-19T15:14:56+08:00 | actor=root | event=start | note=实现手眼标定ROS只读同步采集节点 | verification=-
+- 2026-09-19T15:17:53+08:00 | actor=root | event=checkpoint | note=完成只读手眼采集ROS节点与无相机超时验证；继续正向ROS验证与Dashboard页面 | verification=全量706 passed/7 skipped/1既有失败；分层18；build/ROS节点构造/compileall/diff通过
+- 2026-09-19T15:21:21+08:00 | actor=root | event=checkpoint | note=Dashboard标定页面与ROS客户端基础接线完成，继续端到端验证和重力补偿流程 | verification=dashboard build、分层18、客户端测试通过；旧资源断言已更新；compileall通过
+- 2026-09-19T15:25:02+08:00 | actor=root | event=checkpoint | note=正向ROS标定采集验证通过并加入默认关闭工作台开关，继续网页重力补偿与完整验收 | verification=全量708 passed/7 skipped/1既有失败；分层18；bringup build/show-args通过
+- 2026-09-19T15:27:34+08:00 | actor=root | event=checkpoint | note=完成标定覆盖反馈与bootstrap诊断，继续重力补偿网页控制和完整验收 | verification=相关8通过；全量710 passed/7 skipped/1既有失败；分层18；两包build/compileall/diff通过
+- 2026-09-19T15:30:19+08:00 | actor=root | event=checkpoint | note=显式网页重力补偿入口及初步互斥已实现，继续端到端与浏览器验证 | verification=全量712 passed/7 skipped/1既有失败；layering18；dashboard build/compileall通过
+- 2026-09-19T15:32:20+08:00 | actor=root | event=checkpoint | note=修复标定HTTP成功码与慢请求阻塞停止问题，继续完整浏览器验收 | verification=HTTP/并发4通过；全量715 passed/7 skipped/1既有失败；build/layering18/compileall/diff通过
+- 2026-09-19T15:34:25+08:00 | actor=root | event=checkpoint | note=修复标定页面等待采样时禁用退出重力补偿按钮，脚本并发验证通过 | verification=页面脚本1通过；全量716 passed/7 skipped/1既有失败；分层18/build/compileall/diff通过
+- 2026-09-19T15:37:08+08:00 | actor=root | event=checkpoint | note=实际浏览器合成数据创建采样求解接受恢复通过；继续ROS全链和剩余状态恢复验证 | verification=浏览器可见5训练5验证accepted revision12，deployed=false；无硬件连接
+- 2026-09-19T15:38:34+08:00 | actor=Codex | event=start | note=Recheck ROS domain mismatch after removing fixed documentation values | verification=-
+- 2026-09-19T15:39:14+08:00 | actor=root | event=checkpoint | note=HTTP到真实ROS合成采集链通过；继续重力模式未决请求恢复和完整审计 | verification=HTTP/ROS正向及负向通过；dashboard build与layering18通过
+- 2026-09-19T15:39:50+08:00 | actor=Codex | event=checkpoint | note=Diagnosed repeated arm_status query warning on default ROS domain | verification=Current launch and query are domain 0; publisher exists. Exact echo succeeds but returns latched stale arm feedback and joint_states is not publishing; keep disabled and restart before further plan-only checks.
+- 2026-09-19T15:41:11+08:00 | actor=root | event=checkpoint | note=完成重力补偿超时future跟踪与新鲜反馈恢复门，继续完整需求审计 | verification=全量717 passed/7 skipped/1既有失败；分层18；dashboard build/compileall/diff通过
+- 2026-09-19T15:42:46+08:00 | actor=Codex | event=start | note=Analyze pasted visual_grasp_system launch log after restart | verification=-
+- 2026-09-19T15:43:31+08:00 | actor=root | event=checkpoint | note=实际Dashboard节点HTTP与ROS合成采集联调通过，新增完整验收缺口清单 | verification=test_handeye_capture_runtime 2 passed；实际节点软件模式拒绝gravity；未连接硬件
+- 2026-09-19T15:45:41+08:00 | actor=root | event=checkpoint | note=完成标定算法比较表和采样有效配置/代码指纹追溯 | verification=全量718 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:47:52+08:00 | actor=root | event=checkpoint | note=完成网页ROS相机快照及图像不进入SSE的验证，继续最终流程审计 | verification=全量719 passed/7 skipped/1既有失败；三包build/分层18/compileall/diff通过
+- 2026-09-19T15:50:47+08:00 | actor=root | event=checkpoint | note=实际Dashboard与控制器替身重力补偿完整操作通过，修正历史锁存状态新鲜度 | verification=控制相关4通过；全量720 passed/7 skipped/1既有失败；build/layering18/compileall/diff通过
+- 2026-09-19T15:53:18+08:00 | actor=root | event=checkpoint | note=完成独立机器人TF网页检查和下载数据包内容验证 | verification=相关3通过；全量720 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:56:04+08:00 | actor=root | event=checkpoint | note=TCP枢轴网页分支实现并通过离线持久化及独立验证测试，继续ROS和页面联调 | verification=相关6通过；全量721 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:57:32+08:00 | actor=root | event=checkpoint | note=TCP无相机Dashboard到ROS采样通过，修正网页恢复模式参数回显 | verification=相关3通过；Dashboard重建成功；全量检查已运行
+- 2026-09-19T16:01:15+08:00 | actor=root | event=checkpoint | note=完成标定超时未决请求跟踪及多页面SSE会话隔离 | verification=相关8通过；全量722 passed/7 skipped/1既有失败；dashboard build/分层18/compileall/diff通过
+- 2026-09-19T16:05:24+08:00 | actor=root | event=checkpoint | note=canonical MuJoCo模型多姿态与手眼求解验证通过，继续页面及组合验收 | verification=MuJoCo1通过；全量723 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:07:36+08:00 | actor=root | event=checkpoint | note=修复稳定采样窗口跨断流和质量失败累积问题 | verification=相关4通过；全量725 passed/7 skipped/1既有失败；calibration build/分层18/compileall/diff通过
+- 2026-09-19T16:10:25+08:00 | actor=root | event=checkpoint | note=最新浏览器实际ROS快照TF手眼TCP采样恢复通过；下载事件尚未确认 | verification=浏览器看到快照和TF结果、手眼/TCP各revision1；无真机；保留下载验收缺口
+- 2026-09-19T16:12:32+08:00 | actor=root | event=checkpoint | note=新增服务器附件导出并完成实际HTTP到ROS数据一致性验证 | verification=相关4通过；全量725 passed/7 skipped/1既有失败；dashboard build/分层18/compileall/diff通过
+- 2026-09-19T16:14:42+08:00 | actor=root | event=checkpoint | note=TCP多姿态采样到求解接受恢复导出实际HTTP/ROS全链通过 | verification=完整ROS测试2通过；全量725 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:17:26+08:00 | actor=root | event=checkpoint | note=手眼16姿态图像经实际Dashboard和ROS采样求解接受全链通过 | verification=全链2通过；全量725 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:20:38+08:00 | actor=root | event=checkpoint | note=浏览器服务器附件下载成功，SSE多连接断开重连验收通过 | verification=HTTP/SSE2通过；浏览器download事件确认；全量726 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:23:16+08:00 | actor=root | event=checkpoint | note=补齐网页标定使用与恢复文档，核对安装入口及架构职责 | verification=四个已安装标定入口、CLI help、launch参数解析、layering18/diff通过
+- 2026-09-19T16:24:03+08:00 | actor=root | event=start | note=网页标定收口：验证并修复会话采集条件变化混入问题 | verification=-
+- 2026-09-19T16:25:43+08:00 | actor=root | event=checkpoint | note=修复会话混入不同相机内参或采集配置问题，保持原始数据不变 | verification=相关7通过；全量729 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:28:29+08:00 | actor=root | event=checkpoint | note=统一正式标定会话状态所有权，移除未接线早期原型并增强接受门回归 | verification=store7通过；全量729 passed/7 skipped/1既有失败；build/安装核对/分层18/compileall/diff通过
+- 2026-09-19T16:31:35+08:00 | actor=root | event=checkpoint | note=完善手眼与TCP完整证据哈希和求解软件来源 | verification=相关7通过；全量730 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:32:08+08:00 | actor=root | event=start | note=补齐网页手眼报告离群样本诊断，不自动剔除样本 | verification=-
+- 2026-09-19T16:36:28+08:00 | actor=root | event=checkpoint | note=完成最新算法结果表与离群失败报告的实际浏览器复查及回归 | verification=浏览器失败/离群展示通过；全量731 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:41:23+08:00 | actor=root | event=checkpoint | note=MuJoCo末端模型到投影图像/PnP/手眼求解组合验证通过 | verification=MuJoCo2通过；全量732 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:45:28+08:00 | actor=root | event=checkpoint | note=补齐网页会话级相机话题选择并验证切换不混缓存 | verification=相关3通过；全量732 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T16:48:05+08:00 | actor=root | event=checkpoint | note=补齐样本序号与持久化UTC操作审计并验证重试不重复记录 | verification=相关10通过；全量733 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:51:33+08:00 | actor=root | event=checkpoint | note=统一标定响应会话身份与失败状态回读，完成接口契约验证 | verification=相关8通过；全量734 passed/7 skipped/1既有失败；三包build/分层18/compileall/diff通过
+- 2026-09-19T16:54:22+08:00 | actor=root | event=verified | note=网页手眼标定软件目标完成：实现、真实Dashboard/ROS合成流程、浏览器及MuJoCo数据求解导出恢复均已验收；硬件未操作 | verification=最终MuJoCo浏览器/ROS 16+8 accepted revision26 deployed=false；最近全量734 passed/7 skipped/1既有失败；分层18、构建、compileall、diff通过
+- 2026-09-19T22:23:05+08:00 | actor=Codex | event=start | note=只读确认当前项目是否包含 MuJoCo | verification=-
+- 2026-09-20T10:55:17+08:00 | actor=Codex | event=verified | note=Diagnosed custom ROS message type invalid in operator terminal | verification=Workspace installation and Python imports for ArmStatus and JointMotorState pass; operator symptom is unsourced overlay, while sensor_msgs JointState still works from system ROS. No visual launch/controller currently running.
+- 2026-09-20T11:08:44+08:00 | actor=Codex | event=start | note=Inspect MotionPlanning Plan Execute exposure in visual_grasp_system plan_only RViz | verification=-
+- 2026-09-20T11:12:58+08:00 | actor=Codex | event=verified | note=Separated visual plan-only RViz from MotionPlanning Plan/Execute UI | verification=rebotarm_bringup build passed; layering 18 passed; launch --show-args passed; compileall and git diff --check passed
+- 2026-09-20T11:27:25+08:00 | actor=Codex | event=start | note=Compare visual_grasp_perception_preview and visual_grasp_system launch entrypoints | verification=-
+- 2026-09-20T11:31:46+08:00 | actor=Codex | event=start | note=Assess consolidating perception preview into visual_grasp_system and migrating Open3D viewer | verification=-
+- 2026-09-20T11:34:02+08:00 | actor=Codex | event=start | note=Merge perception preview capabilities into visual_grasp_system and delete duplicate launch | verification=-
+- 2026-09-20T11:42:15+08:00 | actor=Codex | event=complete | note=Merged Open3D and raw candidate preview into visual_grasp_system; deleted duplicate perception preview launch | verification=rebotarm_bringup build passed; focused 97 passed; full 734 passed 7 skipped with 1 pre-existing MuJoCo interpreter failure; compileall, show-args, diff-check passed
+- 2026-09-20T11:45:26+08:00 | actor=Codex | event=start | note=Create consolidated non-visual launch command guide and push current progress to GitHub | verification=-

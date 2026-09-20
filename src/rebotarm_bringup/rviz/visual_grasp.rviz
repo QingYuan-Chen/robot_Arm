@@ -1,7 +1,6 @@
 # 视觉抓取轻量可视化配置（RViz2 保存的 YAML 配置）。
 #
-# 用途：与视觉抓取启动文件配套，只显示“机器人模型 + TF + 抓取候选标记”，刻意不加载
-# 运动规划面板与相机/选择工具，以降低启动开销并把注意力集中在抓取候选位上。
+# 用途：显示机器人模型、视觉候选与纯规划轨迹幻影；不加载规划控制面板。
 #
 # 使用前提：必须已有节点发布 /robot_description 与 /grasp/visual_markers；固定坐标系
 # 为 base_link，因此 TF 链必须从 base_link 出发。本配置只读不写，不产生任何控制命令。
@@ -12,6 +11,21 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
+    # 仅播放 /display_planned_path 的虚拟轨迹；Trajectory 插件没有 MotionPlanning
+    # 面板的 Plan/Execute 操作，不会提供绕过视觉执行器的真机执行入口。
+    - Class: moveit_rviz_plugin/Trajectory
+      Enabled: true
+      Name: Plan-only Trajectory Preview
+      Trajectory Topic: /display_planned_path
+      Interrupt Display: false
+      Loop Animation: false
+      Robot Alpha: 0.55
+      Robot Color: 150; 50; 150
+      Show Robot Visual: true
+      Show Robot Collision: false
+      # 约 33 Hz 的状态插值显示；只影响动画，不改变规划轨迹。
+      State Display Time: 0.03 s
+      Use Sim Time: false
     # 地面网格：提供尺度参照。Reference Frame 必须与全局 Fixed Frame 一致。
     - Class: rviz_default_plugins/Grid
       Enabled: true

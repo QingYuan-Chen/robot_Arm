@@ -13,8 +13,8 @@
     便于上层把它直接转成状态 payload。
 
 安全语义（读代码时最容易忽略的几点）
-    1. ``start_state.is_diff = True``：规划起点取"当前状态"而不是缓存状态，避免拿陈旧位置
-       规划出会撞的路径；
+    1. 默认 ``start_state.is_diff = True``，规划起点取当前状态；纯规划预览可显式提供上一段
+       轨迹终点作为完整虚拟起点，从而连续规划，但该状态不得用于真实执行；
     2. 速度/加速度缩放因子被夹到 [0.01, 1.0]，关节容差与位置容差都有下限，防止调用方传 0
        导致按满速规划或得到零容差的不可解约束；
     3. 只有 ``error_code == 1``（成功）且关节轨迹含轨迹点才算成功；服务异常、等待超时、
@@ -219,12 +219,14 @@ class MoveItMotionPlanner:
         *,
         velocity_scaling: float = 0.1,
         acceleration_scaling: float = 0.1,
+        start_joint_state=None,
     ) -> MotionPlanResult:
         """按给定的末端位姿目标规划。
 
         ``pose`` 是带参考坐标系的位姿消息（本仓库用 base_link 系）：其 ``header`` 会原样
         写进位置/姿态约束，因此调用方必须保证 ``frame_id`` 是规划器认识的坐标系。
         ``velocity_scaling`` / ``acceleration_scaling`` 夹到 [0.01, 1.0]，默认 0.1。
+        ``start_joint_state`` 仅供调用层构造连续纯规划预览；为空时仍使用当前状态。
         """
         if not self._client.wait_for_service(timeout_sec=0.5):
             return MotionPlanResult(
@@ -243,7 +245,12 @@ class MoveItMotionPlanner:
         # 与关节目标入口一致：缩放夹到 [0.01, 1.0]，避免 0 或超限值直达规划器。
         motion_request.max_velocity_scaling_factor = min(max(float(velocity_scaling), 0.01), 1.0)
         motion_request.max_acceleration_scaling_factor = min(max(float(acceleration_scaling), 0.01), 1.0)
-        motion_request.start_state.is_diff = True
+        if start_joint_state is None or not start_joint_state.name:
+            motion_request.start_state.is_diff = True
+        else:
+            # 指定完整的虚拟臂状态；规划服务不得再将其与当前假关节状态混用。
+            motion_request.start_state.is_diff = False
+            motion_request.start_state.joint_state = start_joint_state
         motion_request.goal_constraints = [self._build_pose_constraints(pose)]
 
         return self._call_plan_service(request)

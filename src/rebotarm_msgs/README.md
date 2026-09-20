@@ -19,6 +19,7 @@ rebotarm_msgs/
 │   └── TaskStatus.msg                 # 任务级状态
 ├── srv/
 │   ├── ExecutePose.srv                # 规划并可选执行末端位姿
+│   ├── PublishTrajectoryPreview.srv   # 一次发布多段 RViz 纯规划预览
 │   ├── MoveToPoseIK.srv               # 位姿到关节目标/IK 请求
 │   ├── PlanGraspForLabel.srv          # 按标签规划抓取
 │   ├── SetGripper.srv                 # 设置夹爪开口
@@ -42,10 +43,13 @@ rebotarm_msgs/
 | `Detection2D*`、`GraspCandidate*`、`GraspPlan` | vision、仿真/可视化 | 传递检测、候选和经过筛选的抓取计划 |
 | `ExecutionState`、`TaskStatus` | dashboard、voice、vision | 汇报执行阶段和任务占用 |
 | `JointMotorCmd` | controller 低层透传 | 明确表示绕过规划的底层命令，必须满足控制器安全门 |
-| `ExecutePose`、`MoveToPoseIK`、抓取/夹爪服务 | motion、vision、controller | 规划、IK 和夹爪服务边界 |
+| `ExecutePose`、`PublishTrajectoryPreview`、`MoveToPoseIK`、抓取/夹爪服务 | motion、vision、controller | 规划、连续 RViz 预览、IK 和夹爪服务边界 |
 | 三个 action | motion、controller、voice/simulation | 表达需要反馈、取消和结果的长时任务 |
 
 ## 构建关系
 
 `CMakeLists.txt` 用 `rosidl_generate_interfaces()` 生成 Python/C++ 绑定，依赖字段直接引用的 `builtin_interfaces`、`geometry_msgs`、`std_msgs` 和 `trajectory_msgs`。修改接口时要同步检查所有服务器、客户端、launch 和测试；构建通过不代表真实硬件执行链已验证。
 
+`CalibrationCommand.srv`：标定会话命令及状态快照（版本化 JSON），由
+rebotarm_calibration 实现、Dashboard 调用。包含请求幂等 ID 和会话 revision。
+此接口不承载运动、使能或重力补偿命令。

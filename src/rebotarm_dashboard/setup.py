@@ -22,7 +22,7 @@ setup(
     packages=find_packages(exclude=["test"]),
     # 非 .py 的前端资源不会被 find_packages 收集，需在此显式声明随包安装
     package_data={
-        "rebotarm_dashboard.status_panel_assets": ["index.html"],
+        "rebotarm_dashboard.status_panel_assets": ["index.html", "calibration.html"],
     },
     data_files=[
         # ament 资源索引标记：文件名必须等于包名，否则 ros2 pkg 系列工具找不到本包

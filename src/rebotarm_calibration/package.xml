@@ -18,6 +18,7 @@
   <exec_depend>cv_bridge</exec_depend>
   <!-- Python 客户端库：节点、参数声明与 TF 监听 -->
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>rebotarm_msgs</exec_depend>
   <!-- 消息类型：Image 与 CameraInfo（标定取图与相机内参） -->
   <exec_depend>sensor_msgs</exec_depend>
   <!-- TF 缓冲与查询：基座到末端连杆、基座到相机的外参查询 -->

@@ -26,6 +26,7 @@ POST 路由统一交给同包 status_panel_api 的路由表分发，未登记的
 from __future__ import annotations
 
 import json
+import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -92,6 +93,32 @@ def create_status_panel_server(
             route = url.path
             if route == "/":
                 _write_response(self, 200, html_page.encode("utf-8"), "text/html; charset=utf-8")
+                return
+            if route == "/calibration":
+                from importlib.resources import files
+                page = files('rebotarm_dashboard.status_panel_assets').joinpath('calibration.html').read_bytes()
+                _write_response(self, 200, page, "text/html; charset=utf-8")
+                return
+            if route == "/api/calibration/export":
+                sid = parse_qs(url.query).get('session_id', [''])[0]
+                if not re.fullmatch(r'[0-9a-f]{32}', sid):
+                    _write_response(self, 400, b'{"message":"invalid session_id"}', 'application/json')
+                    return
+                try:
+                    result = node._handle_calibration_command({'command': 'status', 'session_id': sid})
+                    if not result.get('success'):
+                        _write_response(self, 503, _json_bytes(result), 'application/json')
+                        return
+                    body = json.dumps(result['session'], ensure_ascii=False, indent=2, allow_nan=False).encode('utf-8')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.send_header('Content-Disposition', f'attachment; filename="{sid}.json"')
+                    self.send_header('Cache-Control', 'no-store')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                except Exception as exc:
+                    _write_response(self, 503, _json_bytes({'message': str(exc)}), 'application/json')
                 return
             if route == "/api/status":
                 _write_response(self, 200, _json_bytes(store.snapshot_dict()), "application/json")
@@ -180,7 +207,8 @@ def create_status_panel_server(
 
                 result = dispatch_post_request(node, self.path, read_payload)
                 # 业务层用 accepted 表达是否受理：受理回 200，否则回 400 供前端提示原因。
-                status = 200 if result.get("accepted") else 400
+                success = result.get("success") if self.path == "/api/calibration/command" else result.get("accepted")
+                status = 200 if success else 400
             except Exception as exc:
                 # 请求体非法、处理方法抛异常等都归为"无效请求"，不向客户端泄露内部堆栈。
                 result = {"accepted": False, "message": f"invalid web execute request: {exc}"}

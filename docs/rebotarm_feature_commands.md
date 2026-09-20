@@ -1,5 +1,7 @@
 # reBotArm 功能开启指令
 
+> 当前所有非视觉抓取入口的统一速查表见 [`rebotarm_launch_commands.md`](rebotarm_launch_commands.md)。本文保留 MoveIt 与网页工作台的详细说明。
+
 当前视觉部署只支持 Ubuntu 原生 ROS 链；不要使用历史 Windows/HTTP/MJPEG 命令。
 
 这个文档只放仍然保留的独立功能启动指令和测试顺序。
@@ -8,15 +10,16 @@
 
 ## RViz MoveIt 末端拖动
 
-旧的 `interactive_basic.launch.py` 已移除。RViz 末端拖动统一使用下面的
-`rviz_ee_drag_real.launch.py` 或 `rviz_ee_drag_sim.launch.py`。
+旧的 `interactive_basic.launch.py` 和重复的 `rviz_ee_drag_real.launch.py` 已移除。
+真机 RViz 末端拖动统一使用 `moveit_hardware.launch.py use_rviz:=true`，仿真使用
+`rviz_ee_drag_sim.launch.py`。
 
 执行前确认已安装 `ros-jazzy-moveit-simple-controller-manager`。
 若 Plan 成功而 Execute 报 `controller_manager_ does not exist` 或插件类不存在，
 参见[执行插件检查与仿真重启步骤](local_setup_zh.md#moveit-执行插件能-plan-但不能-execute)。
 KDL 根惯量警告与这类执行插件缺失不是同一个问题。
 
-这两个入口保留，但路线是 MoveIt 原生 MotionPlanning：
+两个后端都使用 MoveIt 原生 MotionPlanning：
 
 ```text
 RViz MotionPlanning
@@ -35,13 +38,15 @@ cd ~/robotarm_ros2
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
-ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py
+ros2 launch rebotarm_bringup moveit_hardware.launch.py \
+  channel:=/dev/ttyACM0 use_rviz:=true
 ```
 
 如果自动串口不对，可以手动指定：
 
 ```bash
-ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py channel:=/dev/ttyACM1
+ros2 launch rebotarm_bringup moveit_hardware.launch.py \
+  channel:=/dev/ttyACM1 use_rviz:=true
 ```
 
 仿真 / 不连接真机：
@@ -127,7 +132,6 @@ http://127.0.0.1:8088/
 网页关节 Preview / Execute / Stop
 网页 Safe Home / Enable / Disable
 网页夹爪控制和 joint7 状态显示
-键盘遥操作
 示教录制、轨迹检查、优化回放
 MoveIt 起点对齐和碰撞预检查
 RViz 轻量机械臂实时状态显示
@@ -162,8 +166,8 @@ ros2 service list | grep -E "plan_kinematic_path|check_state_validity"
 ## MoveIt 实机操作与停机
 
 `bringup.launch.py` 仍保留为基础控制器/状态组合入口，不提供 MoveIt 末端拖动。
-旧的 `rviz.launch.py` 已移除；需要 MoveIt Plan/Execute 时使用
-`rviz_ee_drag_real.launch.py`，仿真使用 `rviz_ee_drag_sim.launch.py`；需要网页、示教和完整工作台时使用
+旧的 `rviz.launch.py` 和 `rviz_ee_drag_real.launch.py` 已移除；需要真机 MoveIt Plan/Execute 时使用
+`moveit_hardware.launch.py`，仿真使用 `rviz_ee_drag_sim.launch.py`；需要网页、示教和完整工作台时使用
 `rebotarm_app.launch.py`。不要同时启动这些入口。
 
 以下内容接替已清理的根目录 MoveIt 使用说明。使用原生 MotionPlanning，

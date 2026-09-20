@@ -260,7 +260,7 @@ P6-D final cleanup随后将仓库内`.pytest_cache`及20个project `__pycache__`
 
 ## 2026-08-13 current-source correction / 当前源码更正
 
-本节以当前 source 为准，并保留上文 `-0.105 m` 相关 P5/P6 evidence 为当时的历史记录。当前真机视觉的 `tcp_offset_xyz` 与 active local MuJoCo `ee_site` 均为 `[-0.04,0,0] m`；`real_perception_sim_execution.launch.py` 用 `[0,0,0]` 避免 local `ee_site` 重复施加。`-0.105 m` 仅存在于固定 third-party upstream MuJoCo snapshot，不再是 active runtime/model 值；当前审计没有新增 physical TCP measurement / 物理 TCP 测量证据。
+本节以当前 source 为准，并保留上文 `-0.105 m` 相关 P5/P6 evidence 为当时的历史记录。当前真机视觉的 `tcp_offset_xyz` 与 active local MuJoCo `ee_site` 均为 `[-0.04,0,0] m`。历史上 `real_perception_sim_execution.launch.py` 曾传 `[0,0,0]` 以避免 local `ee_site` 重复施加，该顶层组合入口现已删除。`-0.105 m` 仅存在于固定 third-party upstream MuJoCo snapshot，不再是 active runtime/model 值；当前审计没有新增 physical TCP measurement / 物理 TCP 测量证据。
 
 当前 controller source 已无 persistent zero record / 持久零位、startup rehome / 启动回零和 `NaN unknown / 未知` 分支；磁盘遗留的 `~/.local/state/rebotarm/gripper_zero.json` 不被读取，本轮不删除。普通非零夹爪位置目标仍是 upstream continuous position hold / 上游持续位置保持，而非历史中已回退的 neutral/idle 修复。
 

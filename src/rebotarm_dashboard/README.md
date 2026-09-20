@@ -55,3 +55,9 @@ Dashboard HTTP 只绑定本机 UI/API，不是视觉传输链路；当前视觉�
 - 不在这里生成 `JointTrajectory`、做 MoveIt 规划或实现示教回放质量策略。
 - 不从这里直接 import 电机 SDK。
 - Web 预览和真实执行由请求中的执行模式及下游安全门区分；默认 dry-run/预览不能当作真机执行证据。
+
+## 标定页面
+
+同端口 `/calibration` 提供手眼/TCP向导，HTTP请求通过CalibrationCommand调用
+独立标定节点。默认不自动启动相机/标定/控制器；不会自动应用外参。
+操作与证据见 [网页标定说明](../../docs/calibration_web_usage.md)。

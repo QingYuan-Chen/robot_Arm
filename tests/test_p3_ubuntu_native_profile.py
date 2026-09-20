@@ -46,13 +46,15 @@ def test_retired_http_vision_paths_are_not_shipped() -> None:
         "src/rebotarm_vision/rebotarm_vision/vision_node.py",
         "src/rebotarm_vision/rebotarm_vision/graspnet_baseline_node.py",
         "src/rebotarm_bringup/launch/visual_grasp_system.launch.py",
-        "src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py",
     ):
         source = _read(path)
         assert "network_candidates_url" not in source
         assert "network_detection_client" not in source
         assert "network_mjpeg" not in source
         assert "8081" not in source
+    assert not (
+        ROOT / "src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py"
+    ).exists()
     node = _read("src/rebotarm_vision/rebotarm_vision/graspnet_baseline_node.py")
     assert "self.backend = self._create_inprocess_backend()" in node
     for callback in ("self._on_color", "self._on_depth", "self._on_camera_info", "self._on_detections"):

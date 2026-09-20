@@ -1,11 +1,13 @@
 # reBotArm 遥操作使用文档
 
+> 当前所有非视觉抓取入口的统一速查表见 [`rebotarm_launch_commands.md`](rebotarm_launch_commands.md)。本文保留 Dashboard 与示教的详细操作说明。
+
 > P0 安全门：`HardwareManager.connect()` 已改为只连接并保持失能，显式 enable、失败回滚和安全默认 launch 已有自动化测试；真机 joint states、enable/hold/disable 和故障回滚仍待验收。完成这些实机证据前，本文所有 `use_hardware:=true`、网页真机执行、示教真机回放及视觉真机命令仅作为操作参考，不应直接运行。无硬件仿真和只读检查不受此限制。
 
 这份文档只写当前真实可用的遥操作流程，目标是直接复制粘贴使用。  
 日常启动不需要选择 `mode`，网页是主入口。RViz 末端拖动请使用 `docs/rebotarm_feature_commands.md` 中的 sim/real 专用入口；仿真入口包含 `rebotarm_sim_trajectory_controller`，支持真实的 Plan & Execute。
 
-入口约定：`interactive_basic.launch.py` 和旧的 `rviz.launch.py` 已移除；`bringup.launch.py` 仅用于基础控制器/状态组合，不替代 RViz MoveIt 末端拖动。真机拖动使用 `rviz_ee_drag_real.launch.py`，仿真拖动使用 `rviz_ee_drag_sim.launch.py`，完整网页和示教工作台使用 `rebotarm_app.launch.py`。
+入口约定：`interactive_basic.launch.py`、旧的 `rviz.launch.py` 和重复的 `rviz_ee_drag_real.launch.py` 已移除；`bringup.launch.py` 仅用于基础控制器/状态组合。真机 MoveIt 末端拖动统一使用 `moveit_hardware.launch.py use_rviz:=true`，仿真拖动使用 `rviz_ee_drag_sim.launch.py`，完整网页和示教工作台使用 `rebotarm_app.launch.py`。
 
 ## 1. 启动遥操作系统
 
@@ -28,11 +30,10 @@ reBotArmController 真机控制
 MoveIt move_group
 RViz
 网页状态/遥操作面板
-键盘遥操作
 示教录制后台节点
 ```
 
-日常只使用这一条启动命令。打开网站后，网页遥操作、键盘遥操作、示教录制、轨迹检查、MoveIt 起点对齐、碰撞预检查、回放、RViz 显示都应该可用。
+日常完整网页工作台使用这一条启动命令。打开网站后，网页遥操作、示教录制、轨迹检查、MoveIt 起点对齐、碰撞预检查、回放和状态 RViz 都应该可用。键盘遥操作使用独立的 `teleop_keyboard.launch.py` 或 `teleop_system.launch.py`，不由本入口启动。
 
 默认 `channel:=auto`，会优先选择 `/dev/ttyACM0`，然后尝试 `/dev/ttyACM1`。如果自动选择不对，再手动加：
 
@@ -66,7 +67,6 @@ RViz 三维显示
 网页夹爪控制
 网页 Safe Home / Enable / Disable
 网页示教轨迹 dry-run / replay
-键盘关节小步遥操作
 ```
 
 ## 2. 网页遥操作
@@ -104,8 +104,16 @@ Stop 主要用于网页 Execute
 
 ## 3. 键盘遥操作
 
-启动遥操作系统后，键盘遥操作节点也会启动。  
-键盘遥操作用于关节小步调姿，不作为示教数据来源。
+键盘遥操作不包含在 `rebotarm_app.launch.py` 中。需要键盘关节小步调姿时，单独启动
+`teleop_keyboard.launch.py`，或者使用带 Dashboard 的 `teleop_system.launch.py`；不要和
+已经占用同一真机串口的 `rebotarm_app.launch.py` 并行启动。键盘遥操作不作为示教数据来源。
+
+真机键盘入口示例：
+
+```bash
+ros2 launch rebotarm_bringup teleop_keyboard.launch.py \
+  use_hardware:=true channel:=/dev/ttyACM0 use_local_rviz:=true
+```
 
 当前键盘遥操作是：
 

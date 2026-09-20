@@ -71,3 +71,17 @@ def test_eye_in_hand_solver_rejects_short_or_unknown_method() -> None:
         solve_eye_in_hand(samples[:2])
     with pytest.raises(ValueError, match="unsupported"):
         solve_eye_in_hand(samples, method="unknown")
+
+
+def test_solver_accepts_matrices_and_rejects_single_axis():
+    from rebotarm_calibration.handeye_solver import solve_eye_in_hand
+    from rebotarm_calibration.handeye_residual import transform_matrix, analyze_handeye_residual, matrix_transform
+    samples, expected, _ = _perfect_samples()
+    report = analyze_handeye_residual({'schema_version': 1, 'samples': samples,
+                                      'end_to_camera': matrix_transform(expected)})
+    assert report['acceptance']['pass']
+    matrices = [{k: transform_matrix(s[k]) for k in ('base_to_end', 'camera_to_marker')} for s in samples]
+    assert np.allclose(solve_eye_in_hand(matrices, method='PARK'), expected)
+    repeated = [matrices[0]] * 5
+    with pytest.raises(ValueError, match='unobservable'):
+        solve_eye_in_hand(repeated)

@@ -7,14 +7,17 @@
 
 1. 收到 ExecutePose 请求后交给规划适配器 `MoveItMotionPlanner`，由它调用
    MoveIt 的规划服务求出关节空间轨迹；
-2. 若请求 `execute=false`，只做规划并返回轨迹（干跑/预览路径）；
+2. 若请求 `execute=false`，只做规划并返回轨迹；单段请求可直接发布 RViz 幻影；
+   多阶段视觉入口则先收集各段结果，再通过 `publish_trajectory_preview` 一次发布；
 3. 若需要执行，则把轨迹作为 FollowJointTrajectory 目标发给控制器动作服务
    `/<arm_namespace>/follow_joint_trajectory`，并同步等待结果。
 
 对外接口
 --------
-服务（两个都在 `/<arm_namespace>/motion_execution/` 下）：
+服务（都在 `/<arm_namespace>/motion_execution/` 下）：
 - `execute_pose`（ExecutePose）：规划并在需要时执行一个末端位姿目标；
+- `publish_trajectory_preview`（PublishTrajectoryPreview）：把多段已规划轨迹作为一个
+  RViz 显示序列发布，不会下发控制器动作；
 - `stop`（Trigger）：取消当前动作目标，并请求控制器的 trajectory_stop。
 
 动作客户端：`/<arm_namespace>/follow_joint_trajectory`。
@@ -32,16 +35,18 @@
 from __future__ import annotations
 
 import time
+import math
 
 import rclpy
 from control_msgs.action import FollowJointTrajectory
+from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_srvs.srv import Trigger
 
-from rebotarm_msgs.srv import ExecutePose
+from rebotarm_msgs.srv import ExecutePose, PublishTrajectoryPreview
 
 from .moveit_planner import MoveItMotionPlanner
 
@@ -90,10 +95,17 @@ class PoseExecutionNode(Node):
         self.declare_parameter("default_velocity_scaling", 0.10)
         # default_acceleration_scaling：请求未指定加速度缩放时的默认值，无量纲 (0,1]。
         self.declare_parameter("default_acceleration_scaling", 0.08)
+        # 仅视觉纯规划入口启用；其他 ExecutePose 调用不会产生预览副作用。
+        self.declare_parameter("publish_plan_only_preview", False)
 
         self._arm_namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         # 正在执行的动作目标句柄，仅用于 stop 时发起取消；执行结束后置回 None。
         self._active_goal_handle = None
+        self._preview_publisher = (
+            self.create_publisher(DisplayTrajectory, "/display_planned_path", 10)
+            if bool(self.get_parameter("publish_plan_only_preview").value)
+            else None
+        )
         # 轨迹执行动作客户端（FollowJointTrajectory）：与控制器包约定的执行通道。
         self._trajectory_client = ActionClient(
             self,
@@ -127,6 +139,12 @@ class PoseExecutionNode(Node):
             self._execute_pose,
             callback_group=self._callback_group,
         )
+        self.create_service(
+            PublishTrajectoryPreview,
+            f"/{self._arm_namespace}/motion_execution/publish_trajectory_preview",
+            self._publish_trajectory_preview,
+            callback_group=self._callback_group,
+        )
         # 停止服务：只负责"请求"停止，不保证轨迹已停稳。
         self.create_service(
             Trigger,
@@ -143,11 +161,27 @@ class PoseExecutionNode(Node):
 
         请求字段：`target_pose`（位姿目标）、`velocity_scaling`/`acceleration_scaling`
         （无量纲缩放，0.0 表示用参数默认值）、`timeout_sec`（本步骤超时，s）、
-        `execute`（False 时只规划不下发）。
+        `execute`（False 时只规划不下发）、`preview_start_joint_state`（可选虚拟起点，
+        仅允许 execute=False）、`suppress_preview`（多阶段预览收集期间禁止逐段发布）。
         响应字段：`success`、`stage`（"planning" 或 "execution"，用于区分失败发生在
         哪个阶段）、`message`、`planned_trajectory`。
         """
         response.stage = "planning"
+        preview_start = request.preview_start_joint_state
+        if preview_start.name:
+            if request.execute:
+                response.success = False
+                response.message = "explicit preview start is forbidden for execution"
+                return response
+            if (
+                len(preview_start.name) != 6
+                or set(preview_start.name) != {f"joint{i}" for i in range(1, 7)}
+                or len(preview_start.position) != 6
+                or not all(math.isfinite(value) for value in preview_start.position)
+            ):
+                response.success = False
+                response.message = "invalid preview start joint state"
+                return response
         # 请求里 0.0 视为"未指定"：回落节点参数，避免上位传 0 变成满速或非法值。
         velocity = float(request.velocity_scaling) or float(self.get_parameter("default_velocity_scaling").value)
         acceleration = float(request.acceleration_scaling) or float(
@@ -157,6 +191,7 @@ class PoseExecutionNode(Node):
             request.target_pose,
             velocity_scaling=velocity,
             acceleration_scaling=acceleration,
+            **({"start_joint_state": preview_start} if preview_start.name else {}),
         )
         if not plan.success or plan.trajectory is None:
             response.success = False
@@ -166,6 +201,19 @@ class PoseExecutionNode(Node):
         # 即使随后不执行，也把规划结果回填，便于调用方审查轨迹。
         response.planned_trajectory = plan.trajectory
         if not bool(request.execute):
+            if self._preview_publisher is not None and not bool(request.suppress_preview):
+                trajectory = plan.trajectory
+                # DisplayTrajectory 的初态必须与路径起点一致；不能将当前假关节状态
+                # 错当成上一阶段的终点。此消息仅用于 RViz，绝不发给轨迹 Action。
+                if len(trajectory.joint_names) == len(trajectory.points[0].positions):
+                    display = DisplayTrajectory()
+                    display.model_id = "reBot-DevArm_fixend"
+                    display.trajectory_start.joint_state.name = list(trajectory.joint_names)
+                    display.trajectory_start.joint_state.position = list(trajectory.points[0].positions)
+                    robot_trajectory = RobotTrajectory()
+                    robot_trajectory.joint_trajectory = trajectory
+                    display.trajectory = [robot_trajectory]
+                    self._preview_publisher.publish(display)
             response.success = True
             response.stage = "planning"
             response.message = plan.message
@@ -216,6 +264,73 @@ class PoseExecutionNode(Node):
 
         response.success = True
         response.message = "trajectory executed"
+        return response
+
+    def _publish_trajectory_preview(
+        self,
+        request: PublishTrajectoryPreview.Request,
+        response: PublishTrajectoryPreview.Response,
+    ):
+        """把多段轨迹放进同一条 DisplayTrajectory，供 RViz 连续播放。
+
+        `DisplayTrajectory.trajectory` 本身就是有序轨迹数组：第一段从
+        `trajectory_start` 开始，后续段从前一段终点继续。这里严格检查关节顺序、
+        点维度与相邻端点连续性；任何异常都会整组拒绝，避免显示一条拼接错误的路径。
+        本函数只调用 RViz publisher，不接触 FollowJointTrajectory 动作客户端。
+        """
+
+        if self._preview_publisher is None:
+            response.success = False
+            response.message = "plan-only preview publisher is disabled"
+            return response
+        trajectories = list(request.trajectories)
+        if not trajectories:
+            response.success = False
+            response.message = "no trajectories supplied for preview"
+            return response
+
+        expected_names = list(trajectories[0].joint_names)
+        if not expected_names:
+            response.success = False
+            response.message = "preview trajectory has no joint names"
+            return response
+
+        previous_end = None
+        display = DisplayTrajectory()
+        display.model_id = "reBot-DevArm_fixend"
+        for index, trajectory in enumerate(trajectories):
+            points = list(trajectory.points)
+            if list(trajectory.joint_names) != expected_names or not points:
+                response.success = False
+                response.message = f"preview trajectory {index} has incompatible joints or no points"
+                return response
+            for point in points:
+                positions = list(point.positions)
+                if len(positions) != len(expected_names) or not all(
+                    math.isfinite(value) for value in positions
+                ):
+                    response.success = False
+                    response.message = f"preview trajectory {index} has invalid positions"
+                    return response
+            start = list(points[0].positions)
+            if previous_end is not None and any(
+                abs(current - previous) > 1e-4
+                for current, previous in zip(start, previous_end)
+            ):
+                response.success = False
+                response.message = f"preview trajectory {index} is discontinuous"
+                return response
+            robot_trajectory = RobotTrajectory()
+            robot_trajectory.joint_trajectory = trajectory
+            display.trajectory.append(robot_trajectory)
+            previous_end = list(points[-1].positions)
+
+        first_point = trajectories[0].points[0]
+        display.trajectory_start.joint_state.name = expected_names
+        display.trajectory_start.joint_state.position = list(first_point.positions)
+        self._preview_publisher.publish(display)
+        response.success = True
+        response.message = f"published {len(trajectories)} preview trajectories"
         return response
 
     def _stop(self, _request: Trigger.Request, response: Trigger.Response):

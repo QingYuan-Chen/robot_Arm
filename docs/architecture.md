@@ -205,6 +205,11 @@ It is responsible for:
 - TF validation tools
 - camera intrinsic / extrinsic checks
 
+The calibration ROS node owns session files, synchronized capture and solving.
+Dashboard owns `/calibration`, HTTP/SSE and ROS clients; it must not read calibration
+files or implement calibration mathematics. Explicit gravity-mode operator requests
+use existing controller services and do not belong to the calibration solver.
+
 Calibration outputs should be consumed by vision and motion layers through
 configuration or TF, not copied into dashboard or controller code.
 

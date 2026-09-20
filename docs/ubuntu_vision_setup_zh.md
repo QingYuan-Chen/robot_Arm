@@ -205,6 +205,6 @@ ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
 
 这会使用真实相机和RViz-only运动学后端，不启动MuJoCo物理仿真或真机控制器；
 真实相机相对模拟机器人TF是否有物理意义需自行核验，候选规划不代表实机可执行。
-真实感知加MuJoCo物理后端使用独立的`real_perception_sim_execution.launch.py`，
-参数以其`--show-args`为准，不能同时启动两个模拟执行后端。
+独立的“真实感知 + MuJoCo 执行”组合入口已删除；当前只保留本节的
+真实感知 plan-only 验证以及独立的 MuJoCo 离线仿真入口。
 真实执行另见功能手册和现场授权边界。

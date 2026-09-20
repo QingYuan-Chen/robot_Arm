@@ -52,7 +52,7 @@ def transform_matrix(transform: Mapping[str, object]) -> np.ndarray:
     quaternion = _vector(transform.get("rotation_xyzw"), 4, "rotation_xyzw")
     norm = float(np.linalg.norm(quaternion))
     # 零四元数无法归一化，会静默产生 NaN 旋转矩阵，因此在这里直接拒绝
-    if norm <= 1e-12:
+    if not math.isfinite(norm) or norm <= 1e-12:
         raise ValueError("rotation_xyzw norm must be positive")
     x, y, z, w = quaternion / norm
     # 单位四元数 -> 旋转矩阵的标准展开式（已归一化，可直接代入 x, y, z, w）
@@ -191,7 +191,9 @@ def analyze_handeye_residual(
         for index, left in enumerate(base_to_end)
         for right in base_to_end[index + 1 :]
     )
+    observability = rotation_observability(base_to_end)
     diversity_pass = (
+        observability["pass"] and
         end_translation_span >= float(min_end_translation_span_m)
         and end_rotation_span >= float(min_end_rotation_span_deg)
     )
@@ -215,6 +217,7 @@ def analyze_handeye_residual(
         item["rotation_residual_deg"] = float(rotation_error)
 
     return {
+        "observability": observability,
         "sample_count": len(samples),
         "mean_base_to_marker": matrix_transform(
             _matrix_from_rotation_translation(mean_rotation, mean_position)
@@ -351,3 +354,21 @@ def _matrix_quaternion(rotation: np.ndarray) -> np.ndarray:
     if quaternion[3] < 0.0:
         quaternion *= -1.0
     return quaternion
+
+
+def rotation_observability(transforms, *, maximum_condition_number=100.0):
+    """Relative rotation constraints must constrain all translation directions.
+
+    Stacking R_i.T R_j - I exposes the common-axis nullspace. This is an
+    excitation gate, not a claim of absolute calibration accuracy.
+    """
+    if not math.isfinite(maximum_condition_number) or maximum_condition_number <= 1:
+        raise ValueError("maximum_condition_number must be finite and greater than one")
+    blocks = [a[:3, :3].T @ b[:3, :3] - np.eye(3)
+              for i, a in enumerate(transforms) for b in transforms[i + 1:]]
+    singular = np.linalg.svd(np.vstack(blocks), compute_uv=False) if blocks else np.zeros(3)
+    rank = int(np.count_nonzero(singular > max(1e-10, singular[0] * 1e-8)))
+    condition = float(singular[0] / singular[-1]) if rank == 3 else None
+    return {"rank": rank, "singular_values": singular.tolist(),
+            "condition_number": condition, "maximum_condition_number": maximum_condition_number,
+            "pass": rank == 3 and condition <= maximum_condition_number}

@@ -20,7 +20,7 @@ def test_rebotarm_app_launch_exposes_simple_modes_and_profiles() -> None:
     assert 'DeclareLaunchArgument("profile"' not in launch_text
     assert 'DeclareLaunchArgument("name", default_value="teach_record")' in launch_text
     assert "moveit_hardware.launch.py" in launch_text
-    assert 'executable="TeachRecorderNode"' not in launch_text
+    assert 'executable="TeachRecorderNode"' in launch_text
     assert 'executable="TeachReplayNode"' not in launch_text
     assert "_idle_recorder_node(" not in launch_text
     assert "Teach Trajectory card" in launch_text
@@ -95,12 +95,16 @@ def test_operator_configs_are_split_by_consumer() -> None:
     assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in hardware_launch
 
     for launch_path in (
-        "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
         "src/rebotarm_bringup/launch/bringup.launch.py",
         "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",
     ):
         assert "hardware_controller.launch.py" in _read(launch_path)
+    moveit_hardware = _read(
+        "src/rebotarm_bringup/launch/moveit_hardware.launch.py"
+    )
+    assert "interactive_system.launch.py" in moveit_hardware
+    assert "hardware_controller.launch.py" not in moveit_hardware
 
 
 def test_launches_reference_consumer_specific_operator_configs() -> None:
@@ -174,7 +178,8 @@ def test_feature_commands_document_web_teleop_next_to_rviz_drag() -> None:
 
     assert "## RViz MoveIt 末端拖动" in doc
     assert "## 网页遥操作" in doc
-    assert "ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py" in doc
+    assert "ros2 launch rebotarm_bringup moveit_hardware.launch.py" in doc
+    assert "rviz_ee_drag_real.launch.py" in doc
     assert "ros2 launch rebotarm_bringup rebotarm_app.launch.py" in doc
     assert "channel:=auto" in doc
     assert "网页关节 Preview / Execute / Stop" in doc

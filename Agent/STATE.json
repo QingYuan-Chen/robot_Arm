@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-18T21:57:39+08:00",
+  "generated_at": "2026-09-20T11:45:26+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "4d9ab47",
+    "head": "0798881",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-18T21:57:39+08:00 | actor=codex | event=verified | note=清理删除入口对应的构建缓存后，bringup重新编译成功 | verification=105 focused tests passed; rebotarm_bringup build passed; launch compileall passed"
+  "last_event": "- 2026-09-20T11:45:26+08:00 | actor=Codex | event=start | note=Create consolidated non-visual launch command guide and push current progress to GitHub | verification=-"
 }

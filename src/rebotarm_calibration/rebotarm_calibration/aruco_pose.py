@@ -80,6 +80,10 @@ def detect_aruco_pose(
     if matrix.shape != (3, 3) or not np.all(np.isfinite(matrix)):
         raise ValueError("camera_matrix must be finite 3x3")
     coefficients = np.asarray(list(distortion), dtype=np.float64).reshape(-1, 1)
+    if matrix[0, 0] <= 0 or matrix[1, 1] <= 0 or not np.allclose(matrix[2], [0, 0, 1]):
+        raise ValueError("invalid camera intrinsics")
+    if coefficients.size not in (0, 4, 5, 8, 12, 14) or not np.all(np.isfinite(coefficients)):
+        raise ValueError("unsupported or non-finite distortion coefficients")
     dictionary = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dictionary_name))
     parameters = detector_parameters()
     if hasattr(cv2.aruco, "ArucoDetector"):
@@ -106,8 +110,8 @@ def detect_aruco_pose(
         [[-half, half, 0.0], [half, half, 0.0], [half, -half, 0.0], [-half, -half, 0.0]],
         dtype=np.float64,
     )
-    # IPPE_SQUARE 专用于「已知边长的平面正方形」位姿求解，比通用 PnP 更稳定，也不需要
-    # 通用求解器的多解分支；相机内参与畸变系数直接沿用标定值
+    # IPPE_SQUARE 专用于「已知边长的平面正方形」位姿求解，平面位姿可能存在歧义；
+    # 上层还必须检查质量与时间一致性；相机内参与畸变系数直接沿用标定值
     success, rvec, tvec = cv2.solvePnP(
         object_points,
         image_points,
@@ -122,6 +126,8 @@ def detect_aruco_pose(
     camera_to_marker = np.eye(4, dtype=np.float64)
     camera_to_marker[:3, :3] = rotation
     camera_to_marker[:3, 3] = np.asarray(tvec, dtype=np.float64).reshape(3)
+    if not np.all(np.isfinite(camera_to_marker)) or np.any((rotation @ object_points.T + np.asarray(tvec).reshape(3, 1))[2] <= 0):
+        raise ValueError("marker pose must be finite and in front of camera")
     # 重投影校验：把解出的位姿重新投影成像素，与实测角点比较，得到位姿质量的直接指标
     projected, _ = cv2.projectPoints(object_points, rvec, tvec, matrix, coefficients)
     projected = projected.reshape(-1, 2)

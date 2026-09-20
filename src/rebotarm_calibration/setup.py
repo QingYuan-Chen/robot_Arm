@@ -39,6 +39,8 @@ setup(
     entry_points={
         # console_scripts：脚本名 → 包内入口函数；安装位置由 setup.cfg 指定为 lib/<包名>
         "console_scripts": [
+            "rebotarm_handeye_capture = rebotarm_calibration.handeye_capture_node:main",
+            "rebotarm_handeye_calibration = rebotarm_calibration.handeye_calibration_cli:main",
             "rebotarm_handeye_residual = rebotarm_calibration.handeye_residual_cli:main",
             "rebotarm_tcp_calibration = rebotarm_calibration.tcp_calibration_node:main",
         ],

@@ -150,6 +150,7 @@ def analyze_tcp_samples(
     返回的报告字典键名（``tcp_offset_xyz``/``rms_residual_m``/``gates``/``passed``
     等）是上层节点与工具读取的对外接口，不要改动。
     """
+    _validate_limits(locals())
     if not samples:
         raise ValueError("at least one TCP sample is required")
 
@@ -245,6 +246,7 @@ def analyze_tcp_pivot_samples(
     结果来自哪种模型。
     """
 
+    _validate_limits(locals())
     if not samples:
         raise ValueError("at least one TCP pivot sample is required")
     rotations: list[np.ndarray] = []
@@ -309,7 +311,7 @@ def analyze_tcp_pivot_samples(
         "tcp_offset_xyz": tcp_offset.tolist(),
         "pivot_position_base_xyz": pivot_position.tolist(),
         "matrix_rank": int(rank),
-        "condition_number": condition,
+        "condition_number": condition if math.isfinite(condition) else None,
         "singular_values": singular_values.tolist(),
         "rotation_span_deg": rotation_span,
         "pivot_residual_vectors_m": residual_vectors.tolist(),
@@ -334,3 +336,13 @@ def format_tcp_offset_yaml(offset: Sequence[float]) -> str:
     """
     ox, oy, oz = _vector3(offset, "offset")
     return f"tcp_offset_xyz: [{ox:.6f}, {oy:.6f}, {oz:.6f}]"
+
+
+def _validate_limits(values):
+    for name, value in values.items():
+        if name.startswith(("minimum_", "maximum_")):
+            if not math.isfinite(float(value)) or float(value) <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+    count = values["minimum_samples"]
+    if int(count) != count or count < 3:
+        raise ValueError("minimum_samples must be an integer >= 3")

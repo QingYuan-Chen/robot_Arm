@@ -1,11 +1,13 @@
 # 视觉抓取系统（visual grasp）主启动文件
 #
-# 用途：一条命令拉起 就绪摆位 → 相机与检测 → 抓取网络候选 → MoveIt 逆解与碰撞过滤→ 点到点执行 → 抓取执行器 的完整链路，并在 RViz 中显示数据与标记。
+# 用途：统一提供无硬件感知预览、plan-only 和受控执行。完整组合为
+# 就绪摆位 → 相机与检测 → 抓取网络候选 → MoveIt 逆解与碰撞过滤 →
+# 点到点执行 → 抓取执行器，并在 RViz/Open3D 中显示数据、候选与规划预览。
 #
 # 节点组合与启动顺序：
 #   1) 先包含共享底层栈（MoveIt 规划、RViz、真实或仿真的关节状态来源）；
 #   2) 再启动一次性的视觉就绪实例，把机械臂摆到观察位姿后退出；
-#   3) 用进程退出事件在它退出后启动后续全部视觉抓取节点；若 start_visual_ready=false，则用取反条件直接启动这些节点，跳过摆位。
+#   3) 用进程退出事件在它退出后启动后续全部视觉抓取节点；若不执行启动摆位，则用取反条件直接启动这些节点。
 #   这样可保证相机与检测只在手眼标定所用的位姿下才开始工作。
 #
 # 真实/仿真后端选择：
@@ -126,6 +128,8 @@ def generate_launch_description():
     # ── 执行侧节点开关 ──
     start_visual_grasp_executor = LaunchConfiguration("start_visual_grasp_executor")
     start_visual_grasp_markers = LaunchConfiguration("start_visual_grasp_markers")
+    start_raw_candidate_markers = LaunchConfiguration("start_raw_candidate_markers")
+    start_open3d_viewer = LaunchConfiguration("start_open3d_viewer")
     start_motion_execution = LaunchConfiguration("start_motion_execution")
     execute_gripper = LaunchConfiguration("execute_gripper")
     start_sim_trajectory_controller = LaunchConfiguration("start_sim_trajectory_controller")
@@ -257,6 +261,46 @@ def generate_launch_description():
             "rviz_config": PathJoinSubstitution([bringup_share, "rviz", "visual_grasp.rviz"]),
         }.items(),
     )
+    # 无硬件 plan-only 模式需要一个唯一的运动学状态/轨迹后端。它必须和 MoveIt
+    # 同时启动，而不能等到 visual_ready 启动实例退出后才启动：MoveIt 初始化规划场景
+    # 时会等待当前关节状态，visual_ready 自动摆位也依赖同一个动作与状态接口。
+    # 真机模式下条件恒为 false；外部 MuJoCo 等后端接管时由
+    # start_sim_trajectory_controller=false 显式关闭，避免第二个同名 Action server。
+    sim_trajectory_controller = Node(
+        package="rebotarm_simulation",
+        executable="rebotarm_sim_trajectory_controller",
+        name="rebotarm_sim_trajectory_controller",
+        output="screen",
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    use_hardware,
+                    "'.lower() != 'true' and '",
+                    start_sim_trajectory_controller,
+                    "'.lower() == 'true'",
+                ]
+            )
+        ),
+        parameters=[
+            {
+                "arm_namespace": arm_namespace,
+                "initial_joint_positions": visual_ready_joint_positions,
+            }
+        ],
+    )
+    # 只有两个开关都为 true 才执行一次启动摆位。默认
+    # move_to_visual_ready_on_start=false 时直接启动后续视觉链，同时仍保留常驻的
+    # /visual_ready/move 服务；不能启动一个不会退出的一次性节点来阻塞整个链路。
+    run_visual_ready_startup = PythonExpression(
+        [
+            "'",
+            start_visual_ready,
+            "'.lower() == 'true' and '",
+            move_to_visual_ready_on_start,
+            "'.lower() == 'true'",
+        ]
+    )
     # 启动实例（一次性）：把机械臂摆到视觉观察位姿，摆位结束后退出进程。
     # 必要性：相机视角与手眼关系是在该位姿下标定的，检测必须在位姿就绪后才开始。
     # 它带 startup_delay_sec 延迟与 max_start_delta_rad 起始偏差保护；
@@ -266,7 +310,7 @@ def generate_launch_description():
         executable="rebotarm_visual_ready",
         name="rebotarm_visual_ready_startup",
         output="screen",
-        condition=IfCondition(start_visual_ready),
+        condition=IfCondition(run_visual_ready_startup),
         parameters=[
             visual_ready_params,
             {
@@ -283,9 +327,9 @@ def generate_launch_description():
     )
     # ── 就绪之后才启动的完整视觉抓取链路（按依赖顺序排列）──
     # 顺序：就绪常驻服务 → 相机与检测 → 抓取网络候选 → 逆解与碰撞过滤 →
-    #       仿真轨迹控制器 → MoveIt 位姿执行 → 抓取执行器。
-    # 触发方式：start_visual_ready=true 时由进程退出事件触发；
-    #           false 时由文末的分组动作配合取反条件直接启动（跳过摆位）。
+    #       MoveIt 位姿执行 → 抓取执行器。无硬件状态后端已在本列表之前启动。
+    # 触发方式：明确启用启动自动摆位时由进程退出事件触发；
+    #           否则由文末的分组动作直接启动（跳过自动摆位）。
     post_visual_ready_actions = [
         # 常驻实例：不自动运动，只提供 visual_ready/move 服务，
         # 供界面或操作者在需要时把机械臂摆回观察位姿（与启动实例共用同一份位姿参数）。
@@ -294,6 +338,7 @@ def generate_launch_description():
             executable="rebotarm_visual_ready",
             name="rebotarm_visual_ready",
             output="screen",
+            condition=IfCondition(start_visual_ready),
             parameters=[
                 visual_ready_params,
                 {
@@ -378,6 +423,12 @@ def generate_launch_description():
                     "object_min_diameter_m": 0.06,  # 物体标记最小直径 6 cm，仅影响 RViz 可见性
                     "object_min_height_m": 0.12,  # 物体标记最小高度 12 cm，仅影响 RViz 可见性
                     "upright_object_marker": True,  # 物体框画成竖直方向，便于观察物体位置
+                    # 候选消息只有类别、置信度和抓取尺度，并不包含真实物体轮廓。
+                    # 关闭示意圆柱、中心绿点和文字，避免把它们误认为视觉测得的瓶子外形；
+                    # TCP、接近方向和夹爪开合轴仍保留，用于核对实际抓取计划。
+                    "show_object_marker": False,
+                    "show_object_center_marker": False,
+                    "show_object_label": False,
                     "tcp_offset_xyz": tcp_offset_xyz,
                     "gripper_open_axis_local_xyz": gripper_open_axis_local_xyz,
                     "show_tcp_markers": show_tcp_markers,
@@ -413,6 +464,41 @@ def generate_launch_description():
                     "max_grasps": graspnet_max_grasps,
                     "max_jaw_width_m": candidate_max_jaw_width_m,
                     "max_points": graspnet_max_points,
+                }
+            ],
+        ),
+        # 原始 GraspNet 候选的 RViz 标记。它只做坐标变换与绘制，不参与候选过滤，
+        # 用于对比网络原始输出和下游最终选中的抓取计划。
+        Node(
+            package="rebotarm_vision",
+            executable="rebotarm_grasp_candidate_markers",
+            name="rebotarm_grasp_candidate_markers",
+            output="screen",
+            condition=IfCondition(start_raw_candidate_markers),
+            parameters=[
+                {
+                    "input_topic": graspnet_candidates_topic,
+                    "output_topic": "/grasp/raw_candidate_markers",
+                    "target_frame": "base_link",
+                    "max_candidates": 5,
+                }
+            ],
+        ),
+        # Open3D 只读查看器：复用现有 RGB-D、内参与原始候选，不打开第二份相机或模型，
+        # 也不调用任何规划、控制器或夹爪接口。无桌面环境时显式关闭。
+        Node(
+            package="rebotarm_vision",
+            executable="rebotarm_graspnet_open3d_viewer",
+            name="rebotarm_graspnet_open3d_viewer",
+            output="screen",
+            prefix=graspnet_python_executable,
+            condition=IfCondition(start_open3d_viewer),
+            parameters=[
+                {
+                    "input_color_topic": "/camera/color/image_raw",
+                    "input_depth_topic": "/camera/depth/image_raw",
+                    "input_camera_info_topic": "/camera/depth/camera_info",
+                    "input_candidates_topic": graspnet_candidates_topic,
                 }
             ],
         ),
@@ -473,33 +559,6 @@ def generate_launch_description():
                 }
             ],
         ),
-        # 仅用于 RViz/仿真的运动学轨迹控制器（可选）：在没有外部物理仿真后端
-        # 接管该命名空间时提供轨迹动作服务并发布关节状态。
-        # 真实硬件模式（use_hardware=true）下永不启动，避免出现第二个同名轨迹服务；
-        # 外部仿真正在运行时可用 start_sim_trajectory_controller=false 关掉它。
-        Node(
-            package="rebotarm_simulation",
-            executable="rebotarm_sim_trajectory_controller",
-            name="rebotarm_sim_trajectory_controller",
-            output="screen",
-            condition=IfCondition(
-                PythonExpression(
-                    [
-                        "'",
-                        use_hardware,
-                        "'.lower() != 'true' and '",
-                        start_sim_trajectory_controller,
-                        "'.lower() == 'true'",
-                    ]
-                )
-            ),
-            parameters=[
-                {
-                    "arm_namespace": arm_namespace,
-                    "initial_joint_positions": visual_ready_joint_positions,
-                }
-            ],
-        ),
         # 点到点位姿执行节点：接收位姿目标，调用 MoveIt 规划后交由下层执行
         # （真实硬件走电机控制器，仿真走仿真后端）。
         # 半段速度为 0.10、加速度缩放为 0.08，均为保守值；
@@ -517,6 +576,10 @@ def generate_launch_description():
                     "ee_frame_id": "end_link",
                     "moveit_planning_time": moveit_planning_time,
                     "moveit_num_planning_attempts": moveit_num_planning_attempts,
+                    # 只在纯规划模式发布 RViz 幻影；真机执行/预检不发布虚拟轨迹。
+                    "publish_plan_only_preview": PythonExpression(
+                        ["'", execution_mode, "'.lower() == 'plan_only'"]
+                    ),
                     "default_velocity_scaling": 0.10,  # 速度缩放 10%：保守值，降低碰撞冲击
                     "default_acceleration_scaling": 0.08,  # 加速度缩放 8%：比速度更保守，抑制启停冲击
                 }
@@ -702,8 +765,8 @@ def generate_launch_description():
             DeclareLaunchArgument("start_grasp_preview", default_value="false"),  # 是否启动抓取预览发送器；默认关闭，仅在需要人工观察目标位姿时打开
             DeclareLaunchArgument("start_candidate_ik_filter", default_value="true"),  # 是否启动候选逆解与碰撞过滤节点（候选到可执行计划的必需环节）
             DeclareLaunchArgument("candidate_ik_input_topic", default_value="/grasp/graspnet_candidates"),  # 逆解过滤节点的输入候选话题
-            DeclareLaunchArgument("start_visual_ready", default_value="true"),  # 是否先摆到视觉观察位姿再启动视觉链路；false 时跳过启动实例、直接启动后续节点
-            DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false"),  # 启动实例是否自动执行一次就绪移动；默认 false，只建立服务不运动
+            DeclareLaunchArgument("start_visual_ready", default_value="true"),  # 是否提供视觉就绪摆位流程/服务；只有下面的自动移动开关也为 true 时才先摆位，否则直接启动视觉链并保留手动服务
+            DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false"),  # 是否在启动时自动执行一次就绪移动；默认 false，不阻塞视觉链、不产生运动
             # 观察位姿的 6 个手臂关节角（rad，顺序 joint1..joint6，不含夹爪）。
             # joint1=-pi/2 表示本站工作区在 base 的 -Y 方向，必须与手眼标定所用位姿一致。
             DeclareLaunchArgument(
@@ -716,6 +779,8 @@ def generate_launch_description():
             DeclareLaunchArgument("visual_ready_startup_delay_sec", default_value="0.0"),  # 启动移动前的等待时间（s），用于等控制器/时钟就绪；只推迟开始不改变轨迹
             DeclareLaunchArgument("start_visual_grasp_executor", default_value="true"),  # 是否启动抓取执行器（阶段序列编排 + 台面/夹持力/验证/撤退等安全策略）
             DeclareLaunchArgument("start_visual_grasp_markers", default_value="true"),  # 是否启动 RViz 可视化标记节点
+            DeclareLaunchArgument("start_raw_candidate_markers", default_value="true"),  # 是否把 GraspNet 原始候选发布成 RViz MarkerArray；只读显示，不参与规划与执行
+            DeclareLaunchArgument("start_open3d_viewer", default_value="true"),  # 是否弹出 Open3D 点云/原始夹爪查看器；无桌面环境设为 false
             DeclareLaunchArgument("start_motion_execution", default_value="true"),  # 是否启动点到点位姿执行节点（MoveIt 规划与执行入口）
             DeclareLaunchArgument("execute_gripper", default_value="true"),  # 执行器是否真正下发夹爪命令；plan_only 或仿真下会被强制跳过
             # 是否在没有外部仿真后端接管命名空间时启动仅供 RViz 使用的运动学轨迹控制器。
@@ -795,7 +860,7 @@ def generate_launch_description():
             DeclareLaunchArgument("safe_home_after_grasp", default_value="false"),  # 序列末尾是否回安全位。默认 false：回零是大范围动作，必须由操作员显式开启
             DeclareLaunchArgument("moveit_planning_time", default_value="8.0"),  # MoveIt 单次规划时间上限（s）；调大更可能规划成功，但整体节拍变慢
             DeclareLaunchArgument("moveit_num_planning_attempts", default_value="5"),  # MoveIt 规划尝试次数；调大提高成功率，但耗时成比例增加
-            DeclareLaunchArgument("plan_only_stage_pause_sec", default_value="3.0"),  # plan_only 模式下每个运动阶段的最短停顿（s），给人工核对留时间；执行模式无效
+            DeclareLaunchArgument("plan_only_stage_pause_sec", default_value="0.0"),  # plan_only 各规划阶段间的诊断等待（s）；完整轨迹最后一次发布，默认无需停顿
             DeclareLaunchArgument("approach_visual_servo_enabled", default_value="false"),  # 是否用迭代小步逼近加逐步纠偏替代一次到位的接近；默认关闭的增强项
             DeclareLaunchArgument("approach_visual_servo_max_iterations", default_value="5"),  # 视觉伺服最大迭代步数（至少 1）；调大更可能收敛，但接近段耗时成比例增加
             DeclareLaunchArgument("approach_visual_servo_max_step_m", default_value="0.02"),  # 单步最大位移（m，2 cm）；限制每步风险，调大更快但更接近一次到位的碰撞风险
@@ -821,7 +886,22 @@ def generate_launch_description():
             DeclareLaunchArgument("place_open_max_effort", default_value="0.25"),  # 放置点松爪夹持力（归一化，非牛顿）；松爪只需克服残余摩擦，故小于抓取力
             DeclareLaunchArgument("place_retreat_z_m", default_value="0.06"),  # 松爪后向上撤离的高度（m，6 cm），保证先垂直离开再平移
             DeclareLaunchArgument("trajectory_precheck_enabled", default_value="true"),  # 真正执行前是否先用 execute=False 走一次规划预检；false 会跳过这道门
-            DeclareLaunchArgument("max_plan_age_sec", default_value="1.0"),  # 抓取计划的最大允许时延（s）；超时视为过期并拒收
+            DeclareLaunchArgument(
+                "max_plan_age_sec",
+                default_value=PythonExpression(
+                    [
+                        "'10.0' if '",
+                        execution_mode,
+                        "'.lower() == 'plan_only' else '1.0'",
+                    ]
+                ),
+                # 摄像头采帧→GraspNet→Top-10 IK/碰撞过滤实测可耗 3~5 s；
+                # plan_only 再留出人工观察 RViz/触发服务的时间。只限不下发运动的预览。
+                # execute 仍保持严格的 1 s 默认门限，避免真实抓取使用陈旧视觉结果。
+                description="Maximum grasp-plan age in seconds (default: 10.0 for plan_only, 1.0 for execute)",
+            ),
+            # 无硬件状态后端先注册启动，随后 MoveIt 才开始等待当前状态。
+            sim_trajectory_controller,
             interactive_system,
             visual_ready_startup,
             RegisterEventHandler(
@@ -831,7 +911,7 @@ def generate_launch_description():
                 )
             ),
             GroupAction(
-                condition=UnlessCondition(start_visual_ready),
+                condition=UnlessCondition(run_visual_ready_startup),
                 actions=post_visual_ready_actions,
             ),
         ]

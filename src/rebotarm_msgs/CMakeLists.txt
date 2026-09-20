@@ -11,10 +11,12 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 # 以下四个是接口字段里直接引用的类型来源，必须同时出现在 DEPENDENCIES 与 package.xml：
 # builtin_interfaces 提供 Time（时间戳，秒+纳秒）；geometry_msgs 提供 Pose/PoseStamped；
-# std_msgs 提供 Header（时间戳 + frame_id）；trajectory_msgs 提供 JointTrajectory。
+# std_msgs 提供 Header；sensor_msgs 提供纯规划虚拟起点 JointState；
+# trajectory_msgs 提供 JointTrajectory。
 find_package(builtin_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 
 # 注册本包全部接口，按 msg/（数据消息）、srv/（请求-响应服务）、action/（长时动作）
@@ -33,10 +35,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ArmStatus.msg"
   "srv/PlanGraspForLabel.srv"
   "srv/SetMode.srv"
+  "srv/CalibrationCommand.srv"
   "srv/SetZero.srv"
   "srv/SetTeachRecordPath.srv"
   "srv/MoveToPoseIK.srv"
   "srv/ExecutePose.srv"
+  "srv/PublishTrajectoryPreview.srv"
   "srv/SetGripper.srv"
   "srv/GraspGripper.srv"
   "action/ExecuteGrasp.action"
@@ -44,7 +48,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MoveToPose.action"
 # DEPENDENCIES 声明生成代码要链接/导入的上游接口包，必须与上面 find_package 的
 # 列表完全一致，漏写会导致生成的消息模块在运行时 import 失败。
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs trajectory_msgs
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs sensor_msgs trajectory_msgs
 )
 
 # 把 rosidl 运行时依赖导出给下游包，下游只需 <depend>rebotarm_msgs</depend> 即可。

@@ -21,7 +21,7 @@ from typing import Mapping, Sequence
 import cv2
 import numpy as np
 
-from .handeye_residual import matrix_transform, transform_matrix
+from .handeye_residual import matrix_transform, transform_matrix, rotation_observability
 
 
 # 求解方法名 → OpenCV 枚举的映射。键名（TSAI/PARK/HORAUD/ANDREFF/DANIILIDIS）是对外
@@ -63,14 +63,14 @@ def solve_eye_in_hand(
         if not isinstance(sample, Mapping):
             raise ValueError(f"samples[{index}] must be a mapping")
         base_to_end.append(
-            transform_matrix(_mapping(sample.get("base_to_end"), "base_to_end"))
+            _sample_transform(sample.get("base_to_end"), "base_to_end")
         )
         camera_to_marker.append(
-            transform_matrix(
-                _mapping(sample.get("camera_to_marker"), "camera_to_marker")
-            )
+            _sample_transform(sample.get("camera_to_marker"), "camera_to_marker")
         )
 
+    if not rotation_observability(base_to_end)["pass"]:
+        raise ValueError("hand-eye motion is unobservable or ill-conditioned; use multiple rotation axes")
     rotation, translation = cv2.calibrateHandEye(
         [value[:3, :3] for value in base_to_end],
         [value[:3, 3] for value in base_to_end],
@@ -84,6 +84,7 @@ def solve_eye_in_hand(
     result[:3, 3] = np.asarray(translation, dtype=np.float64).reshape(3)
     if not np.all(np.isfinite(result)):
         raise ValueError(f"{method_name} hand-eye solve returned non-finite values")
+    _validate_transform(result, "solution")
     return result
 
 
@@ -116,10 +117,8 @@ def evaluate_eye_in_hand(
     for index, sample in enumerate(samples):
         if not isinstance(sample, Mapping):
             raise ValueError(f"samples[{index}] must be a mapping")
-        base_end = transform_matrix(_mapping(sample.get("base_to_end"), "base_to_end"))
-        camera_marker = transform_matrix(
-            _mapping(sample.get("camera_to_marker"), "camera_to_marker")
-        )
+        base_end = _sample_transform(sample.get("base_to_end"), "base_to_end")
+        camera_marker = _sample_transform(sample.get("camera_to_marker"), "camera_to_marker")
         marker_values.append(base_end @ handeye @ camera_marker)
         labels.append(str(sample.get("label", f"sample_{index + 1}")))
 
@@ -241,3 +240,11 @@ def _residual_summary(values: np.ndarray, unit: str) -> dict[str, float]:
         f"max_{unit}": float(np.max(values)),
         f"median_{unit}": float(np.median(values)),
     }
+
+
+def _sample_transform(value, label):
+    if isinstance(value, Mapping):
+        return transform_matrix(value)
+    result = np.asarray(value, dtype=np.float64)
+    _validate_transform(result, label)
+    return result

@@ -39,6 +39,11 @@
 
 from __future__ import annotations
 
+from rebotarm_msgs.srv import CalibrationCommand
+from .calibration_client import CalibrationClient
+from .calibration_gravity import gravity_rejection, GravityRequestTracker
+
+
 import json
 import math
 import threading
@@ -500,6 +505,15 @@ class TeleopStatusPanelNode(Node):
             gripper_goal_factory=GripperCommand.Goal,
         )
         # 当前 web 执行目标句柄（供"停止"按钮取消）与其互斥锁：动作回调与 HTTP 线程并发访问。
+        self._calibration_client = CalibrationClient(
+            self.create_client(CalibrationCommand, '/rebotarm_handeye_capture/command'),
+            CalibrationCommand.Request,
+            lambda value: self._store.update_teleop_status('calibration', value),
+        )
+        self._calibration_gravity_owned = False
+        self._calibration_gravity_tracker = GravityRequestTracker()
+        self._arm_status_received_at = None
+        self._operator_request_lock = threading.RLock()
         self._execute_lock = threading.Lock()
         self._execute_goal_handle = None
         # Web 键盘会话状态：显式启用后才接受按键；步长/时长/速度可在会话内被前端调整，故加锁保护。
@@ -600,6 +614,42 @@ class TeleopStatusPanelNode(Node):
             mesh_dir=self._mesh_dir,
             sse_interval_sec=interval,
         )
+
+    def _handle_calibration_gravity(self, payload: dict) -> dict:
+        snapshot = self._store.snapshot()
+        age = (time.monotonic() - self._arm_status_received_at
+               if self._arm_status_received_at is not None else float('inf'))
+        busy = any(status_state(snapshot.teleop.get(key, {})) not in ('', 'idle', 'stopped', 'ready', 'completed')
+                   for key in ('recording', 'replay'))
+        busy = busy or self._execute_goal_handle is not None or self._web_keyboard_enabled
+        command = payload.get('command')
+        tracker = self._calibration_gravity_tracker
+        if tracker.refresh(time.monotonic()):
+            return {'accepted': False, 'message': '上一次模式请求仍未结束，保持控制占用'}
+        if (command == 'stop' and payload.get('confirmed') is True and
+                tracker.idle_confirmed(now=time.monotonic(), received_at=self._arm_status_received_at,
+                                       arm=snapshot.arm)):
+            self._calibration_gravity_owned = False
+            return {'accepted': True, 'message': '请求已结束，新鲜反馈确认IDLE保持，已解除标定占用'}
+        reason = gravity_rejection(command, payload.get('confirmed'), hardware=self._use_hardware,
+            web_enabled=bool(self.get_parameter('web_execute_enabled').value),
+            execution_mode=str(self.get_parameter('execution_mode').value),
+            arm=snapshot.arm, status_age=age, busy=busy)
+        if reason:
+            return {'accepted': False, 'message': reason}
+        # Reserve ownership before waiting: a timeout leaves the outcome unknown.
+        if command == 'start':
+            self._calibration_gravity_owned = True
+        client = self._gravity_start_client if command == 'start' else self._gravity_stop_client
+        success, message = tracker.call(client, Trigger.Request(), command, timeout=3.)
+        # Keep ownership until a subsequent feedback confirms IDLE; operator can
+        # use stop again to reconcile without sending another mode command.
+        result = {'accepted': success, 'message': message, 'command': command}
+        self._store.update_teleop_status('calibration_gravity', result)
+        return result
+
+    def _handle_calibration_command(self, payload: dict) -> dict:
+        return self._calibration_client.command(payload)
 
     def _panel_config(self) -> dict:
         """下发前端的初始化配置（``/api/config``）。
@@ -1379,6 +1429,13 @@ class TeleopStatusPanelNode(Node):
 
     def _on_arm_status(self, msg: ArmStatus) -> None:
         """整臂状态回调：刷新模式/使能/状态机/错误码，并立即重算重力补偿可用性。"""
+        now = time.monotonic()
+        source_ns = int(msg.header.stamp.sec) * 10**9 + int(msg.header.stamp.nanosec)
+        source_age = (self.get_clock().now().nanoseconds - source_ns) / 1e9
+        self._arm_status_received_at = (now - max(0., source_age)
+            if source_ns > 0 and -.05 <= source_age <= .5 else None)
+        if str(msg.state_machine) == 'GRAVITY_COMP':
+            self._calibration_gravity_owned = True
         self._store.update_arm_status(
             mode=str(msg.mode),
             enabled=bool(msg.enabled),

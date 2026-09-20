@@ -29,7 +29,7 @@ setup(
         "console_scripts": [
             # 真机硬件控制主节点：唯一访问电机 SDK/串口通道的进程
             "reBotArmController = rebotarmcontroller.rebotarm_controller:main",
-            # 以下为可直接运行的演示与现场验收客户端（只通过话题/服务/动作访问硬件）
+            # 以下为可直接运行的演示客户端（只通过话题/服务/动作访问硬件）
             # 重力补偿（零重力手动拖拽）演示
             "GravityCompensation = rebotarmcontroller.examples.gravity_compensation:main",
             # 夹爪开合交互演示
@@ -38,8 +38,6 @@ setup(
             "MoveTo = rebotarmcontroller.examples.move_to:main",
             # 末端位姿运动演示（走自定义 MoveToPose 动作）
             "MoveToPose = rebotarmcontroller.examples.move_to_pose:main",
-            # P0 验收工具：显式 enable、原位 hold 与 disable 的实机安全门（Gate B/C）
-            "p0_gate_bc_acceptance = rebotarmcontroller.examples.p0_gate_bc_acceptance:main",
         ],
     },
 )

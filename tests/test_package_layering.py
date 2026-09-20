@@ -112,6 +112,7 @@ def test_primary_bringup_launches_dashboard_package_directly() -> None:
 
 def test_teach_launches_use_teach_package_directly() -> None:
     launch_expectations = [
+        (ROOT / "src/rebotarm_bringup/launch/rebotarm_app.launch.py", "TeachRecorderNode"),
         (ROOT / "src/rebotarm_bringup/launch/teleop_system.launch.py", "TeachRecorderNode"),
     ]
 
@@ -148,13 +149,17 @@ def test_bringup_has_one_real_hardware_controller_owner() -> None:
     hardware_consumers = {
         "bringup.launch.py",
         "interactive_system.launch.py",
-        "moveit_hardware.launch.py",
         "teleop_keyboard.launch.py",
     }
     for name in hardware_consumers:
         assert "hardware_controller.launch.py" in (launch_dir / name).read_text(
             encoding="utf-8"
         )
+    moveit_hardware = (launch_dir / "moveit_hardware.launch.py").read_text(
+        encoding="utf-8"
+    )
+    assert "interactive_system.launch.py" in moveit_hardware
+    assert "hardware_controller.launch.py" not in moveit_hardware
 
 
 def test_rviz_drag_launch_does_not_start_legacy_preview_execution_nodes() -> None:
@@ -225,22 +230,19 @@ def test_rviz_moveit_drag_entrypoints_use_visible_native_goal_marker() -> None:
     rviz_config = (
         ROOT / "src/rebotarm_bringup/rviz/interactive_system.rviz"
     ).read_text(encoding="utf-8")
-    real_launch = (
-        ROOT / "src/rebotarm_bringup/launch/rviz_ee_drag_real.launch.py"
-    ).read_text(encoding="utf-8")
     sim_launch = (
         ROOT / "src/rebotarm_bringup/launch/rviz_ee_drag_sim.launch.py"
     ).read_text(encoding="utf-8")
 
     assert "rviz_ee_drag_real.launch.py" in feature_doc
+    assert "已移除" in feature_doc.split("rviz_ee_drag_real.launch.py", 1)[1][:20]
+    assert "moveit_hardware.launch.py" in feature_doc
     assert "rviz_ee_drag_sim.launch.py" in feature_doc
     assert not (ROOT / "src/rebotarm_bringup/launch/rviz.launch.py").exists()
-    assert '"use_moveit_preview": "true"' in real_launch
     assert '"use_moveit_preview": "true"' in sim_launch
     assert '"start_passive_joint_state_publisher": "false"' in sim_launch
     assert '"use_moveit_fake_joint_states": "false"' in sim_launch
     assert 'executable="rebotarm_sim_trajectory_controller"' in sim_launch
-    assert "start_interaction_nodes" not in real_launch
     assert "start_interaction_nodes" not in sim_launch
     assert "interactive_control/ee_target" not in feature_doc
     assert "EndEffectorTarget" not in rviz_config

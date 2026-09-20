@@ -44,6 +44,7 @@ P0-P6 已按用户确认的工程范围关闭，等待用户提供新规划，�
 
 - [`rebotarm_common_commands.md`](rebotarm_common_commands.md)：网页、键盘、示教和状态检查命令。
 - [`rebotarm_feature_commands.md`](rebotarm_feature_commands.md)：RViz MoveIt 和网页遥操作入口。
+- [`rebotarm_launch_commands.md`](rebotarm_launch_commands.md)：除视觉抓取外的真机、MoveIt、网页、键盘、示教和 MuJoCo 启动指令总表。
 - [`visual_grasp_commands.md`](visual_grasp_commands.md)：视觉抓取的当前过渡链路、安全预览和阶段门。
 
 所有涉及真机的命令都必须先阅读对应文档顶部的安全状态说明。

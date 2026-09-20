@@ -15,6 +15,13 @@ float64 acceleration_scaling
 float64 timeout_sec
 # 为 false 时只规划、不下发轨迹（干跑，用于审查可达性）；为 true 才真正执行。
 bool execute
+# 仅供 execute=false 的连续纯规划预览使用；空 name 表示从 MoveIt 当前状态规划。
+# execute=true 且非空时服务端必须拒绝，不能拿虚拟起点驱动真机。
+sensor_msgs/JointState preview_start_joint_state
+# 为 true 时只返回规划轨迹，不立即向 RViz 发布。多阶段调用方可收集所有结果后，
+# 再通过 PublishTrajectoryPreview 一次发布，避免 RViz 在阶段边界反复重启动画。
+# 该字段不影响 execute=true 的真实执行路径。
+bool suppress_preview
 ---
 # ── 响应 ──────────────────────────────────────────────────────────
 # 本次请求是否成功。规划失败、动作服务器不可用、目标被拒或执行超时都为 false。

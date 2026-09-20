@@ -292,52 +292,9 @@ auto_enable:=false
 这些默认值已经落地；实机执行仍必须显式选择硬件后端并调用 `/rebotarm/enable`，
 且针对当前机器完成分级预检。旧阶段的验收结果不自动适用于新设备。
 
-## 6. P0 Gate B/C：显式 enable、hold 与 disable
+## 6. 历史 P0 验收工具
 
-先在终端 A 只启动硬件 driver：
-
-```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 launch rebotarm_bringup hardware_controller.launch.py \
-  channel:=/dev/ttyACM0 \
-  joint_state_rate:=20.0
-```
-
-确认启动日志为 `CONNECTED_DISABLED`。终端 B 从仓库根目录运行专用验收工具：
-
-```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 run rebotarmcontroller p0_gate_bc_acceptance \
-  --hold-seconds 10 \
-  --max-position-jump-rad 0.03 \
-  --max-abs-velocity-rad-s 0.05
-```
-
-工具只有在以下 preflight / 预检全部成立时才继续：
-
-- 六轴 joint names、位置和速度有效；
-- `enabled=false`、`control_loop_active=false`、`state_machine=IDLE`；
-- 六个电机状态码全为 `0`，controller 没有 error code；
-- 当前绝对速度没有超过验收阈值。
-
-现场确认工作区清空、机械臂有失能防坠措施且急停可用后，按工具提示输入精确确认词：
-
-```text
-ENABLE_HOLD_TEST
-```
-
-随后工具只执行显式 enable、当前位置 hold 监控和 disable，不发送 trajectory、safe-home 或 gripper 命令。位置跳变或速度超限时会请求 `trajectory_stop` 和 `disable`；物理急停始终是软件失效时的第一停止手段。
-
-无论通过、失败还是操作员中止，工具都会在以下目录写入 JSON 证据：
-
-```text
-Agent/evidence/P0/gate-bc-YYYYMMDD-HHMMSS.json
-```
-
-只有最终状态满足 `enabled=false`、控制循环停止、六个状态码全为 `0`，且 disable 后 joint states 继续刷新，Gate C 才能通过。
+P0 Gate B/C 自动使能、保持与失能验收工具已于 2026-09-19 移除，不再作为日常测试步骤。
+历史报告保留在 `Agent/evidence/P0/`，仅用于追溯，不代表当前硬件通过验收。
+控制器的显式使能、反馈校验、失败回滚和停止保护继续保留。
+真机操作与停机步骤见 [功能开启指令](rebotarm_feature_commands.md#moveit-实机操作与停机)。

@@ -57,7 +57,7 @@ def test_status_panel_page_is_split_from_ros_node():
     assert "HTML_PAGE = r\"\"\"" not in page_text
     assert 'id="robot-view"' in html_text
     assert 'id="arm-safe-home"' in html_text
-    assert '"rebotarm_dashboard.status_panel_assets": ["index.html"]' in setup_text
+    assert '"rebotarm_dashboard.status_panel_assets": ["index.html", "calibration.html"]' in setup_text
 
 
 def test_status_panel_http_server_is_split_from_ros_node():
@@ -200,6 +200,9 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'name="rebotarm_visual_ready_startup"' in launch_text
     assert '"exit_after_startup_move": True' in launch_text
     assert "post_visual_ready_actions = [" in launch_text
+    assert "run_visual_ready_startup = PythonExpression(" in launch_text
+    assert "condition=IfCondition(run_visual_ready_startup)" in launch_text
+    assert "condition=UnlessCondition(run_visual_ready_startup)" in launch_text
     assert '"auto_move_on_start": move_to_visual_ready_on_start' in launch_text
     assert '"startup_delay_sec": visual_ready_startup_delay_sec' in launch_text
     assert '"joint_positions": visual_ready_joint_positions' in launch_text
@@ -233,7 +236,21 @@ def test_visual_grasp_system_starts_vision_chain_after_visual_ready():
     assert ready_index < post_ready_index < vision_index < ik_index < executor_index
     assert handler_index > executor_index
     assert "GroupAction(" in launch_text
-    assert "condition=UnlessCondition(start_visual_ready)" in launch_text
+    assert "condition=UnlessCondition(run_visual_ready_startup)" in launch_text
+
+
+def test_visual_grasp_system_starts_sim_state_backend_before_moveit_and_ready_gate():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+
+    sim_definition_index = launch_text.index("sim_trajectory_controller = Node(")
+    post_ready_index = launch_text.index("post_visual_ready_actions = [")
+    launch_sim_index = launch_text.index("            sim_trajectory_controller,")
+    launch_moveit_index = launch_text.index("            interactive_system,", launch_sim_index)
+    launch_ready_index = launch_text.index("            visual_ready_startup,", launch_moveit_index)
+
+    assert sim_definition_index < post_ready_index
+    assert launch_sim_index < launch_moveit_index < launch_ready_index
+    assert launch_text.count('executable="rebotarm_sim_trajectory_controller"') == 1
 
 
 def test_visual_grasp_system_uses_lightweight_rviz_config():
@@ -246,73 +263,50 @@ def test_visual_grasp_system_uses_lightweight_rviz_config():
     assert "rviz_default_plugins/MarkerArray" in rviz_text
     assert "/grasp/visual_markers" in rviz_text
     assert "moveit_rviz_plugin/MotionPlanning" not in rviz_text
+    assert "moveit_rviz_plugin/Trajectory" in rviz_text
+    assert "Trajectory Topic: /display_planned_path" in rviz_text
+    assert "State Display Time: 0.03 s" in rviz_text
+    assert '"publish_plan_only_preview": PythonExpression(' in launch_text
+    assert 'DeclareLaunchArgument("plan_only_stage_pause_sec", default_value="0.0")' in launch_text
     assert "rviz_default_plugins/MoveCamera" not in rviz_text
     assert "rviz_default_plugins/Select" not in rviz_text
 
 
-def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack():
-    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py")
+def test_visual_grasp_system_owns_readonly_rviz_and_open3d_previews():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert 'PathJoinSubstitution([vision_share, "launch", "vision.launch.py"])' in launch_text
+    assert not (
+        ROOT / "src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py"
+    ).exists()
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert 'executable="rebotarm_grasp_candidate_ik_filter"' in launch_text
     assert 'executable="rebotarm_visual_grasp_markers"' in launch_text
-    assert 'executable="rviz2"' in launch_text
+    assert 'executable="rebotarm_grasp_candidate_markers"' in launch_text
     assert 'DeclareLaunchArgument("start_open3d_viewer", default_value="true")' in launch_text
     assert 'executable="rebotarm_graspnet_open3d_viewer"' in launch_text
     assert 'condition=IfCondition(start_open3d_viewer)' in launch_text
     assert '"input_candidates_topic": graspnet_candidates_topic' in launch_text
-    assert 'PathJoinSubstitution([bringup_share, "rviz", "visual_grasp.rviz"])' in launch_text
+    assert 'DeclareLaunchArgument("start_raw_candidate_markers", default_value="true")' in launch_text
+    assert 'condition=IfCondition(start_raw_candidate_markers)' in launch_text
+    assert '"output_topic": "/grasp/raw_candidate_markers"' in launch_text
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_candidates_per_frame", default_value="20")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="0.0")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="1.5708")' in launch_text
     assert '"max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
-    assert '"input_topic": graspnet_candidates_topic' in launch_text
+    assert '"input_topic": candidate_ik_input_topic' in launch_text
     assert "interactive_system.launch.py" in launch_text
-    assert 'DeclareLaunchArgument("start_moveit_preview", default_value="true")' in launch_text
-    assert '"use_hardware": "false"' in launch_text
-    assert '"use_moveit_preview": "true"' in launch_text
-    assert "rebotarm_visual_ready" not in launch_text
-    assert "rebotarm_sim_trajectory_controller" not in launch_text
-    assert "PoseExecutionNode" not in launch_text
-    assert "reBotArmController" not in launch_text
-    assert 'package="moveit_ros_move_group"' not in launch_text
+    assert 'DeclareLaunchArgument("use_hardware", default_value="false")' in launch_text
+    assert 'DeclareLaunchArgument("execution_mode", default_value="plan_only")' in launch_text
+    assert 'condition=IfCondition(start_visual_ready)' in launch_text
 
 
-def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
-    launch_text = _read("src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py")
+def test_retired_real_perception_sim_execution_entrypoint_is_absent():
+    assert not (
+        ROOT
+        / "src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py"
+    ).exists()
 
-    assert '[bringup_share, "launch", "visual_grasp_system.launch.py"]' in launch_text
-    assert 'executable="rebotarm_mujoco_node"' in launch_text
-    assert 'DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim")' in launch_text
-    assert '"arm_namespace": sim_arm_namespace' in launch_text
-    assert '"use_hardware": "false"' in launch_text
-    assert '"start_sim_trajectory_controller": "false"' in launch_text
-    assert '"start_visual_ready": "false"' in launch_text
-    assert '"use_local_rviz": use_local_rviz' in launch_text
-    assert 'SetParameter(name="use_sim_time", value=use_sim_time)' in launch_text
-    assert '"execution_mode": "execute"' in launch_text
-    assert '"start_vision": "true"' in launch_text
-    assert '"vision_profile": "ubuntu_native"' in launch_text
-    assert '"start_graspnet_baseline": "true"' in launch_text
-    assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
-    assert "graspnet_local_infer_url" not in launch_text
-    assert '"vision_python_executable": LaunchConfiguration("vision_python_executable")' in launch_text
-    assert '"graspnet_python_executable": LaunchConfiguration("graspnet_python_executable")' in launch_text
-    assert "PYTHONPATH" not in launch_text
-    assert '"candidate_ik_input_topic": "/grasp/graspnet_candidates"' in launch_text
-    assert '"candidate_pose_policy": "preserve_candidate_pose"' in launch_text
-    assert '"candidate_max_candidates_per_frame": "20"' in launch_text
-    assert '"candidate_joint_state_topic": [' in launch_text
-    assert '"/visual_joint_states",' in launch_text
-    assert '"candidate_max_joint6_delta_rad": "0.0"' in launch_text
-    assert '"tcp_offset_xyz": "[0.0, 0.0, 0.0]"' in launch_text
-    assert '"gripper_grasp_enabled": "false"' in launch_text
-    assert '"grasp_verification_enabled": "false"' in launch_text
-    assert '"max_plan_age_sec": "3.0"' in launch_text
-    assert '"moveit_planning_time": "8.0"' in launch_text
-    assert "reBotArmController" not in launch_text
 
 
 def test_visual_grasp_system_can_disable_rviz_only_controller_for_external_mujoco():
@@ -379,6 +373,9 @@ def test_visual_grasp_markers_show_tcp_approach_and_open_axis():
     assert '"show_tcp_markers": show_tcp_markers' in launch_text
     assert '"show_approach_arrow": show_approach_arrow' in launch_text
     assert '"show_gripper_open_axis": show_gripper_open_axis' in launch_text
+    assert '"show_object_marker": False' in launch_text
+    assert '"show_object_center_marker": False' in launch_text
+    assert '"show_object_label": False' in launch_text
     assert "visual_object_center" in marker_text
     assert "visual_pregrasp_tcp" in marker_text
     assert "visual_grasp_tcp" in marker_text
@@ -386,6 +383,15 @@ def test_visual_grasp_markers_show_tcp_approach_and_open_axis():
     assert "visual_gripper_open_axis" in marker_text
     assert "Marker.ARROW" in marker_text
     assert "Marker.LINE_LIST" in marker_text
+
+
+def test_visual_grasp_plan_age_default_is_mode_aware():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+
+    assert '"max_plan_age_sec",\n                default_value=PythonExpression(' in launch_text
+    assert "\"'10.0' if '\"," in launch_text
+    assert "\"'.lower() == 'plan_only' else '1.0'\"," in launch_text
+    assert '"max_plan_age_sec": max_plan_age_sec' in launch_text
 
 
 def test_visual_grasp_benchmark_returns_ready_between_attempts():
@@ -1283,9 +1289,9 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
     assert "def _handle_stop_recording" in recorder_text
     assert "InternalTeachRecorder" not in controller_text
     assert not (ROOT / "src/rebotarmcontroller/rebotarmcontroller/teach_recorder.py").exists()
-    hardware_launch = _read("src/rebotarm_bringup/launch/moveit_hardware.launch.py")
-    assert 'package="rebotarm_teach"' in hardware_launch
-    assert 'executable="TeachRecorderNode"' in hardware_launch
+    app_launch = _read("src/rebotarm_bringup/launch/rebotarm_app.launch.py")
+    assert 'package="rebotarm_teach"' in app_launch
+    assert 'executable="TeachRecorderNode"' in app_launch
     assert '"start_on_launch": False' in teleop_launch_text
     assert '"require_motor_status": ParameterValue(use_hardware, value_type=bool)' in teleop_launch_text
 
@@ -1394,7 +1400,9 @@ def test_moveit_demo_standalone_publishes_fake_visual_joint_state_source():
     assert '"/joint_states", ["/", arm_namespace, "/joint_states"]' in demo_text
     assert 'executable="GripperVisualJointStateNode"' in demo_text
     assert '"/joint_states", ["/", arm_namespace, "/visual_joint_states"]' in demo_text
-    assert '"use_fake_joint_states": "false"' in hardware_text
+    assert '"use_moveit_fake_joint_states": "false"' in hardware_text
+    assert '"use_hardware": "true"' in hardware_text
+    assert '"use_moveit_preview": "true"' in hardware_text
     assert '"use_fake_joint_states": PythonExpression' in interactive_text
     assert 'use_moveit_fake_joint_states' in interactive_text
 

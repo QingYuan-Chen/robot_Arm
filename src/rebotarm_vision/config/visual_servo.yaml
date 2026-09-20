@@ -5,9 +5,9 @@
 # 注意：本文件中的参数键都是对外接口，禁止改动；只允许增加注释。
 rebotarm_visual_grasp_executor:
   ros__parameters:
-    # plan_only（只规划干跑）模式下每个运动阶段的最短停顿（单位 s），
-    # 给操作员留出核对规划结果的时间；执行模式下该值不起作用。
-    plan_only_stage_pause_sec: 3.0
+    # plan_only（只规划干跑）模式下各阶段之间的诊断等待（单位 s）。
+    # 完整轨迹会在所有阶段规划成功后一次发送给 RViz，因此默认无需停顿。
+    plan_only_stage_pause_sec: 0.0
     # 是否在到达接近点后等待更新版本的抓取计划（近距离视觉更准）。
     # 注意：执行节点内部的参数默认是 true，本档显式置 false，即默认不做计划刷新。
     refresh_plan_at_pregrasp_enabled: false

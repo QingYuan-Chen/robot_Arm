@@ -1,10 +1,11 @@
-#真实机械臂「一体化工作台」启动入口：MoveIt + 网页遥操作面板 + 可选 RViz。
+#真实机械臂「一体化工作台」启动入口：MoveIt + 示教录制 + 网页遥操作面板 + 可选 RViz。
 #
-#用途：面向真机的单命令入口。它包含完整的硬件与 MoveIt 栈（由本包的硬件启动文件组装），再叠加一个网页遥操作状态面板；示教录制/检查/回放由网页界面里的示教卡片驱动，本文件不再直接拉起录制或回放节点，也不提供 mode/profile 之类的分支参数。
+#用途：面向真机的单命令入口。它包含完整的硬件与 MoveIt 栈（由本包的硬件启动文件组装），再叠加示教录制节点和网页遥操作状态面板；示教录制/检查/回放由网页界面里的示教卡片驱动，不提供 mode/profile 之类的分支参数。
 #
 #启动组合与后端选择：
 #
 #- 先包含 "moveit_hardware.launch.py"（真机控制器 + MoveIt "move_group"），统一传入串口通道与抓爪安全阈值；
+#- 启动唯一的 TeachRecorderNode，录制由 Dashboard 卡片显式开始和停止；
 #- 可选启动 RViz（"use_rviz"，使用网页遥操作专用的只读状态布局）；
 #- "panel=true" 时启动网页遥操作状态面板节点，参数里的 "panel_mode="control"" 表示面板处于可下发控制命令的模式（"web_execute_enabled” 再叠加一层执行许可）。
 #
@@ -149,13 +150,30 @@ def _launch_setup(context, *args, **kwargs):
                 "arm_namespace": arm_namespace,
                 "channel": resolved_channel,
                 "use_rviz": "false",
-                "teach_record_path": record_path,
                 "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
                 "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
                 "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
                 "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
                 "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
             }.items(),
+        ),
+        # 示教录制属于完整工作台，不属于基础 MoveIt 入口；默认不自动开始录制。
+        Node(
+            package="rebotarm_teach",
+            executable="TeachRecorderNode",
+            name="teach_recorder_node",
+            output="screen",
+            parameters=[
+                common_config,
+                teach_config,
+                {
+                    "arm_namespace": arm_namespace,
+                    "record_path": record_path,
+                    "start_on_launch": False,
+                    "keyboard_quit_enabled": False,
+                    "require_motor_status": _as_bool(use_hardware),
+                },
+            ],
         ),
         # 网页遥操作专用 RViz 布局：只显示机器人状态与 TF，不提供运动规划交互
         Node(
@@ -186,6 +204,13 @@ def _launch_setup(context, *args, **kwargs):
 
     actions.append(LogInfo(msg="teach recording/check/replay are controlled from the web Teach Trajectory card"))
 
+    actions.append(Node(
+        package="rebotarm_calibration", executable="rebotarm_handeye_capture",
+        output="screen", condition=IfCondition(LaunchConfiguration("calibration")),
+        parameters=[{"image_topic": LaunchConfiguration("calibration_image_topic"),
+                     "camera_info_topic": LaunchConfiguration("calibration_camera_info_topic"),
+                     "session_directory": LaunchConfiguration("calibration_session_directory")}],
+    ))
     return actions
 
 
@@ -230,6 +255,10 @@ def generate_launch_description():
             DeclareLaunchArgument("common_config", default_value=common_config),
             DeclareLaunchArgument("web_config", default_value=web_config),
             DeclareLaunchArgument("teach_config", default_value=teach_config),
+            DeclareLaunchArgument("calibration", default_value="false"),
+            DeclareLaunchArgument("calibration_image_topic", default_value="/camera/color/image_raw"),
+            DeclareLaunchArgument("calibration_camera_info_topic", default_value="/camera/color/camera_info"),
+            DeclareLaunchArgument("calibration_session_directory", default_value="~/.ros/rebotarm_calibration"),
             OpaqueFunction(function=_launch_setup),
         ]
     )

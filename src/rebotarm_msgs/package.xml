@@ -25,6 +25,7 @@
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>trajectory_msgs</depend>
+  <depend>sensor_msgs</depend>
 
   <!-- rosidl 运行期支持：生成代码在 import 时需要它，属于运行期依赖而非构建依赖。 -->
   <exec_depend>rosidl_default_runtime</exec_depend>

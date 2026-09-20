@@ -39,6 +39,8 @@ class PostRoute:
 
 # 全部允许 POST 的路径及其处理方法；路径字符串是前端约定的对外接口，不可改写。
 POST_ROUTES: dict[str, PostRoute] = {
+    "/api/calibration/gravity": PostRoute("_handle_calibration_gravity", payload=True),
+    "/api/calibration/command": PostRoute("_handle_calibration_command", payload=True),
     # 预览一次点动执行：只做参数校验与规划检查，不直接下发硬件目标
     "/api/execute_preview": PostRoute("_handle_execute_preview", payload=True),
     # 停止正在执行的 web 点动目标
@@ -78,7 +80,7 @@ def is_allowed_post_path(path: str) -> bool:
     return path in POST_ROUTES
 
 
-def dispatch_post_request(node: object, path: str, payload_reader: Callable[[], dict]) -> dict:
+def _dispatch_post_request(node: object, path: str, payload_reader: Callable[[], dict]) -> dict:
     """把请求分发到面板节点上对应的处理方法，并返回其结果字典。
 
     payload_reader 是惰性读取函数：只有路由声明需要请求体时才会被调用，
@@ -99,3 +101,20 @@ def dispatch_post_request(node: object, path: str, payload_reader: Callable[[], 
     if not isinstance(result, dict):
         raise StatusPanelApiError(f"{route.handler_name} must return a dict")
     return result
+
+
+def dispatch_post_request(node, path, payload_reader):
+    from contextlib import nullcontext
+    # Calibration has its own lock and never commands motion. Do not let its
+    # potentially long solve hold the operator lock or delay a stop request.
+    if path == '/api/calibration/command':
+        return _dispatch_post_request(node, path, payload_reader)
+    lock = getattr(node, '_operator_request_lock', None)
+    with lock if lock is not None else nullcontext():
+        if getattr(node, '_calibration_gravity_owned', False) and path not in {
+            '/api/calibration/command', '/api/calibration/gravity', '/api/stop_execute',
+            '/api/teach_replay_stop', '/api/keyboard_disable', '/api/arm_disable',
+        }:
+            return {'accepted': False, 'state': 'blocked',
+                    'message': '标定拖动占用控制，请先明确退出重力补偿'}
+        return _dispatch_post_request(node, path, payload_reader)

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 import time
+import math
 
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
+from sensor_msgs.msg import JointState
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
@@ -12,7 +14,7 @@ from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener
 
 from rebotarm_msgs.msg import GraspCandidateArray, GraspPlan
-from rebotarm_msgs.srv import ExecutePose, GraspGripper, SetGripper
+from rebotarm_msgs.srv import ExecutePose, GraspGripper, PublishTrajectoryPreview, SetGripper
 
 from .grasp_retry_policy import RetryPolicyConfig, ordered_candidate_indices
 from .grasp_verification_policy import (
@@ -65,7 +67,7 @@ from .visual_servo_policy import VisualServoApproachConfig, build_visual_servo_s
 # 安全设计（阅读时请重点注意）
 #   1. `execution_mode` 决定一切动作是否真正下发：只有取值 execute / real 才视为"执行"；
 #      其余（含默认 plan_only）下所有运动只做规划干跑、夹爪与回零命令一律跳过，
-#      每个运动阶段还会额外停顿 `plan_only_stage_pause_sec`，方便人工核对。
+#      各段规划成功后由运动层一次性发布连续 RViz 预览；不会逐段重启动画。
 #   2. 抓取计划具有时效性：`max_plan_age_sec` 之外的旧计划、时间戳未设置的计划一律拒收，
 #      避免用几秒前的检测结果去驱动现在的机械臂。
 #   3. 抓取点高度受 `min_grasp_z_m` 下限保护（在序列构建策略中校验），防止规划到桌面以下。
@@ -268,8 +270,8 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("lift_velocity_scaling", 0.08)
         # 加速度缩放，所有阶段共用
         self.declare_parameter("acceleration_scaling", 0.08)
-        # plan_only 模式下每个运动阶段的最短停顿（s），给人工核对留时间
-        self.declare_parameter("plan_only_stage_pause_sec", 3.0)
+        # plan_only 阶段间诊断等待（s）；默认 0，连续预览无需人为停顿
+        self.declare_parameter("plan_only_stage_pause_sec", 0.0)
 
         # ── 到接近点后刷新计划 ─────────────────────────────────────────────
         # 是否在到达接近点后等待更新版本的抓取计划（近距离视觉更准）
@@ -345,7 +347,7 @@ class VisualGraspExecutorNode(Node):
         self._max_plan_age_sec = float(self.get_parameter("max_plan_age_sec").value)
         self._execution_mode = str(self.get_parameter("execution_mode").value).strip().lower()
         # 阶段名 → 该阶段成功后的固定等待（s）。等待只用于让机械/夹爪稳定，未列出的阶段不等待；
-        # 具体时长来自参数，plan_only 模式下运动阶段会再取与 plan_only_stage_pause_sec 的较大值
+        # 具体时长来自参数；plan_only 不需要机械稳定等待，只使用其专用诊断等待参数
         self._stage_waits = {
             "move_to_pregrasp": float(self.get_parameter("pregrasp_wait_sec").value),
             "approach_grasp": float(self.get_parameter("approach_wait_sec").value),
@@ -357,6 +359,7 @@ class VisualGraspExecutorNode(Node):
 
         # ── 运行状态 ───────────────────────────────────────────────────────
         self._latest_plan: GraspPlan | None = None  # 最近一次通过校验的抓取计划
+        self._last_plan_rejection: str = ""  # 服务诊断：最新被丢弃计划的原因，不参与安全判定
         self._latest_candidates: GraspCandidateArray | None = None  # 最近一次非空候选数组
         self._plan_revision = 0  # 计划版本号，每次接受新计划自增；用于判断"是否来了更新的计划"
         self._last_gripper_reached_position: float | None = None  # 最近一次张爪实际到位开口（m），用于估算闭合行程
@@ -369,6 +372,8 @@ class VisualGraspExecutorNode(Node):
         self._current_attempt_index = 0  # 当前尝试序号（从 1 开始），仅用于日志
         self._current_candidate_index = -1  # 当前候选下标；-1 表示用的上游最优计划而非候选重试
         self._current_attempt_plan: GraspPlan | None = None  # 本轮尝试使用的计划，失败时用于打印快照
+        self._preview_start_joint_state: JointState | None = None  # 只在本轮纯规划中传递上一段轨迹终点
+        self._preview_trajectories = []  # 本轮纯规划的各段结果；全部成功后才一次发布给 RViz
         self._running = False  # 运行标志：所有等待循环的取消点，停止服务与异常都会把它置假
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -377,6 +382,11 @@ class VisualGraspExecutorNode(Node):
         self._execute_pose_client = self.create_client(
             ExecutePose,
             f"/{self._arm_namespace}/motion_execution/execute_pose",
+            callback_group=self._callback_group,
+        )
+        self._publish_preview_client = self.create_client(
+            PublishTrajectoryPreview,
+            f"/{self._arm_namespace}/motion_execution/publish_trajectory_preview",
             callback_group=self._callback_group,
         )
         self._motion_stop_client = self.create_client(
@@ -440,10 +450,16 @@ class VisualGraspExecutorNode(Node):
         """
 
         if not plan.valid:
+            self._last_plan_rejection = f"invalid grasp plan: {plan.reason or 'upstream reported invalid'}"
             return
         if not self._plan_is_fresh(plan):
+            age = message_age_sec(plan.header.stamp, now_ns=int(self.get_clock().now().nanoseconds))
+            self._last_plan_rejection = (
+                f"grasp plan expired on arrival: age_sec={age}, max_plan_age_sec={self._max_plan_age_sec}"
+            )
             return
         self._latest_plan = deepcopy(plan)
+        self._last_plan_rejection = ""
         self._plan_revision += 1
 
     def _plan_is_fresh(self, plan: GraspPlan | None) -> bool:
@@ -498,9 +514,16 @@ class VisualGraspExecutorNode(Node):
             response.success = False
             response.message = "visual grasp already running"
             return response
-        if self._latest_plan is None or not self._plan_is_fresh(self._latest_plan):
+        if self._latest_plan is None:
             response.success = False
-            response.message = "no fresh valid grasp plan received"
+            response.message = self._last_plan_rejection or "no grasp plan received yet"
+            return response
+        if not self._plan_is_fresh(self._latest_plan):
+            age = message_age_sec(
+                self._latest_plan.header.stamp, now_ns=int(self.get_clock().now().nanoseconds)
+            )
+            response.success = False
+            response.message = f"cached grasp plan expired: age_sec={age}, max_plan_age_sec={self._max_plan_age_sec}"
             return response
         self._running = True
         self._run_counter += 1
@@ -515,6 +538,8 @@ class VisualGraspExecutorNode(Node):
                 return response
             self._log_diagnostic("filter", "ok", f"attempts={len(attempts)}")
             for attempt_index, (candidate_index, plan) in enumerate(attempts):
+                self._preview_start_joint_state = None
+                self._preview_trajectories = []
                 self._current_attempt_index = attempt_index + 1
                 self._current_candidate_index = int(candidate_index)
                 self._current_attempt_plan = deepcopy(plan)
@@ -531,6 +556,13 @@ class VisualGraspExecutorNode(Node):
                 stages = self._append_place_stages(self._build_sequence_from_plan(plan))
                 ok, message, failed_stage = self._execute_stages(stages)
                 if ok:
+                    if not self._execution_enabled():
+                        ok, message = self._publish_preview_sequence()
+                        if not ok:
+                            response.success = False
+                            response.message = f"preview publication failed: {message}"
+                            self._log_diagnostic("preview", "fail", message)
+                            return response
                     response.success = True
                     response.message = "visual grasp sequence finished"
                     self._log_diagnostic("result", "success", response.message)
@@ -571,6 +603,8 @@ class VisualGraspExecutorNode(Node):
             return response
         finally:
             self._current_attempt_plan = None
+            self._preview_start_joint_state = None
+            self._preview_trajectories = []
             self._running = False
 
     def _stop_visual_grasp(self, _request, response):
@@ -1099,9 +1133,9 @@ class VisualGraspExecutorNode(Node):
           - safe_home：回安全位（未开启执行时直接跳过）。
         未知 `kind` 视为失败，避免静默漏掉某个阶段。
 
-        阶段成功后按 `_stage_waits` 做固定等待；plan_only 下的运动阶段额外保证至少停顿
-        `plan_only_stage_pause_sec`（便于人工观察干跑结果）。等待结束后再检查一次
-        `_running`：若期间收到停止请求，本阶段返回失败 `stopped`，让上层停止推进。
+        真正执行时按 `_stage_waits` 做机械稳定等待；plan_only 不发生机械动作，因此不使用
+        这些等待，只保留可选的 `plan_only_stage_pause_sec` 诊断节拍（默认 0）。等待结束后
+        再检查一次 `_running`：若期间收到停止请求，本阶段返回失败 `stopped`。
         """
 
         self._log_diagnostic(stage.name, "start")
@@ -1126,9 +1160,10 @@ class VisualGraspExecutorNode(Node):
         if not ok:
             self._log_diagnostic(stage.name, "fail", message)
             return False, message
-        wait_sec = self._stage_waits.get(stage.name, 0.0)
-        if not self._execution_enabled() and stage.kind == "move":
-            wait_sec = max(wait_sec, float(self.get_parameter("plan_only_stage_pause_sec").value))
+        if self._execution_enabled():
+            wait_sec = self._stage_waits.get(stage.name, 0.0)
+        else:
+            wait_sec = float(self.get_parameter("plan_only_stage_pause_sec").value)
         time.sleep(max(0.0, wait_sec))
         if not self._running:
             return False, "stopped"
@@ -1175,13 +1210,50 @@ class VisualGraspExecutorNode(Node):
         request.acceleration_scaling = float(self.get_parameter("acceleration_scaling").value)
         request.timeout_sec = self._motion_result_timeout_sec
         request.execute = bool(execute)
+        request.suppress_preview = bool(not execute and not self._execution_enabled())
+        if not execute and not self._execution_enabled() and self._preview_start_joint_state is not None:
+            request.preview_start_joint_state = deepcopy(self._preview_start_joint_state)
         future = self._execute_pose_client.call_async(request)
         if not self._wait_for_future(future, self._service_timeout_sec + self._motion_result_timeout_sec):
             return False, "motion execution service call timed out"
         result = future.result()
         if result is None:
             return False, "motion execution returned no result"
+        if result.success and not execute and not self._execution_enabled():
+            trajectory = result.planned_trajectory
+            names = list(trajectory.joint_names)
+            points = list(trajectory.points)
+            if (
+                len(names) != 6
+                or set(names) != {f"joint{i}" for i in range(1, 7)}
+                or not points
+                or len(points[-1].positions) != 6
+                or not all(math.isfinite(value) for value in points[-1].positions)
+            ):
+                return False, "plan-only response has no valid arm trajectory"
+            next_start = JointState()
+            next_start.name = names
+            next_start.position = list(points[-1].positions)
+            self._preview_start_joint_state = next_start
+            self._preview_trajectories.append(deepcopy(trajectory))
         return bool(result.success), f"{result.stage}: {result.message}"
+
+    def _publish_preview_sequence(self) -> tuple[bool, str]:
+        """全部阶段规划成功后，请运动层一次发布完整 RViz 预览序列。"""
+
+        if not self._preview_trajectories:
+            return False, "no planned trajectories collected"
+        if not self._publish_preview_client.wait_for_service(timeout_sec=self._service_timeout_sec):
+            return False, "trajectory preview service unavailable"
+        request = PublishTrajectoryPreview.Request()
+        request.trajectories = deepcopy(self._preview_trajectories)
+        future = self._publish_preview_client.call_async(request)
+        if not self._wait_for_future(future, self._service_timeout_sec):
+            return False, "trajectory preview service call timed out"
+        result = future.result()
+        if result is None:
+            return False, "trajectory preview service returned no result"
+        return bool(result.success), str(result.message)
 
     def _execution_enabled(self) -> bool:
         """是否处于真正下发动作的模式：只有 execute / real 算数，其余（含 plan_only）都只做规划。"""

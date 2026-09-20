@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -53,6 +54,7 @@ from .tcp_calibration import (
     estimate_sample_offset,
     format_tcp_offset_yaml,
     quaternion_to_rotation_matrix,
+    _rotation_distance_deg,
 )
 
 
@@ -64,7 +66,10 @@ def _tuple3(values, name: str) -> tuple[float, float, float]:
     items = list(values)
     if len(items) != 3:
         raise ValueError(f"{name} must contain exactly 3 values")
-    return (float(items[0]), float(items[1]), float(items[2]))
+    result = tuple(float(v) for v in items)
+    if not all(math.isfinite(v) for v in result):
+        raise ValueError(f"{name} must be finite")
+    return result
 
 
 def _transform_point(transform_stamped, point) -> tuple[float, float, float]:
@@ -206,6 +211,19 @@ class TcpCalibrationNode(Node):
         # 超限说明标定板或机械臂在采集期间晃动，必须重新冻结
         self.declare_parameter("aruco.maximum_reference_std_m", 0.002)
 
+        for name, default in {
+            "capture_timeout_sec": 15.0, "maximum_age_sec": 0.5,
+            "stability_window_sec": 0.4, "stability_translation_m": 0.001,
+            "stability_rotation_deg": 0.5, "aruco.maximum_reprojection_rmse_px": 1.0,
+            "aruco.minimum_area_px2": 400.0, "aruco.maximum_distance_m": 2.0,
+            "aruco.maximum_info_skew_sec": 0.1,
+        }.items():
+            self.declare_parameter(name, default)
+            value = float(self.get_parameter(name).value)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+            setattr(self, name.replace(".", "_"), value)
+
         self.reference_mode = str(self.get_parameter("reference_mode").value).strip().lower()
         # 大小写与首尾空白都会被规范化；非法值立即失败，不进入后续流程
         if self.reference_mode not in {"pivot", "manual", "aruco"}:
@@ -232,8 +250,22 @@ class TcpCalibrationNode(Node):
             0.0, float(self.get_parameter("aruco.maximum_reference_std_m").value)
         )
 
+        for name in ("sample_count", "aruco.reference_frames", "aruco.maximum_frames"):
+            value = self.get_parameter(name).value
+            if int(value) != value or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        for name in ("lookup_timeout_sec", "aruco.maximum_reference_std_m", "aruco.marker_length_m"):
+            value = float(self.get_parameter(name).value)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+        if self.sample_count < 5 and not self.preflight_only:
+            raise ValueError("sample_count must be at least five")
+        if int(self.get_parameter("aruco.maximum_frames").value) < self.reference_frames:
+            raise ValueError("maximum_frames must cover reference_frames")
+        if self.capture_timeout_sec <= self.stability_window_sec:
+            raise ValueError("capture_timeout_sec must exceed stability_window_sec")
         self.tf_buffer = Buffer()
-        # TransformListener 在节点回调线程里持续填充缓冲，本节点不需要自转等待
+        # Callbacks are serviced explicitly during bounded capture windows.
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.bridge = CvBridge()
         # 只保留最新一帧：抽帧节拍由 prepare_reference 控制，积压旧帧没有意义
@@ -264,18 +296,25 @@ class TcpCalibrationNode(Node):
         # 内参与图像分别缓存，采样时各取"当前最新"
         self.latest_camera_info = message
 
-    def _lookup(self, target: str, source: str):
+    def _lookup(self, target: str, source: str, stamp=None):
         """查询 target <- source 的最新 TF，超时由 ``lookup_timeout_sec`` 控制。
 
-        传入 ``rclpy.time.Time()``（零时刻）表示取缓冲区中最新的可用变换，而不是某个历史
-        时刻；超时或链路缺失时抛出 tf2 异常，由调用方决定是否终止标定。
+        未指定 stamp 时查询最新变换；指定时查询图像拍摄时刻。查询不阻塞，
+        外层采集循环负责处理回调、重试和总超时。
         """
         return self.tf_buffer.lookup_transform(
             target,
             source,
-            rclpy.time.Time(),
+            rclpy.time.Time.from_msg(stamp) if stamp is not None else rclpy.time.Time(),
             timeout=rclpy.duration.Duration(seconds=self.lookup_timeout_sec),
         )
+
+    def _check_stamp(self, stamp):
+        stamp_ns = int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+        age = (self.get_clock().now().nanoseconds - stamp_ns) / 1e9
+        if stamp_ns <= 0 or age < -0.05 or age > self.maximum_age_sec:
+            raise ValueError(f"stale or invalid timestamp: age={age:.3f}s")
+        return stamp_ns
 
     def prepare_reference(self) -> tuple[float, float, float]:
         """按当前模式准备并返回基座坐标系下的参考点（米），同时记录冻结过程数据。
@@ -311,13 +350,20 @@ class TcpCalibrationNode(Node):
         normals: list[np.ndarray] = []
         attempts = 0
         last_stamp = None
+        deadline = time.monotonic() + self.capture_timeout_sec
+        rejected = []
+        frame_quality = []
         dictionary = str(self.get_parameter("aruco.dictionary").value)
         marker_id = int(self.get_parameter("aruco.marker_id").value)
         marker_length = float(self.get_parameter("aruco.marker_length_m").value)
         # 抽帧节拍：spin_once 每次最多等 0.2 s 处理一轮回调（图像+内参），
         # 两个条件分别限制尝试总数与已接受帧数，保证不无限等待也不超采
         while attempts < self.maximum_frames and len(accepted) < self.reference_frames:
-            rclpy.spin_once(self, timeout_sec=0.2)
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f"ArUco capture timeout: accepted={len(accepted)}, attempts={attempts}")
+            if not rclpy.ok():
+                raise RuntimeError("ROS shutdown during reference capture")
+            rclpy.spin_once(self, timeout_sec=0.05)
             image = self.latest_image
             info = self.latest_camera_info
             if image is None or info is None:
@@ -329,6 +375,16 @@ class TcpCalibrationNode(Node):
             last_stamp = stamp
             attempts += 1
             try:
+                image_ns = self._check_stamp(image.header.stamp)
+                info_ns = self._check_stamp(info.header.stamp)
+                if abs(image_ns - info_ns) / 1e9 > self.aruco_maximum_info_skew_sec:
+                    raise ValueError("Image/CameraInfo timestamp mismatch")
+                if image.header.frame_id != self.camera_frame or info.header.frame_id != self.camera_frame:
+                    raise ValueError("Image/CameraInfo must match configured optical camera_frame")
+                if (image.width, image.height) != (info.width, info.height):
+                    raise ValueError("Image/CameraInfo resolution mismatch")
+                if info.distortion_model not in ("plumb_bob", "rational_polynomial"):
+                    raise ValueError("unsupported CameraInfo distortion model")
                 color = self.bridge.imgmsg_to_cv2(image, desired_encoding="bgr8")
                 # K 为 3x3 行主序内参矩阵（像素单位）；畸变系数单独取自 info.d
                 matrix = np.asarray(info.k, dtype=np.float64).reshape(3, 3)
@@ -342,7 +398,13 @@ class TcpCalibrationNode(Node):
                 )
                 # PnP 给出标定板中心在相机坐标系下的位置（米）
                 camera_point = marker["camera_to_marker"]["translation"]
-                base_camera = self._lookup(self.base_frame, self.camera_frame)
+                if marker["reprojection_rmse_px"] > self.aruco_maximum_reprojection_rmse_px:
+                    raise ValueError("ArUco reprojection error too large")
+                if marker["area_px2"] < self.aruco_minimum_area_px2:
+                    raise ValueError("ArUco marker too small")
+                if not 0 < np.linalg.norm(camera_point) <= self.aruco_maximum_distance_m:
+                    raise ValueError("ArUco distance out of range")
+                base_camera = self._lookup(self.base_frame, self.camera_frame, image.header.stamp)
                 # 换算到基座系，作为参考点的一个候选
                 accepted.append(_transform_point(base_camera, camera_point))
                 base_rotation = base_camera.transform.rotation
@@ -355,8 +417,11 @@ class TcpCalibrationNode(Node):
                 # 旋转矩阵第 3 列即标定板法向（板 z 轴）在基座系下的单位向量，
                 # 用它检查采集期间板子是否被移动或翻动
                 normals.append((base_to_camera_rotation @ camera_to_marker_rotation)[:, 2])
+                frame_quality.append({"image_stamp_ns": image_ns, "area_px2": marker["area_px2"],
+                                      "reprojection_rmse_px": marker["reprojection_rmse_px"]})
             except Exception as exc:
                 # 单帧失败不终止：检测不到目标、PnP 失败、TF 缺失都只记日志后跳过
+                rejected.append({"stamp": stamp, "reason": str(exc)})
                 self.get_logger().warn(f"ArUco reference frame rejected: {exc}")
         # fail closed：帧数不够时绝不拿部分数据当参考点
         if len(accepted) < self.reference_frames:
@@ -376,6 +441,8 @@ class TcpCalibrationNode(Node):
         self.tcp_reference_position = tuple(float(value) for value in reference)
         # 平均法向后归一化：单位向量直接取平均只是小角度近似，这里仅作诊断输出
         mean_normal = np.mean(np.stack(normals), axis=0)
+        if np.linalg.norm(mean_normal) < 1e-6:
+            raise RuntimeError("ArUco plane normals are inconsistent")
         mean_normal /= np.linalg.norm(mean_normal)
         # 逐帧法向与平均法向的夹角（度）；clip 到 [-1, 1] 防浮点越界让 arccos 报错
         normal_errors_deg = [
@@ -394,6 +461,8 @@ class TcpCalibrationNode(Node):
             "plane_normal_base": mean_normal.tolist(),
             "plane_normal_rms_deg": float(np.sqrt(np.mean(np.square(normal_errors_deg)))),
             "plane_normal_max_deg": float(np.max(normal_errors_deg)),
+            "frame_quality": frame_quality,
+            "rejected_frames": rejected,
             "accepted": len(accepted),
             "attempts": attempts,
             "camera_frame": self.camera_frame,
@@ -412,12 +481,38 @@ class TcpCalibrationNode(Node):
         ``end_link_orientation_xyzw`` 为基座系姿态四元数 (x, y, z, w)。非 ``pivot`` 模式
         下额外记录当次使用的参考点与该姿态反算出的 TCP 偏移，便于逐点复核。
         """
-        # 先自转几轮（最多 0.5 s）让 TF 缓冲拿到最新变换，避免记录到过期位姿
-        for _ in range(5):
-            rclpy.spin_once(self, timeout_sec=0.1)
-        tf_msg = self._lookup(self.base_frame, self.end_link_frame)
+        deadline = time.monotonic() + self.capture_timeout_sec
+        window = []
+        last_error = "no fresh TF"
+        while time.monotonic() < deadline:
+            if not rclpy.ok():
+                raise RuntimeError("ROS shutdown during sample capture")
+            rclpy.spin_once(self, timeout_sec=0.05)
+            try:
+                tf_msg = self._lookup(self.base_frame, self.end_link_frame)
+                stamp_ns = self._check_stamp(tf_msg.header.stamp)
+                if window and stamp_ns <= window[-1][0]:
+                    continue
+                t = tf_msg.transform
+                position = np.array([t.translation.x, t.translation.y, t.translation.z])
+                rotation = quaternion_to_rotation_matrix([t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w])
+                if not np.all(np.isfinite(position)):
+                    raise ValueError("non-finite TF position")
+                if window and any(np.linalg.norm(position - p) > self.stability_translation_m or
+                                  _rotation_distance_deg(rotation, r) > self.stability_rotation_deg
+                                  for _, p, r in window):
+                    window = []
+                window.append((stamp_ns, position, rotation))
+                if len(window) >= 3 and (stamp_ns - window[0][0]) / 1e9 >= self.stability_window_sec:
+                    break
+            except Exception as exc:
+                last_error = str(exc)
+                window = []
+        else:
+            raise RuntimeError(f"TF capture timeout: {last_error}; require fresh stable samples")
         transform = tf_msg.transform
         sample: dict[str, object] = {
+            "tf_stamp_ns": stamp_ns,
             "monotonic_ns": time.monotonic_ns(),
             "end_link_position": [
                 float(transform.translation.x),
@@ -458,6 +553,9 @@ class TcpCalibrationNode(Node):
         )
         return {
             "schema_version": 1,
+            "base_frame": self.base_frame,
+            "end_link_frame": self.end_link_frame,
+            "reference_mode": self.reference_mode,
             "reference_capture": self.reference_capture,
             "samples": self.samples,
             "analysis": analysis,
@@ -472,8 +570,9 @@ def main(args=None) -> None:
     结束还是被中断，都会销毁节点并关闭 rclpy。
     """
     rclpy.init(args=args)
-    node = TcpCalibrationNode()
+    node = None
     try:
+        node = TcpCalibrationNode()
         reference = node.prepare_reference()
         if node.reference_mode == "pivot":
             # pivot 模式没有先验参考点，必须提醒操作者固定住同一个物理尖点
@@ -495,11 +594,11 @@ def main(args=None) -> None:
                 "preflight_only": True,
                 "reference_capture": node.reference_capture,
             }
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
             if node.output_path:
                 path = Path(node.output_path).expanduser()
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                path.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
             return
         # 每个样本都要求人工对位后回车触发，确保操作者确认机械臂已稳定再记录
         for index in range(node.sample_count):
@@ -522,20 +621,24 @@ def main(args=None) -> None:
         analysis = result["analysis"]
         print("")
         print("TCP calibration analysis:")
-        print(json.dumps(analysis, ensure_ascii=False, indent=2))
-        print(format_tcp_offset_yaml(analysis["tcp_offset_xyz"]))
+        print(json.dumps(analysis, ensure_ascii=False, indent=2, allow_nan=False))
+        if analysis["passed"]:
+            print(format_tcp_offset_yaml(analysis["tcp_offset_xyz"]))
+        else:
+            print("REJECTED: " + ", ".join(k for k, v in analysis["gates"].items() if not v))
         # 只打印候选结果：是否部署由人工在核对全部门后另行决定
         print("Candidate is not deployed automatically; deploy only when every gate passes.")
         if node.output_path:
             path = Path(node.output_path).expanduser()
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            path.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
             print(f"raw result written to {path}")
     except (KeyboardInterrupt, EOFError, ExternalShutdownException):
         # 人工中断与输入结束是交互式标定的正常退出路径，不视为失败
         pass
     finally:
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
 

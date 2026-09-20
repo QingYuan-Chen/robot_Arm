@@ -79,10 +79,19 @@ ros2 topic echo /grasp/graspnet_candidates --once
 ros2 topic hz /grasp/graspnet_candidates
 ```
 
-夹爪位姿优先使用 RViz Marker 显示。启动只读预览：
+夹爪位姿优先使用 RViz Marker 显示。统一视觉入口的纯感知模式不会启动真机控制器、
+运动执行节点或抓取执行器；无硬件状态后端只为 TF 和 IK 提供假关节状态：
 
 ```bash
-ros2 launch rebotarm_bringup visual_grasp_perception_preview.launch.py
+ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
+  use_hardware:=false \
+  execution_mode:=plan_only \
+  execute_gripper:=false \
+  start_visual_ready:=false \
+  start_motion_execution:=false \
+  start_visual_grasp_executor:=false \
+  start_open3d_viewer:=true \
+  use_local_rviz:=true
 ```
 
 在 RViz 中确认：
@@ -91,15 +100,10 @@ ros2 launch rebotarm_bringup visual_grasp_perception_preview.launch.py
 - 添加 `MarkerArray`，话题选择视觉夹爪 Marker 话题；
 - 能看到候选物体、pregrasp、grasp、TCP、接近箭头和夹爪开口方向。
 
-这个预览不会启动真实机械臂，也不会执行候选。RViz Marker 比直接在 GraspNet
-推理节点内启动 Open3D 窗口更适合 ROS 测试，因为它保持 ROS 时间戳、TF 和候选
-消息一致，也不会让 GUI 阻塞推理线程。
-
-当前版本没有把 Open3D GUI 作为默认 ROS 测试窗口。Open3D 适合离线保存一帧
-点云后检查几何，但不适合直接放进实时 GraspNet 回调：GUI 事件循环可能阻塞
-推理，且点云与候选位姿容易出现时间戳不一致。因此实时验收使用 RViz：它能同时
-显示点云、TF、候选物体、pregrasp、grasp、TCP 和夹爪开口方向；需要离线点云
-质量分析时再单独使用 Open3D 查看保存的数据。
+这个模式不会启动真实机械臂，也不会执行候选。RViz Marker 保留 ROS 时间戳、TF 和
+过滤后计划；Open3D 是独立只读订阅者，复用同一组 RGB-D、内参与原始候选，在独立
+窗口显示完整点云和实体夹爪，不在 GraspNet 推理回调里运行。无桌面环境或不需要
+Open3D 时传 `start_open3d_viewer:=false`。
 
 ## 5. 验收顺序
 
