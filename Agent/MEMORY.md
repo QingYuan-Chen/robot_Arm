@@ -755,3 +755,7 @@ Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，�
 2026-09-21 视觉预抓取几何简化：彻底删除固定5cm base-Z预抓取偏移及其ROS/launch/YAML接口；visual_grasp_system默认preserve_candidate_pose下，pregrasp仅沿GraspNet候选TCP局部X接近轴反向退让6cm，保留base_link下0.04m绝对Z下限。抓后safe_retreat仍独立使用归一化[-1,0,0.5]固定基座安全方向。视觉定向109、分层18、全量737 passed/7 skipped、compileall/diff、vision/bringup重建与安装参数检查通过；未启动真机。
 
 2026-09-21 抓后撤退与接近路径统一：删除独立垂直lift阶段及固定safe_retreat_axis/min_lift/视觉抬升验证接口；执行序列改为pregrasp→grasp→close/contact+closure验证→沿实际grasp到pregrasp方向撤退6cm。撤退目标仍逐阶段走MoveIt规划、碰撞预检与跟踪门；pregrasp 0.04m绝对Z下限保留。定向111、分层18、全量738 passed/7 skipped、compileall/diff、vision/bringup重建及安装参数清理检查通过；未启动真机。
+
+2026-09-21 视觉夹取第四级运动档：普通移动/最终接近/抓后撤退速度缩放默认调整为0.15/0.05/0.10，全阶段加速度缩放为0.10；四项由visual_grasp_system公开launch参数统一传给视觉执行器与PoseExecutionNode，节点独立启动默认值同步。vision/bringup重建成功，安装入口show-args确认默认值，全量739 passed/7 skipped、分层18、compileall通过；仅完成软件验证，尚未进行第四级真机安全验收。
+
+2026-09-21 视觉夹取暂定上限档：按用户要求将普通移动/最终接近/抓后撤退速度缩放默认提高到0.25/0.08/0.15，全阶段加速度缩放提高到0.12；joint_limits未改，四项仍可由visual_grasp_system启动参数覆盖回退。vision/bringup重建成功，安装入口show-args确认，全量739 passed/7 skipped、分层18、compileall通过；未启动真机，暂定上限尚未完成真机安全验收。用户维护的docs/USER_MAINTAINED_TODO.md未修改。

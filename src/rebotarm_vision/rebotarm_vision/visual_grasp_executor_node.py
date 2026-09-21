@@ -255,13 +255,13 @@ class VisualGraspExecutorNode(Node):
         # plan_only = 只规划干跑（默认）；execute/real = 真正下发轨迹与夹爪命令
         self.declare_parameter("execution_mode", "plan_only")
         # 常规移动的速度缩放，无量纲 (0, 1]；越小越慢越安全
-        self.declare_parameter("move_velocity_scaling", 0.10)
+        self.declare_parameter("move_velocity_scaling", 0.25)
         # 接近段速度缩放；比常规更慢，因为此时离目标与台面最近
-        self.declare_parameter("approach_velocity_scaling", 0.04)
+        self.declare_parameter("approach_velocity_scaling", 0.08)
         # 撤退段速度缩放；比接近段稍快，兼顾"已夹住"与效率
-        self.declare_parameter("retreat_velocity_scaling", 0.08)
+        self.declare_parameter("retreat_velocity_scaling", 0.15)
         # 加速度缩放，所有阶段共用
-        self.declare_parameter("acceleration_scaling", 0.08)
+        self.declare_parameter("acceleration_scaling", 0.12)
         # plan_only 阶段间诊断等待（s）；默认 0，连续预览无需人为停顿
         self.declare_parameter("plan_only_stage_pause_sec", 0.0)
 

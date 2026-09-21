@@ -116,6 +116,28 @@ def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
     assert '"min_grasp_z_m": min_target_z_m' in launch_text
 
 
+def test_visual_grasp_system_uses_provisional_upper_motion_scaling_defaults():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+    executor_text = _read(
+        "src/rebotarm_vision/rebotarm_vision/visual_grasp_executor_node.py"
+    )
+
+    expected = {
+        "move_velocity_scaling": "0.25",
+        "approach_velocity_scaling": "0.08",
+        "retreat_velocity_scaling": "0.15",
+        "acceleration_scaling": "0.12",
+    }
+    for name, default in expected.items():
+        assert f'{name} = LaunchConfiguration("{name}")' in launch_text
+        assert f'DeclareLaunchArgument("{name}", default_value="{default}")' in launch_text
+        assert f'"{name}": {name}' in launch_text
+        assert f'self.declare_parameter("{name}", {float(default):.2f})' in executor_text
+
+    assert '"default_velocity_scaling": move_velocity_scaling' in launch_text
+    assert '"default_acceleration_scaling": acceleration_scaling' in launch_text
+
+
 def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 

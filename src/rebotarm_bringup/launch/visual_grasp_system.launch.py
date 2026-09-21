@@ -203,6 +203,10 @@ def generate_launch_description():
     safe_home_after_grasp = LaunchConfiguration("safe_home_after_grasp")
     moveit_planning_time = LaunchConfiguration("moveit_planning_time")
     moveit_num_planning_attempts = LaunchConfiguration("moveit_num_planning_attempts")
+    move_velocity_scaling = LaunchConfiguration("move_velocity_scaling")
+    approach_velocity_scaling = LaunchConfiguration("approach_velocity_scaling")
+    retreat_velocity_scaling = LaunchConfiguration("retreat_velocity_scaling")
+    acceleration_scaling = LaunchConfiguration("acceleration_scaling")
     plan_only_stage_pause_sec = LaunchConfiguration("plan_only_stage_pause_sec")
     # ── 接近段视觉伺服（默认关闭的增强项）──
     approach_visual_servo_enabled = LaunchConfiguration("approach_visual_servo_enabled")
@@ -550,8 +554,8 @@ def generate_launch_description():
         ),
         # 点到点位姿执行节点：接收位姿目标，调用 MoveIt 规划后交由下层执行
         # （真实硬件走电机控制器，仿真走仿真后端）。
-        # 半段速度为 0.10、加速度缩放为 0.08，均为保守值；
-        # 规划时间与尝试次数由启动参数暴露。
+        # 默认速度与加速度使用视觉夹取暂定上限档，并由启动参数统一传入；
+        # 规划时间与尝试次数同样由启动参数暴露。
         Node(
             package="rebotarm_motion",
             executable="PoseExecutionNode",
@@ -569,8 +573,8 @@ def generate_launch_description():
                     "publish_plan_only_preview": PythonExpression(
                         ["'", execution_mode, "'.lower() == 'plan_only'"]
                     ),
-                    "default_velocity_scaling": 0.10,  # 速度缩放 10%：保守值，降低碰撞冲击
-                    "default_acceleration_scaling": 0.08,  # 加速度缩放 8%：比速度更保守，抑制启停冲击
+                    "default_velocity_scaling": move_velocity_scaling,
+                    "default_acceleration_scaling": acceleration_scaling,
                 }
             ],
         ),
@@ -623,6 +627,10 @@ def generate_launch_description():
                     "safe_retreat_enabled": safe_retreat_enabled,
                     "safe_retreat_distance_m": safe_retreat_distance_m,
                     "safe_home_after_grasp": safe_home_after_grasp,
+                    "move_velocity_scaling": move_velocity_scaling,
+                    "approach_velocity_scaling": approach_velocity_scaling,
+                    "retreat_velocity_scaling": retreat_velocity_scaling,
+                    "acceleration_scaling": acceleration_scaling,
                     "execute_gripper": execute_gripper,
                     "execution_mode": execution_mode,
                     "max_plan_age_sec": max_plan_age_sec,
@@ -838,6 +846,12 @@ def generate_launch_description():
             DeclareLaunchArgument("safe_home_after_grasp", default_value="false"),  # 序列末尾是否回安全位。默认 false：回零是大范围动作，必须由操作员显式开启
             DeclareLaunchArgument("moveit_planning_time", default_value="8.0"),  # MoveIt 单次规划时间上限（s）；调大更可能规划成功，但整体节拍变慢
             DeclareLaunchArgument("moveit_num_planning_attempts", default_value="5"),  # MoveIt 规划尝试次数；调大提高成功率，但耗时成比例增加
+            # 视觉夹取暂定上限默认档。这里的百分比是相对 MoveIt/URDF 关节上限的缩放，
+            # 不是机械臂已完成真机安全验收的绝对速度；后续可在命令行逐项覆盖回退。
+            DeclareLaunchArgument("move_velocity_scaling", default_value="0.25"),  # 普通移动速度：25%
+            DeclareLaunchArgument("approach_velocity_scaling", default_value="0.08"),  # 最终接近抓取速度：8%
+            DeclareLaunchArgument("retreat_velocity_scaling", default_value="0.15"),  # 抓取后撤退速度：15%
+            DeclareLaunchArgument("acceleration_scaling", default_value="0.12"),  # 各运动阶段加速度：12%
             DeclareLaunchArgument("plan_only_stage_pause_sec", default_value="0.0"),  # plan_only 各规划阶段间的诊断等待（s）；完整轨迹最后一次发布，默认无需停顿
             DeclareLaunchArgument("approach_visual_servo_enabled", default_value="false"),  # 是否用迭代小步逼近加逐步纠偏替代一次到位的接近；默认关闭的增强项
             DeclareLaunchArgument("approach_visual_servo_max_iterations", default_value="5"),  # 视觉伺服最大迭代步数（至少 1）；调大更可能收敛，但接近段耗时成比例增加

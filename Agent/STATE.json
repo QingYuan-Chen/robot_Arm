@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-21T13:01:39+08:00",
+  "generated_at": "2026-09-21T17:12:20+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "01ba70c",
+    "head": "20ab32b",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-21T13:01:39+08:00 | actor=codex | event=complete | note=Reviewed the verified visual grasp approach/retreat, arm-status heartbeat, launch/config, tests, and documentation changes for Git publication. Full regression already passed 738 tests with 7 skipped; rebotarm_vision and rebotarm_bringup rebuilt; no hardware action in publication step. | verification=-"
+  "last_event": "- 2026-09-21T17:12:20+08:00 | actor=codex | event=verified | note=已完成GraspNet候选变化与人工快照选择方案分析，未修改代码 | verification=read-only source inspection of GraspNet, raw Open3D viewer, IK filter, executor freshness gate, and launch wiring"
 }

@@ -805,3 +805,16 @@
 - 2026-09-21T12:47:32+08:00 | actor=codex | event=complete | note=Changed visual grasp post-close motion to retreat 6 cm along the actual grasp-to-pregrasp reverse approach direction; removed independent lift, fixed retreat axis/min-lift, and visual-lift verification interfaces. Full tests 738 passed/7 skipped; rebuilt rebotarm_vision and rebotarm_bringup; no hardware started. | verification=-
 - 2026-09-21T13:01:16+08:00 | actor=codex | event=start | note=Review, commit, and push the currently verified visual grasp improvements | verification=-
 - 2026-09-21T13:01:39+08:00 | actor=codex | event=complete | note=Reviewed the verified visual grasp approach/retreat, arm-status heartbeat, launch/config, tests, and documentation changes for Git publication. Full regression already passed 738 tests with 7 skipped; rebotarm_vision and rebotarm_bringup rebuilt; no hardware action in publication step. | verification=-
+- 2026-09-21T13:08:54+08:00 | actor=codex | event=start | note=核对视觉夹取完成后的默认处理流程 | verification=-
+- 2026-09-21T13:12:44+08:00 | actor=codex | event=start | note=排查视觉夹取运动速度慢及卡顿原因 | verification=-
+- 2026-09-21T13:17:52+08:00 | actor=codex | event=start | note=核对 Seeed 官方视觉抓取是否使用分阶段速度与加速度缩放 | verification=-
+- 2026-09-21T13:26:06+08:00 | actor=codex | event=start | note=核对视觉MoveIt速度加速度控制链与官方配置 | verification=-
+- 2026-09-21T13:30:45+08:00 | actor=codex | event=start | note=核对 Seeed 官方各关节速度加速度加加速度数值及其来源 | verification=-
+- 2026-09-21T13:41:04+08:00 | actor=codex | event=start | note=将视觉夹取运动档位调整到第四级并暴露速度参数 | verification=-
+- 2026-09-21T13:45:10+08:00 | actor=codex | event=verified | note=视觉夹取第四级速度档已接入并完成软件验证，尚未进行第四级真机验收 | verification=rebotarm_vision/rebotarm_bringup symlink build passed; layering 18 passed; full suite 739 passed, 7 skipped; compileall passed; installed launch show-args confirmed 0.15/0.05/0.10/0.10
+- 2026-09-21T13:49:53+08:00 | actor=codex | event=start | note=创建仅由用户维护的未完善事项文档 | verification=-
+- 2026-09-21T13:50:18+08:00 | actor=codex | event=verified | note=已创建用户专属维护的待完善事项文档，默认禁止编码代理修改 | verification=文档内容与三项待办及维护边界已人工核对；仅文档变更，无需重新编译
+- 2026-09-21T16:35:09+08:00 | actor=codex | event=start | note=将视觉夹取运动比例提高到约定的暂定上限 | verification=-
+- 2026-09-21T16:38:04+08:00 | actor=codex | event=verified | note=视觉夹取默认运动档已提高到暂定上限，尚未进行真机验收 | verification=defaults 0.25/0.08/0.15/0.12; focused 74 passed; layering 18 passed; full suite 739 passed, 7 skipped; vision/bringup build and compileall passed; installed show-args confirmed; user-maintained TODO unchanged
+- 2026-09-21T17:11:26+08:00 | actor=codex | event=start | note=分析GraspNet候选持续变化并设计人工选择输出快照方案 | verification=-
+- 2026-09-21T17:12:20+08:00 | actor=codex | event=verified | note=已完成GraspNet候选变化与人工快照选择方案分析，未修改代码 | verification=read-only source inspection of GraspNet, raw Open3D viewer, IK filter, executor freshness gate, and launch wiring
