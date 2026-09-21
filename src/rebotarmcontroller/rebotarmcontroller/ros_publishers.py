@@ -9,7 +9,7 @@
 - 本模块只"读缓存 + 发布"，绝不发起同步串口事务。使能后总线由 500 Hz 的统一硬件
   控制环独占，定时器退化为纯缓存读取，避免与命令写入者抢总线；
 - 反馈读取失败时不重新打时间戳：宁可不发新帧，也不把陈旧位置伪装成当前样本，
-  同时刷新状态话题，让上层看到通信故障而不是"停在健康的最后一帧"；
+  同时检查并发布状态变化，让上层看到通信故障而不是"停在健康的最后一帧"；
 - 上一轮发布未结束（回调组可重入，定时器与外部调用可能并发）时直接跳过本轮，
   不排队，避免状态话题积压。
 """
@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rebotarm_msgs.msg import ArmStatus, JointMotorState
@@ -34,8 +35,8 @@ class JointStatePublisher:
     - ``arm_status``：锁存且可靠，晚加入的订阅者立刻拿到最后一帧；
     - ``gripper/state``：仅当硬件配置了夹爪时才创建。
 
-    线程模型：``publish`` 用非阻塞锁串行化，重入时跳过本轮；``publish_status``
-    不加锁，因为它只读取硬件管理器的快照属性，不触发总线事务。
+    线程模型：``publish`` 用非阻塞锁串行化，重入时跳过本轮；状态发布用独立锁
+    串行化定时器与服务回调。状态变化立即发布，未变化时每 0.2 s 发一次心跳。
     """
 
     def __init__(self, node, hardware, namespace: str, rate_hz: float) -> None:
@@ -47,6 +48,10 @@ class JointStatePublisher:
         self._last_feedback_stamp = None
         # 非阻塞发布锁：重入回调组下定时器与外部调用可能并发进入 publish。
         self._publish_lock = threading.Lock()
+        self._status_lock = threading.Lock()
+        self._last_status_identity = None
+        self._last_status_published_at = None
+        self._status_heartbeat_sec = 0.2
         self._publisher = node.create_publisher(
             JointState,
             f"/{namespace}/joint_states",
@@ -113,7 +118,7 @@ class JointStatePublisher:
             self._node.get_logger().warn(f"joint state read failed: {exc}")
             # 不把陈旧的关节位置重新打时间戳当作当前值，但仍刷新锁存状态，让 Web UI
             # 报告通信故障，而不是看起来停在健康的最后一帧。
-            self.publish_status()
+            self.publish_status(force=False)
             return
 
         msg = JointState()
@@ -152,19 +157,44 @@ class JointStatePublisher:
             gripper_msg.status_code = int(g_status)
             self._gripper_state_publisher.publish(gripper_msg)
 
-    def publish_status(self) -> None:
+        # 失败和成功路径都检查状态变化：恢复时立即覆盖锁存的 255/stale，
+        # 稳定时只发低频心跳，不随 joint_states 以 100 Hz 重复发相同状态。
+        self.publish_status(force=False)
+
+    def publish_status(self, *, force: bool = True) -> None:
         """发布锁存的机械臂运行状态（模式、使能位、控制环占用、状态机、错误码）。
 
-        该话题既被定时器周期性刷新，也是反馈读取失败时的唯一"故障通告"通道；
-        因此它只读硬件管理器的快照属性，任何情况下都不能因总线异常而抛错。
+        定时器使用 ``force=False``：内容变化立即发布，否则最多 5 Hz 心跳。
+        服务/动作回调使用默认 ``force=True``，保证操作结果及时可见。
+        仅读取硬件管理器快照，不触发串口事务。
         """
-        msg = ArmStatus()
-        msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.mode = self._hardware.mode
-        msg.enabled = self._hardware.enabled
-        msg.control_loop_active = self._hardware.control_loop_active
-        msg.state_machine = self._hardware.state_machine
-        msg.joint_names = self._hardware.joint_names
-        msg.per_joint_status_code = self._hardware.get_joint_status_codes()
-        msg.error_codes = self._hardware.error_codes
-        self._status_publisher.publish(msg)
+        with self._status_lock:
+            msg = ArmStatus()
+            msg.mode = self._hardware.mode
+            msg.enabled = self._hardware.enabled
+            msg.control_loop_active = self._hardware.control_loop_active
+            msg.state_machine = self._hardware.state_machine
+            msg.joint_names = list(self._hardware.joint_names)
+            msg.per_joint_status_code = self._hardware.get_joint_status_codes()
+            msg.error_codes = list(self._hardware.error_codes)
+            identity = (
+                msg.mode,
+                msg.enabled,
+                msg.control_loop_active,
+                msg.state_machine,
+                tuple(msg.joint_names),
+                tuple(msg.per_joint_status_code),
+                tuple(msg.error_codes),
+            )
+            now = time.monotonic()
+            if (
+                not force
+                and identity == self._last_status_identity
+                and self._last_status_published_at is not None
+                and now - self._last_status_published_at < self._status_heartbeat_sec
+            ):
+                return
+            msg.header.stamp = self._node.get_clock().now().to_msg()
+            self._status_publisher.publish(msg)
+            self._last_status_identity = identity
+            self._last_status_published_at = now

@@ -7,6 +7,7 @@ import numpy as np
 from builtin_interfaces.msg import Time
 
 from rebotarmcontroller.ros_publishers import JointStatePublisher
+import rebotarmcontroller.ros_publishers as ros_publishers
 
 
 class _Recorder:
@@ -39,6 +40,12 @@ class _CacheOnlyHardware:
     def __init__(self) -> None:
         self.refresh_calls = 0
         self.identity = (1,) * 6
+        self.mode = "mit"
+        self.enabled = False
+        self.control_loop_active = False
+        self.state_machine = "IDLE"
+        self.codes = [0] * 6
+        self.error_codes = []
 
     def refresh_feedback_if_due(self) -> None:
         self.refresh_calls += 1
@@ -50,7 +57,7 @@ class _CacheOnlyHardware:
         raise AssertionError("publisher attempted synchronous serial feedback")
 
     def get_joint_status_codes(self):
-        return [1] * 6
+        return self.codes
 
     def get_gripper_state(self):
         return -1.0, 0.0, 0.0, 1
@@ -71,12 +78,15 @@ def test_joint_state_publisher_reads_validated_cache_without_serial_io() -> None
         name: _Recorder() for name in publisher._hardware.joint_names
     }
     publisher._gripper_state_publisher = _Recorder()
+    status_calls: list[int] = []
+    publisher.publish_status = lambda **kwargs: status_calls.append(kwargs)
 
     publisher.publish()
 
     assert publisher._hardware.refresh_calls == 1
     assert len(publisher._publisher.messages) == 1
     assert len(publisher._gripper_state_publisher.messages) == 1
+    assert status_calls == [{"force": False}]
 
     first_stamp = publisher._publisher.messages[-1].header.stamp
     publisher._node.get_clock = lambda: SimpleNamespace(
@@ -87,10 +97,12 @@ def test_joint_state_publisher_reads_validated_cache_without_serial_io() -> None
     publisher._hardware.identity = (2,) * 6
     publisher.publish()
     assert publisher._publisher.messages[-1].header.stamp.sec == 2
+    assert status_calls == [{"force": False}] * 3
     with publisher._publish_lock:
         before = publisher._hardware.refresh_calls
         publisher.publish()
         assert publisher._hardware.refresh_calls == before
+        assert status_calls == [{"force": False}] * 3
 
 
 def test_joint_state_publisher_reports_status_when_feedback_cache_is_invalid() -> None:
@@ -108,10 +120,83 @@ def test_joint_state_publisher_reports_status_when_feedback_cache_is_invalid() -
     }
     publisher._gripper_state_publisher = _Recorder()
     status_calls: list[int] = []
-    publisher.publish_status = lambda: status_calls.append(1)
+    publisher.publish_status = lambda **kwargs: status_calls.append(kwargs)
 
     publisher.publish()
 
-    assert status_calls == [1]
+    assert status_calls == [{"force": False}]
     assert publisher._publisher.messages == []
     assert publisher._node.warnings == ["joint state read failed: arm feedback stale"]
+
+
+def test_joint_state_publisher_refreshes_latched_status_after_feedback_recovers() -> None:
+    publisher = JointStatePublisher.__new__(JointStatePublisher)
+    publisher._publish_lock = threading.Lock()
+    publisher._last_feedback_identity = None
+    publisher._last_feedback_stamp = None
+    publisher._node = _Node()
+    publisher._hardware = _CacheOnlyHardware()
+    publisher._publisher = _Recorder()
+    publisher._joint_state_publishers = {
+        name: _Recorder() for name in publisher._hardware.joint_names
+    }
+    publisher._gripper_state_publisher = _Recorder()
+    status_calls: list[str] = []
+    publisher.publish_status = lambda **kwargs: status_calls.append(kwargs)
+
+    original_get_sample = publisher._hardware.get_cached_joint_sample
+    publisher._hardware.get_cached_joint_sample = lambda: (_ for _ in ()).throw(
+        RuntimeError("arm feedback stale")
+    )
+    publisher.publish()
+
+    publisher._hardware.get_cached_joint_sample = original_get_sample
+    publisher.publish()
+
+    assert status_calls == [{"force": False}] * 2
+    assert len(publisher._publisher.messages) == 1
+
+
+def test_arm_status_change_is_immediate_with_five_hz_heartbeat(monkeypatch) -> None:
+    publisher = JointStatePublisher.__new__(JointStatePublisher)
+    publisher._node = _Node()
+    publisher._hardware = _CacheOnlyHardware()
+    publisher._status_publisher = _Recorder()
+    publisher._status_lock = threading.Lock()
+    publisher._last_status_identity = None
+    publisher._last_status_published_at = None
+    publisher._status_heartbeat_sec = 0.2
+    clock = [0.0]
+    monkeypatch.setattr(ros_publishers.time, "monotonic", lambda: clock[0])
+
+    publisher.publish_status(force=False)
+    assert len(publisher._status_publisher.messages) == 1
+    clock[0] = 0.1
+    publisher.publish_status(force=False)
+    assert len(publisher._status_publisher.messages) == 1
+
+    publisher._hardware.codes = [255] * 6
+    publisher._hardware.error_codes = ["ARM_FEEDBACK: arm feedback stale"]
+    publisher.publish_status(force=False)
+    assert list(publisher._status_publisher.messages[-1].per_joint_status_code) == [255] * 6
+    assert len(publisher._status_publisher.messages) == 2
+
+    clock[0] = 0.11
+    publisher._hardware.codes = [0] * 6
+    publisher._hardware.error_codes = []
+    publisher.publish_status(force=False)
+    assert list(publisher._status_publisher.messages[-1].per_joint_status_code) == [0] * 6
+    assert list(publisher._status_publisher.messages[-1].error_codes) == []
+    assert len(publisher._status_publisher.messages) == 3
+
+    clock[0] = 0.3
+    publisher.publish_status(force=False)
+    assert len(publisher._status_publisher.messages) == 3
+    clock[0] = 0.31
+    publisher.publish_status(force=False)
+    assert len(publisher._status_publisher.messages) == 4
+    publisher._hardware.enabled = True
+    publisher.publish_status(force=False)
+    assert publisher._status_publisher.messages[-1].enabled is True
+    publisher.publish_status()
+    assert len(publisher._status_publisher.messages) == 6

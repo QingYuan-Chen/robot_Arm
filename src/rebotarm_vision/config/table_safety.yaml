@@ -7,12 +7,9 @@ rebotarm_grasp_candidate_ik_filter:
   ros__parameters:
     # 抓取点最低允许高度（单位 m，基座系 z 轴向上）；低于该值判为贴地或穿桌，直接丢弃候选
     candidate_min_grasp_z_m: 0.0
-    # 接近点（预抓取点）最低高度钳位（单位 m，0.120 = 12 cm）；
-    # 低于该值会被抬高到该值，保证从目标上方进入而不是贴着台面平推
-    candidate_pregrasp_min_z_m: 0.120
-    # 抬升安全高度下限（单位 m）。本节点只声明不使用，由执行节点读取同名参数生效，
-    # 列在这里是为了两个节点共享同一份数值。
-    candidate_safe_lift_min_z_m: 0.120
+    # 预抓取目标在 base_link 下的 Z 下限（0.04 m = 4 cm）；
+    # 低于时抬高到该值；不是相对桌面的净空高度，仍需碰撞检查。
+    candidate_pregrasp_min_z_m: 0.04
     # 是否启用工作空间盒闸门。此处为 false，即只靠上面的高度下限保护台面；
     # 置 true 后抓取点还必须落在下面的 min/max 盒内。
     candidate_workspace_gate_enabled: false
@@ -29,6 +26,3 @@ rebotarm_visual_grasp_executor:
   ros__parameters:
     # 抓取点最低允许高度（单位 m，基座系）；不满足即判序列构建失败，不下发任何动作
     min_grasp_z_m: 0.0
-    # 安全撤退前的最低抬升高度（单位 m，0.12 = 12 cm）；与 lift_z_m 取较大者，
-    # 保证"先离开台面、再水平撤退"，避免撤退时撞到桌面或已放置物体
-    safe_retreat_min_lift_z_m: 0.12

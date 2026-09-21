@@ -4,6 +4,8 @@
 
 ## 当前焦点
 
+- 2026-09-21：按用户要求统一视觉撤退方向为 `[-1.0, 0.0, 0.5]`，预抓取 Z 下限为 `0.04m`（base_link坐标，不是桌面净空）。同步 launch、节点默认、三个候选配置与撤退配置和参数文档；抬升下限0.12m、撤退距离0.06m保持原值。vision/bringup重建成功，安装入口show-args确认，分层18 passed，全量737 passed/7 skipped；未启动真机，未验证修改后的实际路线。
+
 - 2026-09-20：按用户同意删除独立 `visual_grasp_perception_preview.launch.py`，将其 Open3D 查看器与原始候选 Marker 节点并入唯一 `visual_grasp_system.launch.py`。主入口新增 `start_open3d_viewer`、`start_raw_candidate_markers`（默认 true）；`start_visual_ready=false` 现在也会关闭常驻视觉就绪服务。纯感知诊断通过 `use_hardware=false`、`execution_mode=plan_only`、关闭运动执行/抓取执行器来组合，不接串口。`rebotarm_bringup` 重建成功，源码/安装目录旧入口均不存在；聚焦视觉/分层测试 97 passed。全量测试 734 passed、7 skipped、1 个既有 MuJoCo 解释器测试失败（与本次合并无关）。
 - 2026-09-19：排查视觉 plan-only 查询不到 `/rebotarm/arm_status`：启动进程继承了操作者终端的 `ROS_DOMAIN_ID=100`，查询终端未设域而处于默认域 0；在域 100 中控制器存在且状态 `enabled=false`、六轴状态码 0、无错误。`tools/source_local_environment.bash` 与视觉 launch 均不设置域号；单套系统无需显式设域。已从 `docs/visual_grasp_commands.md` 删除日常视觉/仿真示例的固定域号，保留多系统并行测试可显式隔离的约定。修改仅文档，不影响既有运行进程；切换域需先安全退出再重启 launch，并让所有终端使用同一域。
 - Active phase / 当前阶段：2026-09-13 一次性基线迁移与软件验证完成，等待后续开发范围；历史 P0-P6 记录不代表本机验收，不创建 P7。
@@ -743,3 +745,13 @@ Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，�
 2026-09-19 最终契约审计：HTTP标定响应补schema_version/session_id/state/revision，ROS失败回读持久状态（无相机capture失败仍active/revision0），不声称失败已修改会话；接口注释补tf_check并文档映射规划命令名。相关8通过，三包build、分层18、全量734 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。无硬件，目标继续最终证据收口。
 
 2026-09-19 网页标定软件目标完成：最终将canonical MuJoCo FK→24张投影图像→ArUco/PnP数据载入隔离会话，实际浏览器通过真实Dashboard/ROS求解16训练8验证，PARK验证位置RMS0.374mm/最大0.710mm；人工software-audit确认、服务器附件下载事件、刷新恢复通过，磁盘accepted/revision26/deployed=false。临时tab与ROS进程退出0。完整验收矩阵在docs/calibration_acceptance.md，操作说明calibration_web_usage.md。最后完整回归734 passed/7 skipped/1既有MuJoCo默认解释器失败，分层18/build/compileall/diff通过；回归后仅证据文档变化。保留用户修改，未提交推送。真实相机/重力补偿/物理精度未验收，另需现场授权，不影响本目标软件完成定义。
+
+2026-09-20 arm_status恢复发布修复：视觉入口启动负载可让首次反馈晚于0.15s并锁存255/stale，后续joint_states和单关节反馈虽恢复status0，成功路径却未刷新TRANSIENT_LOCAL arm_status。JointStatePublisher现于每次成功反馈批次后同步publish_status，并新增启动stale后恢复回归测试。rebotarmcontroller重建通过，定向127、分层18、全量736 passed/7 skipped、compileall/diff通过；失能只读真机复核arm_status六轴0/error_codes空、joint_states约100Hz，未使能未运动。
+
+2026-09-20 arm_status发布节流优化：成功反馈路径改为状态内容变化立即发布，状态不变时由100Hz反馈定时器提供0.2s/5Hz低频心跳；服务/动作状态变更仍用force即时发布。新增变化、恢复、心跳与使能状态测试。rebotarmcontroller重建通过，定向128、分层18、全量737 passed/7 skipped、compileall/diff通过；未启动真机。
+
+2026-09-20 视觉execute计划窗口：现场filtered plan到达年龄约2.8s，高于原1s默认并被安全门拒绝；visual_grasp_system对execute的默认max_plan_age_sec改为4.0s，plan_only保持10.0s，仍保留采集原始时间戳而不重打时间。bringup重建、visual wiring73、分层18、全量737 passed/7 skipped、compileall/diff通过；未执行真机运动。
+
+2026-09-21 视觉预抓取几何简化：彻底删除固定5cm base-Z预抓取偏移及其ROS/launch/YAML接口；visual_grasp_system默认preserve_candidate_pose下，pregrasp仅沿GraspNet候选TCP局部X接近轴反向退让6cm，保留base_link下0.04m绝对Z下限。抓后safe_retreat仍独立使用归一化[-1,0,0.5]固定基座安全方向。视觉定向109、分层18、全量737 passed/7 skipped、compileall/diff、vision/bringup重建与安装参数检查通过；未启动真机。
+
+2026-09-21 抓后撤退与接近路径统一：删除独立垂直lift阶段及固定safe_retreat_axis/min_lift/视觉抬升验证接口；执行序列改为pregrasp→grasp→close/contact+closure验证→沿实际grasp到pregrasp方向撤退6cm。撤退目标仍逐阶段走MoveIt规划、碰撞预检与跟踪门；pregrasp 0.04m绝对Z下限保留。定向111、分层18、全量738 passed/7 skipped、compileall/diff、vision/bringup重建及安装参数清理检查通过；未启动真机。

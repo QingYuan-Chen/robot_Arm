@@ -139,17 +139,13 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_min_confidence", 0.0)
         # 过滤统计日志的最小间隔，单位 s；<= 0 表示每帧都打印
         self.declare_parameter("filter_stats_log_interval_sec", 5.0)
-        # 抬升高度，单位 m；本节点只声明不使用，由下游执行器读取同一参数名
-        self.declare_parameter("lift_z_m", 0.08)
         # TCP 相对末端连杆的偏移（末端连杆局部坐标系，单位 m）；求逆解前会先从目标点减去该
         # 偏移，把"TCP 应到达的点"换算成"末端连杆应到达的位姿"
         self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
         # 目标点在基座系下的平移修正，单位 m；用于补偿手眼/TCP 标定残差
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
-        # 接近点额外抬高量，单位 m；保证接近动作从目标上方进入而不是平推
-        self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
         # 接近点最低高度钳位，单位 m；低于该值会被抬高到该值，避免接近点插进桌面
-        self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)
+        self.declare_parameter("candidate_pregrasp_min_z_m", 0.04)
         # 抓取点整体高度偏移，单位 m；与每个变体的高度偏移叠加
         self.declare_parameter("grasp_base_z_offset_m", 0.0)
         # ---- 几何闸门与打分权重 ----
@@ -159,8 +155,6 @@ class CandidateIkFilterNode(Node):
         self.declare_parameter("candidate_max_jaw_width_m", 0.085)
         # 抓取点最低允许高度，单位 m（基座系）；低于该值判为贴地或穿桌
         self.declare_parameter("candidate_min_grasp_z_m", 0.0)
-        # 抬升安全高度下限，单位 m；本节点只声明不使用，由下游执行器读取同一参数名
-        self.declare_parameter("candidate_safe_lift_min_z_m", 0.120)
         # 是否启用工作空间盒闸门；默认关闭，启用后抓取点必须落在下面的盒范围内
         self.declare_parameter("candidate_workspace_gate_enabled", False)
         # 工作空间盒最小角（基座系，单位 m）；沿用旧仓库 +X 工作区。
@@ -553,7 +547,6 @@ class CandidateIkFilterNode(Node):
                 base_pregrasp_distance_m=float(self.get_parameter("base_pregrasp_distance_m").value),
                 tcp_offset_xyz=self._tuple3("tcp_offset_xyz"),
                 target_base_offset_xyz=self._tuple3("target_base_offset_xyz"),
-                pregrasp_base_z_offset_m=float(self.get_parameter("pregrasp_base_z_offset_m").value),
                 pregrasp_min_z_m=float(self.get_parameter("candidate_pregrasp_min_z_m").value),
                 grasp_base_z_offset_m=float(self.get_parameter("grasp_base_z_offset_m").value),
                 orientation_yaw_offsets_rad=tuple(self._list_float_parameter("orientation_yaw_offsets_rad")),

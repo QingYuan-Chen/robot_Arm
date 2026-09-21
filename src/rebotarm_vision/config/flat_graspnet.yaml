@@ -43,9 +43,9 @@ flat_graspnet:
   # 抓取点最低允许高度（单位 m，基座系，z 轴向上）；低于该值判为贴地/穿桌。
   # 0.0 只拦"到桌面以下"，实际桌面安全由接近点高度与撤退策略共同保证。
   candidate_min_grasp_z_m: 0.0
-  # 接近点（预抓取点）最低高度钳位（单位 m，0.120 = 12 cm）；
-  # 低于该值会被抬高到该值，保证从目标上方进入而不是贴着台面平推。
-  candidate_pregrasp_min_z_m: 0.120
+  # 预抓取目标在 base_link 下的 Z 下限（0.04 m = 4 cm）；
+  # 低于时抬高到该值；不是相对桌面的净空高度，仍需碰撞检查。
+  candidate_pregrasp_min_z_m: 0.04
   # 关节位移在候选评分中的权重（每 rad 的扣分）；调大更偏好关节动作小的解，动作更省但可能牺牲抓取质量
   candidate_score_joint_distance_weight: 0.15
   # joint6（腕部旋转）变化量在评分中的独立权重（每 rad 的扣分）；

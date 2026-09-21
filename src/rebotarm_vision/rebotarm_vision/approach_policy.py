@@ -1,7 +1,7 @@
 """预抓取位姿的几何构造：沿逼近轴反方向退开一段距离。
 
 抓取序列先到「预抓取点」，再沿逼近轴直进到抓取点；预抓取点由抓取点沿逼近轴
-反向平移 ``pregrasp_distance_m`` 得到，可再叠加 z 偏移并做最低高度钳制。本模块
+反向平移 ``pregrasp_distance_m`` 得到，再做最低高度钳制。本模块
 只做向量运算，不做规划、不查碰撞；单位米，坐标系与输入一致。
 """
 
@@ -17,8 +17,6 @@ class ApproachPolicyConfig:
     # 预抓取点相对抓取点沿逼近反方向的距离，单位米。调大留出更长的直进段，
     # 逼近更稳，但更容易在狭窄空间里先撞到别的物体。
     pregrasp_distance_m: float = 0.08
-    # 预抓取点的额外 z 偏移，单位米（正值抬高）。默认 0 表示不额外抬高。
-    pregrasp_z_offset_m: float = 0.0
     # 预抓取点的绝对最低高度，单位米；> 0 时生效，防止预抓取点落到台面以下。
     pregrasp_min_z_m: float = 0.0
 
@@ -46,9 +44,8 @@ def build_pregrasp_tcp(
 ) -> tuple[float, float, float]:
     """由抓取点计算预抓取点（工具中心点位置）。
 
-    公式：pregrasp = grasp - normalize(axis) × pregrasp_distance_m，然后 z 方向
-    加 pregrasp_z_offset_m，最后在 pregrasp_min_z_m > 0 时把 z 钳制到不低于该
-    下限（钳制发生在加偏移之后，见下方代码顺序）。
+    公式：pregrasp = grasp - normalize(axis) × pregrasp_distance_m。随后仅在
+    pregrasp_min_z_m > 0 时把 z 钳制到不低于该下限。
 
     返回三元组 (x, y, z)，单位米，与输入同坐标系。
     """
@@ -57,9 +54,7 @@ def build_pregrasp_tcp(
     pregrasp = (
         float(grasp_tcp_xyz[0]) - axis[0] * float(config.pregrasp_distance_m),
         float(grasp_tcp_xyz[1]) - axis[1] * float(config.pregrasp_distance_m),
-        float(grasp_tcp_xyz[2])
-        - axis[2] * float(config.pregrasp_distance_m)
-        + float(config.pregrasp_z_offset_m),
+        float(grasp_tcp_xyz[2]) - axis[2] * float(config.pregrasp_distance_m),
     )
     min_z = float(config.pregrasp_min_z_m)
     # 仅当显式配置了正的下限时才钳制：0 表示「不限制」而不是「必须在地面上」。

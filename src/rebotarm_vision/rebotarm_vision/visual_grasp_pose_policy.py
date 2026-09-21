@@ -62,8 +62,6 @@ class BaseAxisGraspPolicyConfig:
     # 对外的整体位置补偿（目标坐标系），单位 m。用于修正标定残差或按固定量挪动抓取点；
     # 与 tcp_offset_xyz 不同，它不随姿态旋转，直接加在抓取点上。
     target_base_offset_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    # 预抓取点额外的竖直抬升量，单位 m；调大→从更高处开始下落进给，可避开桌面凸起。
-    pregrasp_z_offset_m: float = 0.05
     # 预抓取点 z 的下限，单位 m。<= 0 表示不启用该保护；> 0 时把预抓取点抬高到至少该高度，
     # 防止退让后撞到地面或桌面以下。
     pregrasp_min_z_m: float = 0.0
@@ -87,8 +85,6 @@ class OfficialGeometryGraspPolicyConfig:
     tcp_offset_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
     # 对外的整体位置补偿（目标坐标系），单位 m。
     target_base_offset_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    # 预抓取点额外的竖直抬升量，单位 m；默认 0 表示预抓取点完全落在候选接近轴上。
-    pregrasp_z_offset_m: float = 0.0
     # 预抓取点 z 的下限，单位 m；<= 0 表示不启用。
     pregrasp_min_z_m: float = 0.0
     # 抓取点的竖直补偿，单位 m。本族预抓取点由 ``grasp_tcp`` 推导，
@@ -193,8 +189,7 @@ def build_base_axis_grasp_targets(
     2. ``base = grasp_position_xyz + target_base_offset_xyz``（抓取点整体补偿）；
     3. ``grasp_tcp = base`` 叠加 ``grasp_z_offset_m``；
     4. 以 **base**（而非 ``grasp_tcp``）为基准沿接近轴反方向退开
-       ``pregrasp_distance_m``，再叠加 ``pregrasp_z_offset_m`` 并做
-       ``pregrasp_min_z_m`` 下限保护；
+       ``pregrasp_distance_m``，并做 ``pregrasp_min_z_m`` 下限保护；
     5. 两个点分别减去 TCP 偏移，得到控制器可用的末端点位姿。
 
     注意与官方几何族的差异：本族预抓取点基于 ``base``，所以 ``grasp_z_offset_m``
@@ -224,7 +219,6 @@ def build_base_axis_grasp_targets(
         approach_axis_xyz=axis,
         config=ApproachPolicyConfig(
             pregrasp_distance_m=float(config.pregrasp_distance_m),
-            pregrasp_z_offset_m=float(config.pregrasp_z_offset_m),
             pregrasp_min_z_m=float(config.pregrasp_min_z_m),
         ),
     )
@@ -264,7 +258,6 @@ def build_hybrid_geometry_grasp_targets(
             pregrasp_distance_m=config.pregrasp_distance_m,
             tcp_offset_xyz=config.tcp_offset_xyz,
             target_base_offset_xyz=config.target_base_offset_xyz,
-            pregrasp_z_offset_m=config.pregrasp_z_offset_m,
             pregrasp_min_z_m=config.pregrasp_min_z_m,
             grasp_z_offset_m=config.grasp_z_offset_m,
         ),
@@ -304,7 +297,6 @@ def build_official_geometry_grasp_targets(
         approach_axis_xyz=approach_axis,
         config=ApproachPolicyConfig(
             pregrasp_distance_m=float(config.pregrasp_distance_m),
-            pregrasp_z_offset_m=float(config.pregrasp_z_offset_m),
             pregrasp_min_z_m=float(config.pregrasp_min_z_m),
         ),
     )

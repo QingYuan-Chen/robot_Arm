@@ -152,7 +152,6 @@ def generate_launch_description():
     pose_mode = LaunchConfiguration("pose_mode")
     tcp_offset_xyz = LaunchConfiguration("tcp_offset_xyz")
     target_base_offset_xyz = LaunchConfiguration("target_base_offset_xyz")
-    base_z_offset_m = LaunchConfiguration("base_z_offset_m")
     min_target_z_m = LaunchConfiguration("min_target_z_m")
     grasp_base_z_offset_m = LaunchConfiguration("grasp_base_z_offset_m")
     pose_policy = LaunchConfiguration("pose_policy")
@@ -170,7 +169,6 @@ def generate_launch_description():
     candidate_max_jaw_width_m = LaunchConfiguration("candidate_max_jaw_width_m")
     candidate_min_grasp_z_m = LaunchConfiguration("candidate_min_grasp_z_m")
     candidate_pregrasp_min_z_m = LaunchConfiguration("candidate_pregrasp_min_z_m")
-    candidate_safe_lift_min_z_m = LaunchConfiguration("candidate_safe_lift_min_z_m")
     candidate_workspace_gate_enabled = LaunchConfiguration("candidate_workspace_gate_enabled")
     candidate_workspace_min_xyz = LaunchConfiguration("candidate_workspace_min_xyz")
     candidate_workspace_max_xyz = LaunchConfiguration("candidate_workspace_max_xyz")
@@ -180,9 +178,8 @@ def generate_launch_description():
     candidate_max_joint6_delta_rad = LaunchConfiguration("candidate_max_joint6_delta_rad")
     candidate_joint6_symmetry_enabled = LaunchConfiguration("candidate_joint6_symmetry_enabled")
     candidate_joint6_symmetry_angle_rad = LaunchConfiguration("candidate_joint6_symmetry_angle_rad")
-    # ── 夹爪几何、抬升与夹持力（执行器）──
+    # ── 夹爪几何与夹持力（执行器）──
     # 归一化夹持力量纲与硬件层不同，硬件层会再做区间截断。
-    lift_z_m = LaunchConfiguration("lift_z_m")
     close_position_m = LaunchConfiguration("close_position_m")
     close_max_effort = LaunchConfiguration("close_max_effort")
     open_before_approach = LaunchConfiguration("open_before_approach")
@@ -202,9 +199,7 @@ def generate_launch_description():
     gripper_grasp_min_closure_distance_m = LaunchConfiguration("gripper_grasp_min_closure_distance_m")
     # ── 抓取后安全撤退、回零与 MoveIt 规划 ──
     safe_retreat_enabled = LaunchConfiguration("safe_retreat_enabled")
-    safe_retreat_min_lift_z_m = LaunchConfiguration("safe_retreat_min_lift_z_m")
     safe_retreat_distance_m = LaunchConfiguration("safe_retreat_distance_m")
-    safe_retreat_axis_xyz = LaunchConfiguration("safe_retreat_axis_xyz")
     safe_home_after_grasp = LaunchConfiguration("safe_home_after_grasp")
     moveit_planning_time = LaunchConfiguration("moveit_planning_time")
     moveit_num_planning_attempts = LaunchConfiguration("moveit_num_planning_attempts")
@@ -222,8 +217,6 @@ def generate_launch_description():
     grasp_verification_enabled = LaunchConfiguration("grasp_verification_enabled")
     grasp_verification_min_closure_distance_m = LaunchConfiguration("grasp_verification_min_closure_distance_m")
     grasp_verification_require_contact = LaunchConfiguration("grasp_verification_require_contact")
-    visual_lift_check_enabled = LaunchConfiguration("visual_lift_check_enabled")
-    visual_lift_min_delta_m = LaunchConfiguration("visual_lift_min_delta_m")
     place_after_grasp_enabled = LaunchConfiguration("place_after_grasp_enabled")
     place_position_xyz = LaunchConfiguration("place_position_xyz")
     place_orientation_xyzw = LaunchConfiguration("place_orientation_xyzw")
@@ -399,7 +392,6 @@ def generate_launch_description():
                     "target_frame": "base_link",
                     "tcp_offset_xyz": tcp_offset_xyz,
                     "target_base_offset_xyz": target_base_offset_xyz,
-                    "base_z_offset_m": base_z_offset_m,
                     "min_target_z_m": min_target_z_m,
                     "publish_count": 5,  # 重复发布 5 次，抵消话题发现延迟
                     "exit_after_publish": False,  # 发布后不退出，保持常驻以便反复预览
@@ -537,11 +529,9 @@ def generate_launch_description():
                     "candidate_grasp_z_offsets_m": candidate_grasp_z_offsets_m,
                     "max_candidates_per_frame": candidate_max_candidates_per_frame,
                     "candidate_min_confidence": candidate_min_confidence,
-                    "lift_z_m": lift_z_m,
                     "candidate_min_jaw_width_m": candidate_min_jaw_width_m,
                     "candidate_max_jaw_width_m": candidate_max_jaw_width_m,
                     "candidate_min_grasp_z_m": candidate_min_grasp_z_m,
-                    "candidate_safe_lift_min_z_m": candidate_safe_lift_min_z_m,
                     "candidate_workspace_gate_enabled": candidate_workspace_gate_enabled,
                     "candidate_workspace_min_xyz": candidate_workspace_min_xyz,
                     "candidate_workspace_max_xyz": candidate_workspace_max_xyz,
@@ -553,7 +543,6 @@ def generate_launch_description():
                     "candidate_joint6_symmetry_angle_rad": candidate_joint6_symmetry_angle_rad,
                     "tcp_offset_xyz": tcp_offset_xyz,
                     "target_base_offset_xyz": target_base_offset_xyz,
-                    "pregrasp_base_z_offset_m": base_z_offset_m,
                     "candidate_pregrasp_min_z_m": candidate_pregrasp_min_z_m,
                     "grasp_base_z_offset_m": grasp_base_z_offset_m,
                 }
@@ -586,7 +575,7 @@ def generate_launch_description():
             ],
         ),
         # 视觉抓取执行器（链路末端）：把过滤后的计划展开为
-        # 接近 → 预抓取 → 抓取 → 抬升 →（可选 验证/撤退/放置）的阶段序列，
+        # 接近 → 预抓取 → 抓取 → 闭合验证 →（可选 沿接近路径反向撤退/放置）的阶段序列，
         # 逐阶段调用运动层与夹爪服务，并施加台面高度、夹持力、验证与撤退等安全策略。
         # 默认 execution_mode=plan_only：只规划干跑，不向硬件下发动作。
         Node(
@@ -609,14 +598,12 @@ def generate_launch_description():
                     "target_frame": "base_link",
                     "tcp_offset_xyz": tcp_offset_xyz,
                     "target_base_offset_xyz": target_base_offset_xyz,
-                    "pregrasp_base_z_offset_m": base_z_offset_m,
                     "grasp_base_z_offset_m": grasp_base_z_offset_m,
                     "pose_policy": pose_policy,
                     "fixed_grasp_orientation_xyzw": fixed_grasp_orientation_xyzw,
                     "base_approach_axis_xyz": base_approach_axis_xyz,
                     "base_pregrasp_distance_m": base_pregrasp_distance_m,
                     "min_grasp_z_m": min_target_z_m,
-                    "lift_z_m": lift_z_m,
                     "close_position_m": close_position_m,
                     "close_max_effort": close_max_effort,
                     "open_before_approach": open_before_approach,
@@ -634,9 +621,7 @@ def generate_launch_description():
                     "gripper_grasp_velocity_threshold": gripper_grasp_velocity_threshold,
                     "gripper_grasp_min_closure_distance_m": gripper_grasp_min_closure_distance_m,
                     "safe_retreat_enabled": safe_retreat_enabled,
-                    "safe_retreat_min_lift_z_m": safe_retreat_min_lift_z_m,
                     "safe_retreat_distance_m": safe_retreat_distance_m,
-                    "safe_retreat_axis_xyz": safe_retreat_axis_xyz,
                     "safe_home_after_grasp": safe_home_after_grasp,
                     "execute_gripper": execute_gripper,
                     "execution_mode": execution_mode,
@@ -656,8 +641,6 @@ def generate_launch_description():
                     "grasp_verification_enabled": grasp_verification_enabled,
                     "grasp_verification_min_closure_distance_m": grasp_verification_min_closure_distance_m,
                     "grasp_verification_require_contact": grasp_verification_require_contact,
-                    "visual_lift_check_enabled": visual_lift_check_enabled,
-                    "visual_lift_min_delta_m": visual_lift_min_delta_m,
                     "place_after_grasp_enabled": place_after_grasp_enabled,
                     "place_position_xyz": place_position_xyz,
                     "place_orientation_xyzw": place_orientation_xyzw,
@@ -805,7 +788,6 @@ def generate_launch_description():
             DeclareLaunchArgument("pose_mode", default_value="pregrasp"),  # 预览发送的位姿模式；pregrasp = 预抓取位姿（更安全），另一可选为抓取位姿
             DeclareLaunchArgument("tcp_offset_xyz", default_value="[-0.04, 0.0, 0.0]"),  # 末端法兰到夹持中心 TCP 的平移（m，沿末端 X 轴 -4 cm），操作员实测值；改动会让抓取点整体偏移
             DeclareLaunchArgument("target_base_offset_xyz", default_value="[0.0, 0.0, 0.0]"),  # base 系下的整体平移补偿（m），用于吸收标定残差；全 0 表示不补偿
-            DeclareLaunchArgument("base_z_offset_m", default_value="0.05"),  # 预抓取位姿在 base Z 方向的额外抬升（m，5 cm），与沿接近轴的后退距离叠加
             DeclareLaunchArgument("min_target_z_m", default_value="0.0"),  # 预览/执行允许的最低目标高度（m）；大于 0 时把目标抬高到该值，0 表示不做下限抬升
             DeclareLaunchArgument("grasp_base_z_offset_m", default_value="0.0"),  # 抓取位姿在 base Z 方向的额外偏移（m）；0 表示取深度反投影的原始高度
             DeclareLaunchArgument("pose_policy", default_value="base_axis"),  # 执行器使用的姿态策略；base_axis = 按 base 接近轴构造确定姿态（候选过滤节点另用混合策略）
@@ -825,8 +807,7 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_min_jaw_width_m", default_value="0.006"),  # 夹爪开口下限（m，6 mm）；更小说明夹爪几乎闭合，视为无效抓取
             DeclareLaunchArgument("candidate_max_jaw_width_m", default_value="0.085"),  # 夹爪开口上限（m，85 mm，接近最大行程）；超过即夹不住目标
             DeclareLaunchArgument("candidate_min_grasp_z_m", default_value="0.0"),  # 抓取点最低高度（m，base 系 z 轴向上）；低于该值判为贴地或穿桌
-            DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120"),  # 接近点最低高度钳位（m，12 cm）；低于会被抬高，保证从目标上方进入而不是贴台面平推
-            DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120"),  # 抬升与撤退前的最低高度（m，12 cm）；保证先离开台面再水平移动
+            DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.04"),  # 预抓取目标在 base_link 下的 Z 下限（4 cm）；低于时抬高到此值，不代表离桌面4 cm
             DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true"),  # 是否启用工作空间包围盒闸门；本档为 true，候选必须落在下面的盒内
             DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]"),  # 旧仓库工作空间盒最小角（m，base 系）
             DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]"),  # 旧仓库工作空间盒最大角（m，base 系）
@@ -836,7 +817,6 @@ def generate_launch_description():
             DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="1.5708"),  # joint6 单关节最大允许角差（rad，约 90 度）；超过直接否决该候选
             DeclareLaunchArgument("candidate_joint6_symmetry_enabled", default_value="true"),  # 是否启用夹爪 180 度对称性补偿（平行夹爪绕张合轴转 pi 后仍是同一次物理抓取）
             DeclareLaunchArgument("candidate_joint6_symmetry_angle_rad", default_value="3.141592653589793"),  # 对称角（rad，等于 pi）；只有 180 度对称才物理等价，不应随意改动
-            DeclareLaunchArgument("lift_z_m", default_value="0.04"),  # 抓取后抬升高度（m，4 cm）；本启动档覆盖策略档中的 8 cm
             DeclareLaunchArgument("close_position_m", default_value="0.025"),  # 固定合爪目标位置（两指间距，m）；自适应模式开启且测得有效宽度时会被覆写
             DeclareLaunchArgument("close_max_effort", default_value="0.4"),  # 合爪阶段最大夹持力（归一化量纲，非牛顿；本站约定 0~0.6）；调大更紧但可能压坏目标
             DeclareLaunchArgument("open_before_approach", default_value="true"),  # 是否在接近目标前先张开夹爪；狭窄场景可置 false，改为到达接近点后再张开
@@ -853,10 +833,8 @@ def generate_launch_description():
             DeclareLaunchArgument("gripper_grasp_min_close_time_sec", default_value="0.08"),  # 最短合爪时间（s）；防止刚起步、速度尚未建立就被误判为已接触
             DeclareLaunchArgument("gripper_grasp_velocity_threshold", default_value="0.04"),  # 判定已停住（堵转）的角速度阈值（rad/s）；调大更易误判接触，调小更难判定
             DeclareLaunchArgument("gripper_grasp_min_closure_distance_m", default_value="0.006"),  # 判定接触所需的最小闭合行程（m）；行程不足说明是空夹，而不是夹到物体
-            DeclareLaunchArgument("safe_retreat_enabled", default_value="true"),  # 抬起后是否额外撤向远离目标的方向；false 则阶段序列在抬起后直接结束
-            DeclareLaunchArgument("safe_retreat_min_lift_z_m", default_value="0.12"),  # 撤退前的最低抬升高度（m，12 cm）；与 lift_z_m 取较大者，保证先离台面再平移
-            DeclareLaunchArgument("safe_retreat_distance_m", default_value="0.06"),  # 撤退平移距离（m，6 cm）；沿下面的方向轴直线退开
-            DeclareLaunchArgument("safe_retreat_axis_xyz", default_value="[0.0, 1.0, 0.5]"),  # 撤退方向向量（base 系，内部会归一化）；默认沿 +Y 并向上 0.5 斜向撤退
+            DeclareLaunchArgument("safe_retreat_enabled", default_value="true"),  # 闭合并验证后是否沿本次接近路径反向撤退
+            DeclareLaunchArgument("safe_retreat_distance_m", default_value="0.06"),  # 沿 grasp -> pregrasp 方向撤退的距离（m，6 cm）
             DeclareLaunchArgument("safe_home_after_grasp", default_value="false"),  # 序列末尾是否回安全位。默认 false：回零是大范围动作，必须由操作员显式开启
             DeclareLaunchArgument("moveit_planning_time", default_value="8.0"),  # MoveIt 单次规划时间上限（s）；调大更可能规划成功，但整体节拍变慢
             DeclareLaunchArgument("moveit_num_planning_attempts", default_value="5"),  # MoveIt 规划尝试次数；调大提高成功率，但耗时成比例增加
@@ -869,11 +847,9 @@ def generate_launch_description():
             DeclareLaunchArgument("auto_retry_enabled", default_value="false"),  # 阶段失败后是否自动换下一个候选重试。默认 false：失败即停并回报原因
             DeclareLaunchArgument("auto_retry_max_attempts", default_value="3"),  # 自动重试最多使用的候选个数（含首次）；仅在允许重试且该阶段可重试时生效
             DeclareLaunchArgument("safe_retreat_before_retry", default_value="true"),  # 重试前是否先撤到接近点，避免贴着目标原地换位形刮碰物体
-            DeclareLaunchArgument("grasp_verification_enabled", default_value="true"),  # 是否在抬起后验证抓取成功性（接触 + 闭合行程，可选视觉抬升证据）
+            DeclareLaunchArgument("grasp_verification_enabled", default_value="true"),  # 是否在闭合后验证抓取成功性（接触 + 闭合行程）
             DeclareLaunchArgument("grasp_verification_min_closure_distance_m", default_value="0.006"),  # 判定确实夹住所需要的最小闭合行程（m）；行程不足说明是空夹
             DeclareLaunchArgument("grasp_verification_require_contact", default_value="true"),  # 是否必须检出夹爪接触；置 false 后仅凭闭合行程判成功，误判风险上升
-            DeclareLaunchArgument("visual_lift_check_enabled", default_value="false"),  # 是否引入视觉抬升证据（依赖视觉更新）；默认关闭，未验证前不作为判据
-            DeclareLaunchArgument("visual_lift_min_delta_m", default_value="0.03"),  # 视觉抬升证据的最小高度变化（m，3 cm）；低于该值判验证失败
             DeclareLaunchArgument("place_after_grasp_enabled", default_value="false"),  # 抓取成功后是否继续执行放置序列；默认 false，防止未经授权的大范围搬运
             DeclareLaunchArgument("place_position_xyz", default_value="[-0.20, -0.20, 0.25]"),  # 放置点位置（base 系，m）；默认落在操作者一侧、抬高的安全位置
             # 放置点姿态四元数 (x, y, z, w)；默认绕 Z 轴 -90 度，与本站抓取姿态一致，
@@ -892,13 +868,14 @@ def generate_launch_description():
                     [
                         "'10.0' if '",
                         execution_mode,
-                        "'.lower() == 'plan_only' else '1.0'",
+                        "'.lower() == 'plan_only' else '4.0'",
                     ]
                 ),
                 # 摄像头采帧→GraspNet→Top-10 IK/碰撞过滤实测可耗 3~5 s；
                 # plan_only 再留出人工观察 RViz/触发服务的时间。只限不下发运动的预览。
-                # execute 仍保持严格的 1 s 默认门限，避免真实抓取使用陈旧视觉结果。
-                description="Maximum grasp-plan age in seconds (default: 10.0 for plan_only, 1.0 for execute)",
+                # execute 使用 4 s 默认门限，覆盖当前 RGB-D→GraspNet→IK/碰撞过滤实测延迟；
+                # 更短或更长的窗口仍可由调用方显式覆盖。
+                description="Maximum grasp-plan age in seconds (default: 10.0 for plan_only, 4.0 for execute)",
             ),
             # 无硬件状态后端先注册启动，随后 MoveIt 才开始等待当前状态。
             sim_trajectory_controller,

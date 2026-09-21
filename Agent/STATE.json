@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-20T11:45:26+08:00",
+  "generated_at": "2026-09-21T13:01:39+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "0798881",
+    "head": "01ba70c",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-20T11:45:26+08:00 | actor=Codex | event=start | note=Create consolidated non-visual launch command guide and push current progress to GitHub | verification=-"
+  "last_event": "- 2026-09-21T13:01:39+08:00 | actor=codex | event=complete | note=Reviewed the verified visual grasp approach/retreat, arm-status heartbeat, launch/config, tests, and documentation changes for Git publication. Full regression already passed 738 tests with 7 skipped; rebotarm_vision and rebotarm_bringup rebuilt; no hardware action in publication step. | verification=-"
 }

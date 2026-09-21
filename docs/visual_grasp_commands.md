@@ -54,13 +54,13 @@ ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
 状态后端向 MoveIt 提供当前关节状态；不需要额外传 `start_visual_ready:=false`。
 `plan_only` 下 `max_plan_age_sec` 默认是 10 s：GraspNet 推理和逐候选 IK/碰撞过滤
 可能已耗去 3–5 s，再留时间供人工观察后触发纯规划；切换到
-`execution_mode:=execute` 时默认恢复为 1 s。两种模式都可显式传
+`execution_mode:=execute` 时默认使用 4 s。两种模式都可显式传
 `max_plan_age_sec:=<秒数>` 覆盖默认值。
 10 s 只是无动作的轨迹预览窗口，不能据此验收眼在手相机的实物对齐或真实抓取安全。
 如果服务拒绝请求，响应会区分 `no grasp plan received yet`、
 `invalid grasp plan`、`grasp plan expired on arrival` 与 `cached grasp plan expired`。
 过期响应中的 `age_sec` 是自采集时间戳算起，而不是自 RViz 显示或消息到达时算起。
-调用 `/rebotarm/visual_grasp/execute` 后，执行器先依次规划预抓取、抓取、抬升和可选撤退；
+调用 `/rebotarm/visual_grasp/execute` 后，执行器依次规划预抓取、抓取和可选的沿接近路径反向撤退；
 后一段从上一段规划终点继续。只有全部阶段成功后，运动层才用一条
 `/display_planned_path` 消息让 RViz 连续播放完整的紫色机器人幻影，阶段失败时不会显示
 不完整序列。该预览不发送控制器 Action，也不会改变 `/rebotarm/joint_states`；默认阶段

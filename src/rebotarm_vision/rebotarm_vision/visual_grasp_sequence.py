@@ -3,8 +3,8 @@
 职责与位置
 ----------
 把"预抓取位姿 + 抓取位姿 + 夹爪策略"翻译成执行器可逐阶段下发的动作阶段列表，
-阶段顺序固定为：可选的初始开爪 -> 移动到预抓取位 -> 接近抓取点 -> 合爪 -> 抬升
--> 可选的斜向撤退 -> 可选的回安全位。
+阶段顺序固定为：可选的初始开爪 -> 移动到预抓取位 -> 接近抓取点 -> 合爪
+-> 可选的沿接近路径反向撤退 -> 可选的回安全位。
 
 数据流与安全边界
 ----------------
@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .gripper_policy import GripperCommand
-from .retreat_policy import RetreatPolicyConfig, build_lift_pose, build_retreat_pose
+from .retreat_policy import RetreatPolicyConfig, build_retreat_pose
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,6 @@ class VisualGraspSequenceConfig:
       ``auto_gripper_width`` 关闭或未测得有效目标宽度时生效。
     - ``close_max_effort``：合爪阶段最大夹持力（归一化），越大夹得越紧也越容易压坏
       目标，且更容易触发夹爪堵转/过载报错。
-    - ``lift_z_m``：抬升阶段相对抓取点沿 Z（基座系竖直方向）向上的增量。
     - ``min_grasp_z_m``：抓取点最低允许高度，是安全门；低于该值说明目标太贴桌面或
       在桌面以下，直接拒绝而不是继续规划。
     - ``auto_gripper_width`` 及以下 6 个字段：按测量到的夹爪目标宽度自动推导开合
@@ -60,8 +59,8 @@ class VisualGraspSequenceConfig:
       ``min/max_open_position_m``、``min/max_close_position_m`` 夹到安全行程内。
     - ``gripper_command``：夹爪策略预计算好的命令；非空时直接采用它的开合宽度与
       夹持力（并复用其允许/拒绝判定），此时上面那组自动宽度字段不再参与计算。
-    - ``retreat_policy``：撤退策略；关闭时既不插入撤退阶段，也不启用最低抬升高度
-      约束。
+    - ``retreat_policy``：启用后从抓取点沿 ``grasp -> pregrasp`` 方向退出；不使用
+      固定基座方向，也不先做独立垂直抬升。
     - ``include_safe_home``：是否在序列末尾追加回安全位阶段（设备侧服务按自身
       记录的基准位姿执行，本模块不携带目标点）。
     """
@@ -70,7 +69,6 @@ class VisualGraspSequenceConfig:
     open_position_m: float = 0.09
     close_position_m: float = 0.025
     close_max_effort: float = 0.4
-    lift_z_m: float = 0.08
     min_grasp_z_m: float = 0.0
     auto_gripper_width: bool = False
     detected_jaw_width_m: float = 0.0
@@ -142,7 +140,7 @@ def build_visual_grasp_sequence(
     """构造完整的视觉抓取阶段列表（纯函数，只做几何与安全检查）。
 
     阶段顺序：可选的初始开爪 -> move_to_pregrasp -> approach_grasp ->
-    close_gripper -> lift -> 可选的 safe_retreat -> 可选的 safe_home。
+    close_gripper -> 可选的 safe_retreat -> 可选的 safe_home。
 
     异常：抓取点 Z 低于 ``min_grasp_z_m`` 时抛 ``ValueError``（安全门）；夹爪策略
     已判定不允许抓取时抛 ``ValueError``（物体过宽等）；撤退轴为零向量时由撤退策略
@@ -154,9 +152,6 @@ def build_visual_grasp_sequence(
             f"{config.min_grasp_z_m:.3f}"
         )
 
-    # 撤退策略关闭时最低抬升高度约束为 0，抬升量完全由 lift_z_m 决定。
-    min_lift_z = config.retreat_policy.min_lift_z_m if config.retreat_policy.enabled else 0.0
-    lift_pose = build_lift_pose(grasp, lift_z_m=config.lift_z_m, min_lift_z_m=min_lift_z)
     # 夹爪策略给出的命令优先：它已包含过宽拒绝判定与宽度上下限钳制。
     if config.gripper_command is not None:
         if not config.gripper_command.allowed:
@@ -178,7 +173,7 @@ def build_visual_grasp_sequence(
                 detected_jaw_width_m=float(config.detected_jaw_width_m),
             )
         )
-    # 主体阶段始终存在，顺序不可调换：先到位、再接近、再合爪、最后抬升。
+    # 主体阶段始终存在，顺序不可调换：先到位、再接近、再合爪。
     stages.extend(
         [
             VisualGraspStage(
@@ -198,11 +193,6 @@ def build_visual_grasp_sequence(
                 gripper_max_effort=max_effort,
                 detected_jaw_width_m=float(config.detected_jaw_width_m),
             ),
-            VisualGraspStage(
-                name="lift",
-                kind="move",
-                pose=lift_pose,
-            ),
         ]
     )
     if config.retreat_policy.enabled:
@@ -210,7 +200,7 @@ def build_visual_grasp_sequence(
             VisualGraspStage(
                 name="safe_retreat",
                 kind="move",
-                pose=build_retreat_pose(lift_pose, config.retreat_policy),
+                pose=build_retreat_pose(grasp, pregrasp, config.retreat_policy),
             )
         )
     if config.include_safe_home:

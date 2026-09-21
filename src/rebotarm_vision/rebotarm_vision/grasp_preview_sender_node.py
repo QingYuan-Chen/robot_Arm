@@ -15,8 +15,8 @@
 
 关键参数（详细语义见 __init__ 中的声明处）：
     pose_mode 选择预抓取位姿还是抓取位姿；target_frame 指定输出坐标系；
-    tcp_offset_xyz 做 TCP 到末端连杆的换算；target_base_offset_xyz / base_z_offset_m
-    做基准坐标系下的平移补偿；min_target_z_m 是防撞地面的高度下限；
+    tcp_offset_xyz 做 TCP 到末端连杆的换算；target_base_offset_xyz 做基准坐标系下
+    的平移补偿；min_target_z_m 是防撞地面的高度下限；
     publish_count 决定重复发布次数；exit_after_publish 决定发布后是否退出进程。
 
 运行模型：
@@ -164,8 +164,6 @@ class GraspPreviewSenderNode(Node):
         self.declare_parameter("tcp_offset_xyz", [0.0, 0.0, 0.0])
         # 基准坐标系下的整体平移补偿（m），用于修正候选点与期望落点的固定偏差
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
-        # 基准坐标系 Z 方向抬升量（m）：常见配置 0.05，把预览目标抬高以留出接近余量
-        self.declare_parameter("base_z_offset_m", 0.0)
         # 目标高度下限（m）：>0 时把 Z 抬到该平面以上，防止目标点落到桌面以下
         self.declare_parameter("min_target_z_m", 0.0)
         # 每条规划的发布次数：重复发布以降低订阅端漏收概率（QoS 深度 10）
@@ -179,7 +177,6 @@ class GraspPreviewSenderNode(Node):
         self.target_frame = str(self.get_parameter("target_frame").value)
         self.tcp_offset_xyz = self._tuple3("tcp_offset_xyz")
         self.target_base_offset_xyz = self._tuple3("target_base_offset_xyz")
-        self.base_z_offset_m = float(self.get_parameter("base_z_offset_m").value)
         self.min_target_z_m = float(self.get_parameter("min_target_z_m").value)
         # 至少发布 1 次：参数误配为 0 或负数时不至于静默不发
         self.publish_count = max(1, int(self.get_parameter("publish_count").value))
@@ -201,7 +198,6 @@ class GraspPreviewSenderNode(Node):
             f"pose_mode={self.pose_mode}, target_frame={self.target_frame}, "
             f"tcp_offset_xyz={self.tcp_offset_xyz}, "
             f"target_base_offset_xyz={self.target_base_offset_xyz}, "
-            f"base_z_offset_m={self.base_z_offset_m:.3f}, "
             f"min_target_z_m={self.min_target_z_m:.3f}"
         )
 
@@ -260,7 +256,6 @@ class GraspPreviewSenderNode(Node):
         pose.position.x = round(float(pose.position.x) + self.target_base_offset_xyz[0], 6)
         pose.position.y = round(float(pose.position.y) + self.target_base_offset_xyz[1], 6)
         pose.position.z = round(float(pose.position.z) + self.target_base_offset_xyz[2], 6)
-        pose.position.z = round(float(pose.position.z) + self.base_z_offset_m, 6)
         # 安全下限：只在显式配置正的下限时生效，绝不把目标压低到配置平面以下
         if self.min_target_z_m > 0.0:
             pose.position.z = max(float(pose.position.z), self.min_target_z_m)

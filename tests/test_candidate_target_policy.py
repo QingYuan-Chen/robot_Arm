@@ -23,7 +23,6 @@ def test_candidate_target_policy_preserve_pose_adds_parallel_jaw_symmetric_varia
             base_pregrasp_distance_m=0.08,
             tcp_offset_xyz=(0.0, 0.0, 0.0),
             target_base_offset_xyz=(0.0, 0.0, 0.0),
-            pregrasp_base_z_offset_m=0.0,
             grasp_base_z_offset_m=0.0,
         ),
     )
@@ -50,7 +49,6 @@ def test_candidate_target_policy_base_axis_keeps_existing_yaw_z_label_and_positi
             base_pregrasp_distance_m=0.08,
             tcp_offset_xyz=(-0.04, 0.0, 0.0),
             target_base_offset_xyz=(0.0, 0.01, 0.0),
-            pregrasp_base_z_offset_m=0.05,
             grasp_base_z_offset_m=0.0,
             orientation_yaw_offsets_rad=(0.0,),
             candidate_grasp_z_offsets_m=(0.0,),
@@ -60,7 +58,7 @@ def test_candidate_target_policy_base_axis_keeps_existing_yaw_z_label_and_positi
 
     assert [variant.label for variant in variants] == ["base_axis_yaw0_z0"]
     assert variants[0].grasp.position == pytest.approx((0.48, -0.017, 0.229))
-    assert variants[0].pregrasp.position == pytest.approx((0.40, -0.017, 0.279))
+    assert variants[0].pregrasp.position == pytest.approx((0.40, -0.017, 0.229))
 
 
 def test_candidate_target_policy_uses_pose_agnostic_pregrasp_minimum_height_only_when_needed():
@@ -74,7 +72,6 @@ def test_candidate_target_policy_uses_pose_agnostic_pregrasp_minimum_height_only
             pose_policy="base_axis",
             base_approach_axis_xyz=(1.0, 0.0, 0.0),
             base_pregrasp_distance_m=0.06,
-            pregrasp_base_z_offset_m=0.0,
             pregrasp_min_z_m=0.12,
             tcp_offset_xyz=(0.0, 0.0, 0.0),
             target_base_offset_xyz=(0.0, 0.0, 0.0),
@@ -88,7 +85,6 @@ def test_candidate_target_policy_uses_pose_agnostic_pregrasp_minimum_height_only
             pose_policy="base_axis",
             base_approach_axis_xyz=(1.0, 0.0, 0.0),
             base_pregrasp_distance_m=0.06,
-            pregrasp_base_z_offset_m=0.0,
             pregrasp_min_z_m=0.12,
             tcp_offset_xyz=(0.0, 0.0, 0.0),
             target_base_offset_xyz=(0.0, 0.0, 0.0),

@@ -86,9 +86,6 @@ class CandidateTargetPolicyConfig:
     # 基准坐标系下的整体平移量 (x, y, z)（m），用于补偿候选点相对物体中心的偏差，
     # 所有变体统一叠加；默认 (0, 0, 0) 表示不补偿。
     target_base_offset_xyz: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    # 预抓取位姿在基准坐标系 Z 方向的额外抬升量（m），默认 0.05，
-    # 目的是让接近段从物体上方下来，避免水平切入时刮碰桌面或物体。
-    pregrasp_base_z_offset_m: float = 0.05
     # 预抓取点 Z 的下限（m），0 表示不限制；>0 时会把预抓取点抬高到该平面以上。
     pregrasp_min_z_m: float = 0.0
     # 抓取位姿在基准坐标系 Z 方向的整体补偿量（m），默认 0（指爪宽度等偏差在标定中处理）。
@@ -126,7 +123,7 @@ def _base_axis_config(
 ) -> BaseAxisGraspPolicyConfig:
     """把总体策略配置映射为「固定基准轴」子策略配置。
 
-    只做字段搬运：接近轴、预抓取距离、TCP 偏移、基准偏移、预抓取抬升/下限与抓取 Z 补偿。
+    只做字段搬运：接近轴、预抓取距离、TCP 偏移、基准偏移、预抓取下限与抓取 Z 补偿。
     """
     return BaseAxisGraspPolicyConfig(
         fixed_orientation_xyzw=fixed_orientation_xyzw,
@@ -134,7 +131,6 @@ def _base_axis_config(
         pregrasp_distance_m=float(config.base_pregrasp_distance_m),
         tcp_offset_xyz=config.tcp_offset_xyz,
         target_base_offset_xyz=config.target_base_offset_xyz,
-        pregrasp_z_offset_m=float(config.pregrasp_base_z_offset_m),
         pregrasp_min_z_m=float(config.pregrasp_min_z_m),
         grasp_z_offset_m=float(grasp_z_offset_m),
     )
@@ -154,7 +150,6 @@ def _official_config(
         pregrasp_distance_m=float(config.base_pregrasp_distance_m),
         tcp_offset_xyz=config.tcp_offset_xyz,
         target_base_offset_xyz=config.target_base_offset_xyz,
-        pregrasp_z_offset_m=float(config.pregrasp_base_z_offset_m),
         pregrasp_min_z_m=float(config.pregrasp_min_z_m),
         grasp_z_offset_m=float(grasp_z_offset_m),
     )

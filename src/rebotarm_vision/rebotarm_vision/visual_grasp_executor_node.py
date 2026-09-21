@@ -20,7 +20,7 @@ from .grasp_retry_policy import RetryPolicyConfig, ordered_candidate_indices
 from .grasp_verification_policy import (
     GraspVerificationConfig,
     GraspVerificationInput,
-    verify_grasp_after_lift,
+    verify_grasp_after_close,
 )
 from .grasp_preview_sender_node import (
     _transform_from_msg,
@@ -60,7 +60,7 @@ from .visual_servo_policy import VisualServoApproachConfig, build_visual_servo_s
 #     `/gripper/set`（夹爪位置控制）与 `/gripper/grasp`（力闭合抓取）。
 #
 # 典型阶段序列（由序列构建策略按参数生成）：
-#   [open_gripper] → move_to_pregrasp → approach_grasp → close_gripper → lift
+#   [open_gripper] → move_to_pregrasp → approach_grasp → close_gripper
 #   → [safe_retreat] → [safe_home] → [move_to_place → open_gripper_at_place → place_retreat]
 #   方括号表示由参数开关控制的可选阶段。
 #
@@ -73,7 +73,7 @@ from .visual_servo_policy import VisualServoApproachConfig, build_visual_servo_s
 #   3. 抓取点高度受 `min_grasp_z_m` 下限保护（在序列构建策略中校验），防止规划到桌面以下。
 #   4. 每个阶段失败都会走恢复策略：先请求运动停止，再（可选）撤到接近点，
 #      只有"允许自动重试 + 该阶段可重试 + 还有剩余候选"三者同时成立才会换候选继续。
-#   5. 抬起阶段之后做抓取验证（接触 + 闭合行程，可选视觉抬升证据），验证不过即判本次抓取失败。
+#   5. 闭合后立即做抓取验证（接触 + 闭合行程），通过后才沿接近路径反向撤退。
 #
 # 线程模型：全部回调注册在可重入回调组上，主函数使用三线程执行器。执行服务回调会长时间
 # 阻塞（内部用 `rclpy.ok()` 与 `_running` 标志轮询等待），停止服务可在另一个线程里打断它。
@@ -121,7 +121,7 @@ class VisualGraspExecutorNode(Node):
 
     生命周期：进程启动即建立 TF 监听、六个下游服务客户端、两个订阅与两个服务；
     节点本身不保存"机械臂状态"，只保存最近一次有效计划与候选，以及本轮执行过程的
-    快照（最近夹爪到位位置、是否检出接触、闭合行程、抬起起始高度），供失败诊断使用。
+    快照（最近夹爪到位位置、是否检出接触、闭合行程），供失败诊断使用。
 
     回调模型：所有订阅与服务都在同一个可重入回调组，主线程池为三线程。抓取序列在
     `/visual_grasp/execute` 的回调里同步执行，期间由 `_running` 标志与 `rclpy.ok()`
@@ -154,12 +154,10 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("tcp_offset_xyz", [-0.04, 0.0, 0.0])
         # 目标点整体平移补偿（m），用于补偿标定/安装残差；默认全 0 表示不补偿
         self.declare_parameter("target_base_offset_xyz", [0.0, 0.0, 0.0])
-        # 接近点（预抓取点）额外抬高的 z 偏移（m），只有旧式 visual_pose 策略使用
-        self.declare_parameter("pregrasp_base_z_offset_m", 0.05)
-        # 抓取点额外的 z 偏移（m），同上，仅旧式策略使用
+        # 抓取点额外的 z 偏移（m），仅旧式 visual_pose 策略使用
         self.declare_parameter("grasp_base_z_offset_m", 0.0)
         # 位姿生成策略：base_axis = 用固定姿态 + 基座接近轴现算接近点；
-        # visual_pose/source_pose/legacy = 直接采用计划里的位姿并叠加上述 z 偏移
+        # visual_pose/source_pose/legacy = 直接采用计划里的位姿；抓取点可叠加上述 z 偏移
         self.declare_parameter("pose_policy", "base_axis")
         # 固定抓取姿态四元数 xyzw，默认绕 Z 转 -90°（本站工作区相对上游 +X 布局旋转而来），
         # 使夹爪闭合方向与目标摆放方向一致
@@ -174,8 +172,6 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("base_pregrasp_distance_m", 0.08)
         # 抓取点 z 下限（m），低于此值直接判序列构建失败，属桌面碰撞护栏
         self.declare_parameter("min_grasp_z_m", 0.0)
-        # 闭合后抬升高度（m）；同时受安全撤退的 min_lift_z_m 抬高保护
-        self.declare_parameter("lift_z_m", 0.08)
 
         # ── 夹爪开合与宽度自适应 ────────────────────────────────────────────
         # 是否在接近前先张开夹爪；张开会提前占用空间，狭窄场景可关掉
@@ -232,14 +228,10 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("gripper_grasp_min_closure_distance_m", 0.006)
 
         # ── 抓取后安全撤退 ─────────────────────────────────────────────────
-        # 是否在抬起后额外撤到远离目标的方向
+        # 是否在闭合后沿本次接近路径反向撤退
         self.declare_parameter("safe_retreat_enabled", True)
-        # 撤退前的最低抬升高度（m），与 lift_z_m 取较大者，保证先离台再平移
-        self.declare_parameter("safe_retreat_min_lift_z_m", 0.12)
         # 撤退平移距离（m）
         self.declare_parameter("safe_retreat_distance_m", 0.06)
-        # 撤退方向（基座系，会归一化）；默认沿 +Y 并向上 0.5，即斜向后上方退开
-        self.declare_parameter("safe_retreat_axis_xyz", [0.0, 1.0, 0.5])
         # 是否在序列末尾回安全位（默认关，避免未经授权的大范围回零动作）
         self.declare_parameter("safe_home_after_grasp", False)
 
@@ -254,8 +246,8 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("execute_gripper", True)
         # 夹爪开/合阶段的等待（s）
         self.declare_parameter("gripper_wait_sec", 1.0)
-        # lift 与 safe_retreat 阶段的等待（s）
-        self.declare_parameter("lift_wait_sec", 0.5)
+        # safe_retreat 阶段完成后的稳定等待（s）
+        self.declare_parameter("retreat_wait_sec", 0.5)
         # 单次运动执行的服务端超时（s），会随请求一起下发，因此要覆盖规划耗时
         self.declare_parameter("motion_result_timeout_sec", 45.0)
 
@@ -266,8 +258,8 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("move_velocity_scaling", 0.10)
         # 接近段速度缩放；比常规更慢，因为此时离目标与台面最近
         self.declare_parameter("approach_velocity_scaling", 0.04)
-        # 抬起与撤退段速度缩放；比接近段稍快，兼顾"已夹住"与效率
-        self.declare_parameter("lift_velocity_scaling", 0.08)
+        # 撤退段速度缩放；比接近段稍快，兼顾"已夹住"与效率
+        self.declare_parameter("retreat_velocity_scaling", 0.08)
         # 加速度缩放，所有阶段共用
         self.declare_parameter("acceleration_scaling", 0.08)
         # plan_only 阶段间诊断等待（s）；默认 0，连续预览无需人为停顿
@@ -300,16 +292,12 @@ class VisualGraspExecutorNode(Node):
         self.declare_parameter("auto_retry_max_attempts", 3)
         # 重试前是否先撤到接近点（避免贴着目标换位形）
         self.declare_parameter("safe_retreat_before_retry", True)
-        # 是否在抬起后做抓取成功性验证
+        # 是否在闭合后用接触与闭合行程做抓取成功性验证
         self.declare_parameter("grasp_verification_enabled", True)
         # 判定"确实夹住"所需的最小闭合行程（m）
         self.declare_parameter("grasp_verification_min_closure_distance_m", 0.006)
         # 是否要求检出接触，缺失即判验证失败
         self.declare_parameter("grasp_verification_require_contact", True)
-        # 是否引入视觉抬升证据（用最新计划的目标高度变化佐证物体被抬起）
-        self.declare_parameter("visual_lift_check_enabled", False)
-        # 视觉抬升证据的最小高度变化（m）
-        self.declare_parameter("visual_lift_min_delta_m", 0.03)
 
         # ── 抓取后放置（可选）──────────────────────────────────────────────
         # 是否在抓取成功后继续执行放置序列
@@ -340,7 +328,6 @@ class VisualGraspExecutorNode(Node):
         self._target_frame = str(self.get_parameter("target_frame").value).strip()
         self._tcp_offset_xyz = self._tuple3("tcp_offset_xyz")
         self._target_base_offset_xyz = self._tuple3("target_base_offset_xyz")
-        self._pregrasp_base_z_offset_m = float(self.get_parameter("pregrasp_base_z_offset_m").value)
         self._grasp_base_z_offset_m = float(self.get_parameter("grasp_base_z_offset_m").value)
         self._service_timeout_sec = float(self.get_parameter("service_timeout_sec").value)
         self._motion_result_timeout_sec = float(self.get_parameter("motion_result_timeout_sec").value)
@@ -353,8 +340,7 @@ class VisualGraspExecutorNode(Node):
             "approach_grasp": float(self.get_parameter("approach_wait_sec").value),
             "close_gripper": float(self.get_parameter("gripper_wait_sec").value),
             "open_gripper": float(self.get_parameter("gripper_wait_sec").value),
-            "lift": float(self.get_parameter("lift_wait_sec").value),
-            "safe_retreat": float(self.get_parameter("lift_wait_sec").value),
+            "safe_retreat": float(self.get_parameter("retreat_wait_sec").value),
         }
 
         # ── 运行状态 ───────────────────────────────────────────────────────
@@ -365,7 +351,6 @@ class VisualGraspExecutorNode(Node):
         self._last_gripper_reached_position: float | None = None  # 最近一次张爪实际到位开口（m），用于估算闭合行程
         self._last_grasp_contact_detected = False  # 最近一次抓取服务是否检出接触（堵转推断）
         self._last_grasp_closure_distance_m = 0.0  # 本次闭合行程（m）= 张爪到位值 - 抓取到位值，下限截到 0
-        self._last_lift_start_z_m: float | None = None  # 抬起阶段起点 z（m），用作视觉抬升证据的基准
         self._retry_retreat_stage: VisualGraspStage | None = None  # 已完成的接近点阶段，重试前撤回到这里
         self._run_counter = 0  # 累计执行次数，只增不减，用于给每轮日志编号
         self._current_run_id = 0  # 当前执行轮次编号
@@ -551,7 +536,6 @@ class VisualGraspExecutorNode(Node):
                 # 每轮尝试都把上一轮的抓取证据清零，防止上一轮的结果误判本轮
                 self._last_grasp_contact_detected = False
                 self._last_grasp_closure_distance_m = 0.0
-                self._last_lift_start_z_m = None
                 self._retry_retreat_stage = None
                 stages = self._append_place_stages(self._build_sequence_from_plan(plan))
                 ok, message, failed_stage = self._execute_stages(stages)
@@ -656,7 +640,6 @@ class VisualGraspExecutorNode(Node):
             open_position_m=float(self.get_parameter("open_position_m").value),
             close_position_m=float(self.get_parameter("close_position_m").value),
             close_max_effort=float(self.get_parameter("close_max_effort").value),
-            lift_z_m=float(self.get_parameter("lift_z_m").value),
             min_grasp_z_m=float(self.get_parameter("min_grasp_z_m").value),
             auto_gripper_width=bool(self.get_parameter("auto_gripper_width").value),
             detected_jaw_width_m=self._detected_jaw_width(plan),
@@ -669,9 +652,7 @@ class VisualGraspExecutorNode(Node):
             gripper_command=gripper_command,
             retreat_policy=RetreatPolicyConfig(
                 enabled=bool(self.get_parameter("safe_retreat_enabled").value),
-                min_lift_z_m=float(self.get_parameter("safe_retreat_min_lift_z_m").value),
                 retreat_distance_m=float(self.get_parameter("safe_retreat_distance_m").value),
-                retreat_axis_xyz=self._tuple3("safe_retreat_axis_xyz"),
             ),
             include_safe_home=bool(self.get_parameter("safe_home_after_grasp").value),
         )
@@ -737,16 +718,13 @@ class VisualGraspExecutorNode(Node):
         两个特殊阶段：
           - move_to_pregrasp：记录本阶段为"重试前撤回点"，并按参数等待更新的计划；刷新被
             设为必需却等不到时，本次尝试直接判失败。
-          - lift：抬起完成后做抓取验证，验证不通过按失败返回，失败阶段名仍为 lift。
+          - close_gripper：闭合完成后立即用接触与闭合行程做抓取验证；验证通过后才撤退。
         """
 
         stage_index = 0
         while stage_index < len(stages):
             stage = stages[stage_index]
             stage_start_revision = self._plan_revision
-            # 抬起目标高度 = 抓取点 z + lift_z_m，反推即抬起起点 z，供视觉抬升证据对比使用
-            if stage.name == "lift" and stage.pose is not None:
-                self._last_lift_start_z_m = float(stage.pose.position[2]) - float(self.get_parameter("lift_z_m").value)
             ok, message = self._run_stage(stage)
             if not ok:
                 return False, message, stage.name
@@ -767,8 +745,8 @@ class VisualGraspExecutorNode(Node):
                     if not ok:
                         return False, message, "visual_servo_approach"
                     stages = self._remove_approach_after_pregrasp(stages, stage_index)
-            if stage.name == "lift":
-                verified, reason = self._verify_after_lift()
+            if stage.name == "close_gripper":
+                verified, reason = self._verify_after_close()
                 if not verified:
                     return False, reason, stage.name
             stage_index += 1
@@ -948,46 +926,28 @@ class VisualGraspExecutorNode(Node):
             )
         return False, f"not converged after {max_iterations} steps: error={last_error:.4f}"
 
-    def _verify_after_lift(self) -> tuple[bool, str]:
-        """抬起后判定本次抓取是否真的成功，返回 (是否通过, 原因)。
+    def _verify_after_close(self) -> tuple[bool, str]:
+        """闭合后判定本次抓取是否成功，返回 (是否通过, 原因)。
 
         只在"真正执行 + 夹爪命令未禁用"时才有意义：plan_only 或夹爪被禁用时直接放行并注明跳过，
         因为此时根本没有真实夹持行为可供判定。
 
-        证据来源：
-          - 夹爪侧：是否检出接触（力闭合服务由堵转推断），以及闭合行程是否够大；
-          - 视觉侧（可选）：最新计划里的目标高度相对抬起起点的高度变化，用来佐证目标被带起来。
-        视觉证据在启用时是硬条件：拿不到证据或变化量不足都判失败。计算视觉证据可能因
-        位姿换算失败抛异常，此处捕获后仅告警并标记为不可用，交由验证策略决定后果。
+        证据来源是夹爪是否检出接触（力闭合服务由堵转推断）以及闭合行程是否够大。
         """
 
         if not self._execution_enabled():
             return True, "plan_only: grasp verification skipped"
         if not self._gripper_execution_enabled():
             return True, "gripper disabled: grasp verification skipped"
-        visual_delta = 0.0
-        visual_available = False
-        if bool(self.get_parameter("visual_lift_check_enabled").value) and self._latest_plan is not None:
-            try:
-                _, latest_grasp = self._build_motion_targets(self._latest_plan)
-                if self._last_lift_start_z_m is not None:
-                    visual_delta = float(latest_grasp.position[2]) - float(self._last_lift_start_z_m)
-                    visual_available = True
-            except Exception as exc:
-                self.get_logger().warn(f"visual lift verification unavailable: {exc}")
-        result = verify_grasp_after_lift(
+        result = verify_grasp_after_close(
             GraspVerificationInput(
                 gripper_contact_detected=bool(self._last_grasp_contact_detected),
                 closure_distance_m=float(self._last_grasp_closure_distance_m),
-                visual_lift_delta_m=visual_delta,
-                visual_lift_evidence_available=visual_available,
             ),
             GraspVerificationConfig(
                 enabled=bool(self.get_parameter("grasp_verification_enabled").value),
                 min_closure_distance_m=float(self.get_parameter("grasp_verification_min_closure_distance_m").value),
                 require_gripper_contact=bool(self.get_parameter("grasp_verification_require_contact").value),
-                visual_lift_check_enabled=bool(self.get_parameter("visual_lift_check_enabled").value),
-                min_visual_lift_delta_m=float(self.get_parameter("visual_lift_min_delta_m").value),
             ),
         )
         return bool(result.success), str(result.reason)
@@ -1045,7 +1005,7 @@ class VisualGraspExecutorNode(Node):
         policy = str(self.get_parameter("pose_policy").value).strip().lower()
         if policy in ("visual_pose", "source_pose", "legacy"):
             return (
-                self._convert_plan_pose(plan, plan.pregrasp_pose, self._pregrasp_base_z_offset_m),
+                self._convert_plan_pose(plan, plan.pregrasp_pose, 0.0),
                 self._convert_plan_pose(plan, plan.grasp_pose, self._grasp_base_z_offset_m),
             )
         if policy != "base_axis":
@@ -1063,7 +1023,6 @@ class VisualGraspExecutorNode(Node):
                 pregrasp_distance_m=float(self.get_parameter("base_pregrasp_distance_m").value),
                 tcp_offset_xyz=self._tcp_offset_xyz,
                 target_base_offset_xyz=self._target_base_offset_xyz,
-                pregrasp_z_offset_m=self._pregrasp_base_z_offset_m,
                 grasp_z_offset_m=self._grasp_base_z_offset_m,
             ),
         )
@@ -1278,16 +1237,14 @@ class VisualGraspExecutorNode(Node):
         return float(getattr(plan.candidate, "object_length", 0.0) or 0.0)
 
     def _velocity_scaling_for_stage(self, name: str) -> float:
-        """按阶段名选择速度缩放：接近类阶段最慢，抬起/撤退居中，其余用常规值。"""
+        """按阶段名选择速度缩放：接近最慢，撤退居中，其余用常规值。"""
 
         if name == "visual_servo_approach":
             return float(self.get_parameter("approach_velocity_scaling").value)
         if name == "approach_grasp":
             return float(self.get_parameter("approach_velocity_scaling").value)
-        if name == "lift":
-            return float(self.get_parameter("lift_velocity_scaling").value)
         if name == "safe_retreat":
-            return float(self.get_parameter("lift_velocity_scaling").value)
+            return float(self.get_parameter("retreat_velocity_scaling").value)
         return float(self.get_parameter("move_velocity_scaling").value)
 
     def _call_gripper(self, stage: VisualGraspStage) -> tuple[bool, str]:
@@ -1363,7 +1320,7 @@ class VisualGraspExecutorNode(Node):
         行程全部来自抓取参数。注意本夹爪没有力传感器，"接触"是闭合行程 + 速度堵转推断的
         结果，不是实测接触力。
 
-        副作用（供抬起后抓取验证使用）：记录是否检出接触，并把闭合行程记为
+        副作用（供闭合后抓取验证使用）：记录是否检出接触，并把闭合行程记为
         "上次张爪到位开口 - 本次到位开口"，结果截断到非负；若从未张过爪（基准为 None），
         基准按 0 处理，因此行程会偏大——正常序列里闭合前一定先张开过。
         """

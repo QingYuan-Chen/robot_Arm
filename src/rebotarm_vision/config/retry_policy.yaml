@@ -12,17 +12,12 @@ rebotarm_visual_grasp_executor:
     auto_retry_max_attempts: 3
     # 重试前是否先撤到接近点。默认 true，避免贴着目标原地换位形而刮碰物体。
     safe_retreat_before_retry: true
-    # 是否在抬起阶段之后做抓取成功性验证（接触 + 闭合行程，可选视觉抬升证据）
+    # 是否在闭合后做抓取成功性验证（接触 + 闭合行程）
     grasp_verification_enabled: true
     # 判定"确实夹住"所需的最小闭合行程（单位 m）；行程不足说明是空夹
     grasp_verification_min_closure_distance_m: 0.006
     # 是否要求必须检出夹爪接触；置 false 后仅凭闭合行程判成功，误判风险上升
     grasp_verification_require_contact: true
-    # 是否引入视觉抬升证据（用最新抓取计划里目标高度的变化佐证物体被抬起）。
-    # 默认 false：该项依赖视觉更新，未验证前不作为判据。
-    visual_lift_check_enabled: false
-    # 视觉抬升证据的最小高度变化（单位 m，0.03 = 3 cm）；低于该值判验证失败
-    visual_lift_min_delta_m: 0.03
     # 是否在抓取成功后继续执行放置序列（move_to_place → 松爪 → 抬高撤离）。
     # 默认 false，防止未授权的大范围搬运动作。
     place_after_grasp_enabled: false

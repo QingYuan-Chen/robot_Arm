@@ -1,7 +1,5 @@
 # reBotArm 功能开启指令
 
-> 当前所有非视觉抓取入口的统一速查表见 [`rebotarm_launch_commands.md`](rebotarm_launch_commands.md)。本文保留 MoveIt 与网页工作台的详细说明。
-
 当前视觉部署只支持 Ubuntu 原生 ROS 链；不要使用历史 Windows/HTTP/MJPEG 命令。
 
 这个文档只放仍然保留的独立功能启动指令和测试顺序。

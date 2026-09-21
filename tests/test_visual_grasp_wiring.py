@@ -389,8 +389,9 @@ def test_visual_grasp_plan_age_default_is_mode_aware():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
     assert '"max_plan_age_sec",\n                default_value=PythonExpression(' in launch_text
+    assert "default: 10.0 for plan_only, 4.0 for execute" in launch_text
     assert "\"'10.0' if '\"," in launch_text
-    assert "\"'.lower() == 'plan_only' else '1.0'\"," in launch_text
+    assert "\"'.lower() == 'plan_only' else '4.0'\"," in launch_text
     assert '"max_plan_age_sec": max_plan_age_sec' in launch_text
 
 
@@ -626,7 +627,7 @@ def test_visual_grasp_executor_wires_retry_verification_place_and_recovery():
     assert "attempts: list[tuple[int, GraspPlan]] = [(-1, deepcopy(self._latest_plan))]" in executor_text
     assert "if index == int(candidates.best_index):" in executor_text
     assert "continue" in executor_text
-    assert "def _verify_after_lift" in executor_text
+    assert "def _verify_after_close" in executor_text
     assert 'return True, "gripper disabled: grasp verification skipped"' in executor_text
     assert "def _append_place_stages" in executor_text
     assert "def _precheck_execute_pose" in executor_text
@@ -685,7 +686,7 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'deltas["joint6"] = _symmetric_parallel_jaw_delta' not in node_text
     assert "build_candidate_target_variants(" in node_text
     assert "CandidateTargetPolicyConfig(" in node_text
-    assert 'self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)' in node_text
+    assert 'self.declare_parameter("candidate_pregrasp_min_z_m", 0.04)' in node_text
     assert 'pregrasp_min_z_m=float(self.get_parameter("candidate_pregrasp_min_z_m").value)' in node_text
     assert "build_parallel_jaw_pose_variants(" in target_policy_text
     assert "pregrasp_min_z_m: float = 0.0" in target_policy_text
@@ -768,8 +769,8 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_enabled", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_angle_rad", default_value="3.141592653589793")' in launch_text
     assert 'DeclareLaunchArgument("candidate_min_grasp_z_m", default_value="0.0")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.04")' in launch_text
+    assert "candidate_safe_lift_min_z_m" not in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]")' in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]")' in launch_text
@@ -804,7 +805,7 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
     assert "candidate_workspace_max_xyz: [0.64, 0.35, 0.45]" in profile_text
     assert "candidate_max_grasp_to_object_center_m: 0.15" in profile_text
     assert "candidate_max_candidates_per_frame: 20" in profile_text
-    assert "candidate_pregrasp_min_z_m: 0.120" in profile_text
+    assert "candidate_pregrasp_min_z_m: 0.04" in profile_text
     assert "candidate_max_variants_per_candidate" not in profile_text
 
 
