@@ -860,3 +860,6 @@
 - 2026-09-22T19:11:51+08:00 | actor=codex | event=complete | note=预检五项清单接入真实检查结果；无硬件操作 | verification=745 passed 7 skipped; focused 3; layering 18; calibration/dashboard build; compileall; diff check
 - 2026-09-22T19:13:34+08:00 | actor=codex | event=start | note=优化采样预览与预检清单布局 | verification=-
 - 2026-09-22T19:16:05+08:00 | actor=codex | event=complete | note=预检清单独立整行，优化采样区域布局 | verification=browser screenshot; 745 passed 7 skipped; layering 18; dashboard build; compileall; diff check
+- 2026-09-23T03:58:43+08:00 | actor=codex | event=start | note=以上游1749e3ab为新基线，选择性迁回本项目独有的MuJoCo、正式单瓶抓取和反馈安全能力 | verification=-
+- 2026-09-23T04:18:34+08:00 | actor=codex | event=checkpoint | note=隔离工作树选择性迁入MuJoCo与正式单瓶抓取，保留上游包结构；回归继续 | verification=motion/vision/simulation独立构建通过；单瓶抓取28 passed；恢复与相关边界89 passed；完整回归未完
+- 2026-09-23T04:29:43+08:00 | actor=codex | event=verified | note=完成上游新基线隔离工作树选择性能力迁移及软件验证；主目录待后续落地 | verification=1145 passed, 14 skipped; layering 18 passed; 11 packages built; compileall, launch show-args, EGL/physics/Pick smoke, diff check passed; no hardware

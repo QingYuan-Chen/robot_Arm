@@ -1,0 +1,19 @@
+default:
+  mass_scale: [1.0, 1.0]
+  damping_scale: [1.0, 1.0]
+  friction_scale: [1.0, 1.0]
+  torque_scale: [1.0, 1.0]
+  control_latency_steps: [0, 0]
+  action_noise_std: [0.0, 0.0]
+  position_noise_std: [0.0, 0.0]
+  velocity_noise_std: [0.0, 0.0]
+
+training_profile:
+  mass_scale: [0.95, 1.05]
+  damping_scale: [0.85, 1.15]
+  friction_scale: [0.85, 1.15]
+  torque_scale: [0.90, 1.10]
+  control_latency_steps: [0, 2]
+  action_noise_std: [0.0, 0.01]
+  position_noise_std: [0.0, 0.002]
+  velocity_noise_std: [0.0, 0.01]

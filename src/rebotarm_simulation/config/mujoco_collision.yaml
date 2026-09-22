@@ -1,0 +1,30 @@
+schema_version: 1
+visual_group: 2
+collision_group: 3
+
+# Collision geoms are expressed in each URDF link frame.  Arm primitives are
+# deliberately a little smaller than the visual envelope to avoid false
+# contacts around adjacent joint housings.  The finger meshes are retained:
+# MuJoCo uses their convex hull for collision detection while rendering the
+# original STL independently as the visual geom.
+bodies:
+  base_link:
+    - {name: base, type: box, pos: [0.0, 0.0, 0.0438], size: [0.068, 0.098, 0.043]}
+  link1:
+    - {name: housing, type: capsule, fromto: [0.0067, 0.0, 0.015, 0.0067, 0.0, 0.060], size: [0.025]}
+  link2:
+    - {name: upper_arm, type: capsule, fromto: [-0.255, 0.0, -0.0316, -0.015, 0.0, -0.0316], size: [0.026]}
+  link3:
+    - {name: forearm, type: capsule, fromto: [0.030, -0.030, -0.0311, 0.180, -0.030, -0.0311], size: [0.025]}
+  link4:
+    - {name: wrist_arm, type: capsule, fromto: [0.015, -0.030, -0.030, 0.080, -0.030, -0.030], size: [0.028]}
+  link5:
+    - {name: wrist_pitch, type: capsule, fromto: [-0.0028, 0.0, 0.012, -0.0028, 0.0, 0.060], size: [0.027]}
+  link6:
+    - {name: wrist_roll, type: cylinder, pos: [0.0, 0.0, 0.0242], size: [0.032, 0.028]}
+  end_link:
+    - {name: gripper_base, type: box, pos: [-0.090, 0.0, 0.0], size: [0.016, 0.075, 0.025]}
+  left_finger_link:
+    - {name: finger, type: mesh, mesh: left_finger, friction: [1.2, 0.02, 0.001]}
+  right_finger_link:
+    - {name: finger, type: mesh, mesh: right_finger, friction: [1.2, 0.02, 0.001]}

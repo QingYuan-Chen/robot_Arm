@@ -1,0 +1,3 @@
+*.urdf text eol=lf
+src/rebotarm_moveit_config/config/rebotarm.urdf text eol=lf
+src/rebotarm_simulation/models/rebotarm/robot.xml text eol=lf

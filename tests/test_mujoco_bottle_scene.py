@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCENE = ROOT / "src/rebotarm_simulation/models/rebotarm/scene.xml"
+SCENE = ROOT / "src/rebotarm_simulation/models/rebotarm/scene_bottle.xml"
 
 
 def test_canonical_mujoco_scene_uses_bottle_target_proxy():

@@ -311,6 +311,7 @@ def test_build_patched_wheel_runs_all_gates_and_smoke_in_order(
     gateway = tmp_path / "ws_gateway"
     wheel = tmp_path / "motorbridge.whl"
     events = []
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: events.append("timeout"))
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: events.append("verify"))
     monkeypatch.setattr(
         SETUP,
@@ -336,7 +337,7 @@ def test_build_patched_wheel_runs_all_gates_and_smoke_in_order(
     monkeypatch.setattr(SETUP, "_smoke_test_wheel", smoke)
 
     assert SETUP.build_patched_wheel() == wheel
-    assert events == ["verify", "checkout", "rust", "wheel", "smoke"]
+    assert events == ["verify", "checkout", "timeout", "rust", "wheel", "smoke"]
 
 
 def test_build_patched_wheel_propagates_smoke_failure(
@@ -344,6 +345,7 @@ def test_build_patched_wheel_propagates_smoke_failure(
     tmp_path: Path,
 ) -> None:
     wheel = tmp_path / "motorbridge.whl"
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: None)
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
     monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)
     monkeypatch.setattr(
@@ -368,6 +370,7 @@ def test_install_mode_does_not_install_when_real_build_smoke_fails(
     tmp_path: Path,
 ) -> None:
     wheel = tmp_path / "motorbridge.whl"
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: None)
     installed = []
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
     monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)

@@ -4,6 +4,10 @@
 
 ## 当前焦点
 
+- 2026-09-23：隔离工作树选择性迁移的软件验证完成：保留上游 11 包、唯一实机控制器组合与原有 MuJoCo 启动入口；迁入本地独有 Viewer/Reach/Pick/Sim2Real/Real2Sim、正式单瓶抓取及受保护失败恢复。上游反馈序号和 5 Hz ArmStatus 心跳已具备，不搬回旧控制器。单瓶抓取最低抓取点为用户此前指定的 0.03 m，未经新基线真机复验。完整回归 1145 passed/14 skipped（隔离 ROS 域 119）；分层 18 passed；11 包 symlink-install、compileall、两个 launch `--show-args`、MuJoCo EGL/物理与 Pick 安全批次、diff check 通过。MuJoCo README 与文档测试采用 `third_party/rebotarm_mujoco_venv` 新布局；Viewer launch 归属 `rebotarm_simulation`。主目录及已有未提交改动不动；未提交、未推送，无串口或实机操作。下一步由用户决定何时把经审阅的隔离结果并入主目录，并在新基线单独进行实机验收。
+
+- 2026-09-23：用户确认以 `huangbinai/robotarm_ros2` 上游提交 `1749e3ab9db29d4998f860efb91cf2558b1a73e2` 作为新的项目起点，接受其功能包修复、去冗余、删包结果和新安装布局。迁移在隔离工作树 `codex/upstream-baseline-migration` 进行，主目录及原工作树现有未提交内容保持不动；只选择性迁回上游缺失且仍有价值的 MuJoCo、正式单瓶抓取和反馈安全能力，不恢复已退役入口。本轮无实机授权，不访问串口或发送动作。上游基线独立 symlink-install 构建 11 包通过；分层测试 18 passed、必需 compileall 通过。完整测试在补齐构建 overlay 后为 728 passed/21 skipped/3 failed，三项均依赖隔离工作树尚未安装的仓库外厂商 SDK/MotorBridge 源码树，先作为环境型基线缺口记录，不能算迁移回归。
+
 - 2026-09-22：采样区预检清单从覆盖度内部移到独立整行卡片，桌面五列、窄屏换行；相机与 TF/覆盖度卡片上沿对齐，移除旧40px补偿留白。静态截图验证、Dashboard重建、745 passed/7 skipped、分层18、compileall/diff通过；仅布局变更。
 
 - 2026-09-22：试采预检新增后端请求级检查清单：图像、CameraInfo、同期机器人 TF、ArUco 质量、姿态稳定性；每次观测重置状态，成功或超时返回最后观测的逐项结果，不把未执行项目标为通过。TCP 相机三项标记不适用；前端等待期间不宣称实时阶段完成。双包重建、完整745 passed/7 skipped、分层18、聚焦3与compileall/diff通过；无真实采样或硬件操作。
@@ -26,7 +30,7 @@
 
 - 2026-09-20：按用户同意删除独立 `visual_grasp_perception_preview.launch.py`，将其 Open3D 查看器与原始候选 Marker 节点并入唯一 `visual_grasp_system.launch.py`。主入口新增 `start_open3d_viewer`、`start_raw_candidate_markers`（默认 true）；`start_visual_ready=false` 现在也会关闭常驻视觉就绪服务。纯感知诊断通过 `use_hardware=false`、`execution_mode=plan_only`、关闭运动执行/抓取执行器来组合，不接串口。`rebotarm_bringup` 重建成功，源码/安装目录旧入口均不存在；聚焦视觉/分层测试 97 passed。全量测试 734 passed、7 skipped、1 个既有 MuJoCo 解释器测试失败（与本次合并无关）。
 - 2026-09-19：排查视觉 plan-only 查询不到 `/rebotarm/arm_status`：启动进程继承了操作者终端的 `ROS_DOMAIN_ID=100`，查询终端未设域而处于默认域 0；在域 100 中控制器存在且状态 `enabled=false`、六轴状态码 0、无错误。`tools/source_local_environment.bash` 与视觉 launch 均不设置域号；单套系统无需显式设域。已从 `docs/visual_grasp_commands.md` 删除日常视觉/仿真示例的固定域号，保留多系统并行测试可显式隔离的约定。修改仅文档，不影响既有运行进程；切换域需先安全退出再重启 launch，并让所有终端使用同一域。
-- Active phase / 当前阶段：2026-09-13 一次性基线迁移与软件验证完成，等待后续开发范围；历史 P0-P6 记录不代表本机验收，不创建 P7。
+- Active phase / 当前阶段：2026-09-23 上游新基线隔离工作树的选择性迁移与软件验证完成，待审阅后再决定主目录落地；历史 P0-P6 记录不等于新基线实机验收。
 - Completed phase / 已完成阶段：P0 机械臂安全启动与执行门控、P1 MuJoCo 基线巩固与差距整合、P2 Gemini 2 SDK 与真实 RGB-D 验收、P3 完整单 Ubuntu 视觉链路、P4 Ubuntu 本地 GraspNet、P5 hand-eye/nominal TCP/MuJoCo 标定检查，以及 P6 当前工程范围均已关闭。
 - Hardware gate / 硬件门：当前没有新的硬件动作授权。P6 关闭不授权 approach、gripper、lift、retreat、自动抓取或其他后续规划中的动作。
 

@@ -1,78 +1,59 @@
-"""MuJoCo 被动查看器（离线键盘调试工具）。
-
-职责：在弹出的 MuJoCo 被动查看器窗口中手动驱动仿真机械臂与夹爪，用于离线
-核对模型、控制器与夹爪行为。本模块不触碰真实电机、不开启硬件通道，也不
-发布/订阅任何 ROS 话题，因此可以安全地在无硬件环境下单独运行。
-
-线程模型：查看器内部线程在按键时回调 `on_key`，仅把键码放入 FIFO 队列；
-仿真线程每周期取出一个"有限快照"顺序处理，从而避免跨线程直接改动 MuJoCo
-原生状态。查看器渲染只通过 `viewer.sync()` 与仿真线程同步。
-
-控制模式（`active_mode`）：
-- `pos_vel`：关节位置/速度闭环，默认模式，用于普通点动；
-- `gravity_comp`：重力补偿，重置/复位后进入，便于手动拖动示教；
-- `hold`：保持当前关节角，切换时会把目标同步为当前角度。
-
-安全要点：退出时必须确认查看器线程已释放 MuJoCo 原生句柄后才能关闭仿真；
-若无法确认，则保留完整所有权图（见 `_RETAINED_UNSAFE_VIEWERS`）并抛出异常，
-绝不冒险释放，以免查看器仍在使用已释放内存时崩溃进程。
-"""
-
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 import importlib
+import json
 import math
 from queue import Empty, SimpleQueue
 import sys
+import threading
 import time
 from typing import Callable, Sequence
+import warnings
 
-from .mujoco_sim import ARM_JOINT_NAMES, RebotArmMujoco
-
-
-# 键盘操作帮助文本：随状态一起打印到状态流（默认 stderr），也是查看器内唯一
-# 的按键说明来源。`[`/`]` 或 1-6 选择关节，按住 J/K 反向/正向点动关节，
-# 按住 C/O 闭合/张开夹爪，G/H/P 切换控制模式，R 复位、T 回零，Q 退出。
-HELP = (
-    "[ / ] select | 1-6 select | hold J/K joint | hold C/O gripper | "
-    "G gravity | H hold | P pos | R zero | T home | Q quit"
+from .mujoco_cartesian import CartesianDelta, MujocoCartesianController
+from .mujoco_commands import dispatch_sim_command
+from .mujoco_dashboard import (
+    DASHBOARD_PAGES,
+    PLOT_PAGES,
+    compose_dashboard,
 )
-# 无法安全确认已释放的（查看器, 仿真, 模型, 数据）组合。若查看器线程可能仍在
-# 使用 MuJoCo 原生句柄，保留强引用而非释放内存，可避免进程 use-after-free 崩溃；
-# 正常退出路径下该列表始终为空。
+from .mujoco_jog import JOG_SPEED_LEVELS
+from .mujoco_sim import ARM_JOINT_NAMES, RebotArmMujoco
+from .mujoco_telemetry import MujocoTelemetryHistory
+from .mujoco_visualization import GhostArmOverlay, TelemetryFigures
+
+
+HELP = (
+    "M JOINT/XYZ/RPY | Z/X select | J/K start jog | C/O gripper | S stop\n"
+    "-/+ speed | G gravity | H hold | P position | V collision | F6 page | F7 help\n"
+    "F8 world/tool | F9 plots | T home | R reset | Q quit\n"
+    "Terminal: joints J1..J6 | joint NAME VALUE | gripper WIDTH | state"
+)
+TELEMETRY_SAMPLE_HZ = 50.0
+TELEMETRY_WINDOW_S = 10.0
+VISUAL_UPDATE_HZ = 30.0
+DASHBOARD_UPDATE_HZ = 10.0
 _RETAINED_UNSAFE_VIEWERS = []
 
 
 @dataclass(frozen=True)
 class ViewerControlState:
-    """查看器控制状态的不可变快照。
-
-    每个仿真周期都基于旧状态生成新状态（`dataclasses.replace`），因此状态迁移
-    是纯函数式的，便于回放与测试；时间型的点动状态（`jog_time_remaining`、
-    `*_jog_direction`）用于实现"按住某键持续点动"的手感。
-
-    字段含义：
-    - `selected_joint`：当前选中的关节下标 0..5，对应 `joint1`..`joint6`；
-    - `joint_targets`：六个关节的位置目标（单位 rad，顺序同 `joint1`..`joint6`）；
-    - `joint_positions`：六个关节的当前实际角度（单位 rad，仅用于显示）；
-    - `gripper_width`：夹爪目标开口宽度（单位 m，范围为夹爪机械行程）；
-    - `paused`：暂停时不再推进物理步，只处理按键；
-    - `joint_delta`/`gripper_delta`：本周期待执行的单步增量次数（按键累积，执行后清零）；
-    - `joint_jog_direction`/`gripper_jog_direction`：持续点动方向（-1/0/+1）；
-    - `jog_time_remaining`：持续点动剩余时间（单位 s），归零后方向自动失效；
-    - `single_step`：暂停状态下按 `.` 触发的单步执行请求；
-    - `reset`/`home`：本周期请求的复位/回零动作标志；
-    - `mode`：本周期请求切换的控制模式（None 表示不切换）；
-    - `active_mode`：仿真当前实际生效的控制模式；
-    - `quit`：请求退出主循环。
-    """
-
     selected_joint: int = 0
     joint_targets: tuple[float, ...] = (0.0,) * 6
     joint_positions: tuple[float, ...] = (0.0,) * 6
+    joint_velocities: tuple[float, ...] = (0.0,) * 6
     gripper_width: float = 0.09
+    gripper_actual_width: float = 0.09
+    max_contact_force: float = 0.0
+    contact_count: int = 0
+    requested_torques: tuple[float, ...] = (0.0,) * 6
+    applied_torques: tuple[float, ...] = (0.0,) * 6
+    saturated: tuple[bool, ...] = (False,) * 6
+    watchdog_remaining_s: float = 0.0
+    collision_visible: bool = False
     paused: bool = False
     joint_delta: int = 0
     gripper_delta: int = 0
@@ -83,31 +64,91 @@ class ViewerControlState:
     reset: bool = False
     home: bool = False
     mode: str | None = None
-    active_mode: str = "pos_vel"
+    active_mode: str = "hold"
+    jog_speed_index: int = 1
+    joint_jog_rate: float = 0.20
+    gripper_jog_rate: float = 0.02
+    stop_jog: bool = False
+    interaction_mode: str = "joint"
+    selected_cartesian_axis: int = 0
+    cartesian_frame: str = "world"
+    cartesian_accumulator_s: float = 0.0
+    ik_status: str = "idle"
+    ik_error: float = 0.0
+    dashboard_page: str = "overview"
+    plot_page: str = "off"
+    help_visible: bool = False
+    ee_position: tuple[float, ...] = (0.0, 0.0, 0.0)
+    ee_rpy: tuple[float, ...] = (0.0, 0.0, 0.0)
+    target_position: tuple[float, ...] = (0.0, 0.0, 0.0)
+    target_rpy: tuple[float, ...] = (0.0, 0.0, 0.0)
+    cartesian_target_reset: bool = False
     quit: bool = False
 
 
 def reduce_key(state: ViewerControlState, key: str) -> ViewerControlState:
-    """把一个按键归约为新的控制状态（纯函数，不触碰仿真）。
-
-    键位与 `HELP` 一一对应；无法识别的按键原样返回旧状态。注意空格切换暂停，
-    而 `.` 仅在暂停状态下触发单步，避免运行中误触导致额外步进。
-    """
     key = key.lower()
-    if key == "]":
-        return replace(state, selected_joint=(state.selected_joint + 1) % 6)
-    if key == "[":
-        return replace(state, selected_joint=(state.selected_joint - 1) % 6)
-    if key in "123456":
-        return replace(state, selected_joint=int(key) - 1)
+    if key == "m":
+        modes = ("joint", "xyz", "rpy")
+        mode = modes[(modes.index(state.interaction_mode) + 1) % len(modes)]
+        return replace(
+            state,
+            interaction_mode=mode,
+            joint_jog_direction=0,
+            gripper_jog_direction=0,
+            cartesian_accumulator_s=0.0,
+        )
+    if key == "x":
+        if state.interaction_mode != "joint":
+            return replace(
+                state,
+                selected_cartesian_axis=(state.selected_cartesian_axis + 1) % 3,
+                joint_jog_direction=0,
+                stop_jog=bool(state.joint_jog_direction),
+            )
+        return replace(
+            state,
+            selected_joint=(state.selected_joint + 1) % 6,
+            joint_jog_direction=0,
+            stop_jog=bool(state.joint_jog_direction),
+        )
+    if key == "z":
+        if state.interaction_mode != "joint":
+            return replace(
+                state,
+                selected_cartesian_axis=(state.selected_cartesian_axis - 1) % 3,
+                joint_jog_direction=0,
+                stop_jog=bool(state.joint_jog_direction),
+            )
+        return replace(
+            state,
+            selected_joint=(state.selected_joint - 1) % 6,
+            joint_jog_direction=0,
+            stop_jog=bool(state.joint_jog_direction),
+        )
     if key == "j":
-        return replace(state, joint_delta=state.joint_delta - 1, joint_jog_direction=-1)
+        return replace(state, joint_jog_direction=-1, gripper_jog_direction=0)
     if key == "k":
-        return replace(state, joint_delta=state.joint_delta + 1, joint_jog_direction=1)
+        return replace(state, joint_jog_direction=1, gripper_jog_direction=0)
     if key == "c":
-        return replace(state, gripper_delta=state.gripper_delta - 1, gripper_jog_direction=-1)
+        return replace(state, joint_jog_direction=0, gripper_jog_direction=-1)
     if key == "o":
-        return replace(state, gripper_delta=state.gripper_delta + 1, gripper_jog_direction=1)
+        return replace(state, joint_jog_direction=0, gripper_jog_direction=1)
+    if key == "-":
+        return replace(state, jog_speed_index=max(0, state.jog_speed_index - 1))
+    if key in ("=", "+"):
+        return replace(
+            state,
+            jog_speed_index=min(len(JOG_SPEED_LEVELS) - 1, state.jog_speed_index + 1),
+        )
+    if key == "s":
+        return replace(
+            state,
+            joint_jog_direction=0,
+            gripper_jog_direction=0,
+            jog_time_remaining=0.0,
+            stop_jog=True,
+        )
     if key == " ":
         return replace(state, paused=not state.paused, single_step=False)
     if key == "." and state.paused:
@@ -117,20 +158,41 @@ def reduce_key(state: ViewerControlState, key: str) -> ViewerControlState:
     if key == "t":
         return replace(state, home=True)
     if key == "g":
-        return replace(state, mode="gravity_comp")
+        return replace(
+            state, mode="gravity_comp", joint_jog_direction=0, gripper_jog_direction=0
+        )
     if key == "h":
-        return replace(state, mode="hold")
+        return replace(
+            state, mode="hold", joint_jog_direction=0, gripper_jog_direction=0
+        )
     if key == "p":
-        return replace(state, mode="pos_vel")
+        return replace(
+            state, mode="position", joint_jog_direction=0, gripper_jog_direction=0
+        )
+    if key == "v":
+        return replace(state, collision_visible=not state.collision_visible)
+    if key == "f9":
+        page = PLOT_PAGES[(PLOT_PAGES.index(state.plot_page) + 1) % len(PLOT_PAGES)]
+        return replace(state, plot_page=page, help_visible=False)
+    if key == "f8":
+        return replace(
+            state,
+            cartesian_frame="tool" if state.cartesian_frame == "world" else "world",
+            joint_jog_direction=0,
+        )
+    if key == "f6":
+        page = DASHBOARD_PAGES[
+            (DASHBOARD_PAGES.index(state.dashboard_page) + 1) % len(DASHBOARD_PAGES)
+        ]
+        return replace(state, dashboard_page=page, help_visible=False)
+    if key == "f7":
+        return replace(state, help_visible=not state.help_visible, plot_page="off")
     if key in ("q", "\x1b"):
         return replace(state, quit=True)
     return state
 
 
 def _take_key_snapshot(events: SimpleQueue) -> tuple[int, ...]:
-    # 只取当前队列中已到达的事件（按 qsize 限量），保证处理的是"有限快照"：
-    # 新到达的按键留给下一个周期，避免持续按键时本周期被无限拖长。
-    # `Empty` 兜底是因为 qsize 与实际取出之间可能被其它线程改变。
     snapshot = []
     for _ in range(events.qsize()):
         try:
@@ -140,14 +202,81 @@ def _take_key_snapshot(events: SimpleQueue) -> tuple[int, ...]:
     return tuple(snapshot)
 
 
-def drain_key_events(events: SimpleQueue, state: ViewerControlState) -> ViewerControlState:
-    """消费一个有限 FIFO 快照，把新事件留给下一个周期。
+def _take_line_snapshot(events: SimpleQueue) -> tuple[str, ...]:
+    snapshot = []
+    for _ in range(events.qsize()):
+        try:
+            snapshot.append(events.get_nowait())
+        except Empty:
+            break
+    return tuple(snapshot)
 
-    仅做状态归约、不推进仿真，用于测试或需要先观察按键效果的场景。
-    """
+
+def start_command_reader(command_stream, command_events: SimpleQueue) -> threading.Thread:
+    def read_lines() -> None:
+        for line in command_stream:
+            command_events.put(str(line).strip())
+
+    thread = threading.Thread(target=read_lines, name="mujoco-viewer-command-input", daemon=True)
+    thread.start()
+    return thread
+
+
+def drain_key_events(events: SimpleQueue, state: ViewerControlState) -> ViewerControlState:
+    """Consume a finite FIFO snapshot, leaving new events for the next cycle."""
     for keycode in _take_key_snapshot(events):
         state = reduce_key(state, _decode_key(keycode))
     return state
+
+
+def process_command_events(
+    sim, events: SimpleQueue, state: ViewerControlState, status_stream
+) -> ViewerControlState:
+    for line in _take_line_snapshot(events):
+        if not line:
+            continue
+        try:
+            command_name = line.split(maxsplit=1)[0].lower()
+            result = dispatch_sim_command(sim, line, paused=state.paused)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            print(f"command error: {exc}", file=status_stream, flush=True)
+            continue
+        state = replace(state, paused=result.paused, quit=state.quit or result.should_quit)
+        if result.value is not None:
+            print(f"command result: {_command_value_text(result.value)}", file=status_stream, flush=True)
+        state = _state_from_sim(
+            sim,
+            paused=state.paused,
+            selected_joint=state.selected_joint,
+            previous=state,
+        )
+        state = replace(state, quit=state.quit)
+        if command_name in {"home", "reset"}:
+            state = replace(state, cartesian_target_reset=True)
+        if state.quit:
+            break
+    return state
+
+
+def _command_value_text(value) -> str:
+    try:
+        return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        return repr(value)
+
+
+def _jsonable(value):
+    if hasattr(value, "__dataclass_fields__"):
+        return {name: _jsonable(getattr(value, name)) for name in value.__dataclass_fields__}
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if hasattr(value, "__dict__"):
+        return {key: _jsonable(item) for key, item in vars(value).items()}
+    return value
 
 
 def process_key_events(
@@ -158,12 +287,7 @@ def process_key_events(
     gripper_step: float,
     jog_hold_time: float = 0.18,
 ) -> ViewerControlState:
-    """在仿真线程上顺序执行一个有限事件快照。
-
-    逐个事件依次"归约状态 -> 执行待办命令"，因此同一快照内的多次按键会按到达
-    顺序累加（例如连按 K 叠加多次关节增量）。`single_step` 在暂停状态下立即
-    推进一个物理步，实现暂停时的逐帧观察。检测到退出请求时提前结束本批次。
-    """
+    """Execute one finite event snapshot sequentially on the simulation thread."""
     for keycode in _take_key_snapshot(events):
         state = reduce_key(state, _decode_key(keycode))
         state = apply_pending_commands(
@@ -177,21 +301,140 @@ def process_key_events(
     return state
 
 
-def _state_from_sim(sim, *, paused: bool = False, selected_joint: int = 0) -> ViewerControlState:
-    # 从仿真对象重新同步一份状态快照。仿真侧每个关节角都是弧度，夹爪宽度是米；
-    # 只取前 6 个自由度作为机械臂关节（其余为夹爪手指关节）。
+def _state_from_sim(
+    sim,
+    *,
+    paused: bool = False,
+    selected_joint: int = 0,
+    previous: ViewerControlState | None = None,
+) -> ViewerControlState:
     state = sim.get_state()
     targets = tuple(float(value) for value in sim.control_targets[:6])
     positions = tuple(float(value) for value in state.joint_positions[:6])
+    velocities = tuple(float(value) for value in state.joint_velocities[:6])
+    ee_position = tuple(
+        float(value) for value in getattr(state, "end_effector_position", (0.0, 0.0, 0.0))
+    )
+    ee_rpy = _quaternion_xyzw_to_rpy(
+        getattr(state, "end_effector_orientation", (0.0, 0.0, 0.0, 1.0))
+    )
+    contacts = _contact_summary(sim)
+    control = _control_status(sim)
     return ViewerControlState(
         selected_joint=selected_joint,
         joint_targets=targets,
         joint_positions=positions,
+        joint_velocities=velocities,
         gripper_width=float(state.gripper_width),
+        gripper_actual_width=float(state.gripper_width),
+        max_contact_force=contacts[0],
+        contact_count=contacts[1],
         paused=paused,
-        # 兼容没有控制模式概念的仿真对象：缺失时按默认位置/速度模式处理。
-        active_mode=str(getattr(sim, "control_mode", "pos_vel")),
+        requested_torques=control[0],
+        applied_torques=control[1],
+        saturated=control[2],
+        watchdog_remaining_s=control[3],
+        active_mode=control[4],
+        collision_visible=False if previous is None else previous.collision_visible,
+        jog_speed_index=1 if previous is None else previous.jog_speed_index,
+        joint_jog_rate=0.20 if previous is None else previous.joint_jog_rate,
+        gripper_jog_rate=0.02 if previous is None else previous.gripper_jog_rate,
+        interaction_mode="joint" if previous is None else previous.interaction_mode,
+        selected_cartesian_axis=0 if previous is None else previous.selected_cartesian_axis,
+        cartesian_frame="world" if previous is None else previous.cartesian_frame,
+        dashboard_page="overview" if previous is None else previous.dashboard_page,
+        plot_page="off" if previous is None else previous.plot_page,
+        help_visible=False if previous is None else previous.help_visible,
+        ee_position=ee_position,
+        ee_rpy=ee_rpy,
+        target_position=ee_position if previous is None else previous.target_position,
+        target_rpy=ee_rpy if previous is None else previous.target_rpy,
     )
+
+
+def _quaternion_xyzw_to_rpy(quaternion: Sequence[float]) -> tuple[float, float, float]:
+    x, y, z, w = (float(value) for value in quaternion)
+    roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+    pitch_term = max(-1.0, min(1.0, 2.0 * (w * y - z * x)))
+    pitch = math.asin(pitch_term)
+    yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+    return roll, pitch, yaw
+
+
+def _quaternion_wxyz_to_rpy(quaternion: Sequence[float]) -> tuple[float, float, float]:
+    w, x, y, z = (float(value) for value in quaternion)
+    return _quaternion_xyzw_to_rpy((x, y, z, w))
+
+
+def _control_status(sim) -> tuple[tuple[float, ...], tuple[float, ...], tuple[bool, ...], float, str]:
+    if hasattr(sim, "get_control_status"):
+        status = sim.get_control_status()
+        remaining = status.watchdog_remaining_s
+        return (
+            tuple(float(value) for value in status.requested_torques[:6]),
+            tuple(float(value) for value in status.applied_torques[:6]),
+            tuple(bool(value) for value in status.saturated[:6]),
+            0.0 if remaining is None else float(remaining),
+            str(status.mode),
+        )
+    mode = str(getattr(sim, "control_mode", "hold"))
+    return (0.0,) * 6, (0.0,) * 6, (False,) * 6, 0.0, mode
+
+
+def _contact_summary(sim) -> tuple[float, int]:
+    if not hasattr(sim, "get_contacts"):
+        return 0.0, 0
+    contacts = tuple(sim.get_contacts())
+    if not contacts:
+        return 0.0, 0
+    return max(float(contact.force) for contact in contacts), len(contacts)
+
+
+def _refresh_observed_state(sim, state: ViewerControlState) -> ViewerControlState:
+    sim_state = sim.get_state()
+    max_contact_force, contact_count = _contact_summary(sim)
+    control = _control_status(sim)
+    return replace(
+        state,
+        joint_positions=tuple(float(value) for value in sim_state.joint_positions[:6]),
+        joint_velocities=tuple(float(value) for value in sim_state.joint_velocities[:6]),
+        gripper_actual_width=float(sim_state.gripper_width),
+        max_contact_force=max_contact_force,
+        contact_count=contact_count,
+        requested_torques=control[0],
+        applied_torques=control[1],
+        saturated=control[2],
+        watchdog_remaining_s=control[3],
+        active_mode=control[4],
+        ee_position=tuple(
+            float(value)
+            for value in getattr(
+                sim_state, "end_effector_position", state.ee_position
+            )
+        ),
+        ee_rpy=(
+            _quaternion_xyzw_to_rpy(sim_state.end_effector_orientation)
+            if hasattr(sim_state, "end_effector_orientation")
+            else state.ee_rpy
+        ),
+    )
+
+
+def _set_mode(sim, mode: str) -> str:
+    setter = getattr(sim, "set_mode", None) or getattr(sim, "set_control_mode")
+    return str(setter(mode))
+
+
+def _command_positions(sim, targets):
+    command = getattr(sim, "command_joint_positions", None) or getattr(
+        sim, "set_joint_position_targets"
+    )
+    return command(targets)
+
+
+def _command_gripper(sim, width: float) -> float:
+    command = getattr(sim, "command_gripper_width", None) or getattr(sim, "set_gripper_width")
+    return float(command(width))
 
 
 def apply_pending_commands(
@@ -202,15 +445,7 @@ def apply_pending_commands(
     *,
     jog_hold_time: float = 0.18,
 ) -> ViewerControlState:
-    """执行一次性待办命令（单步点动、复位/回零、模式切换），并回读仿真状态。
-
-    `joint_step` 为每次关节点动的角度增量（rad），`gripper_step` 为每次夹爪
-    点动的宽度增量（m），两者都必须为正数。执行完成后所有一次性标志位清零，
-    但未执行的增量、退出请求以及 `jog_hold_time` 启动的持续点动计时会被保留。
-    """
     if state.reset or state.home:
-        # 复位会重建仿真内部状态，因此先保存与"人机意图"相关的字段，事后恢复，
-        # 否则按下的增量或退出请求会被复位流程吞掉。
         pending_joint_delta = state.joint_delta
         pending_gripper_delta = state.gripper_delta
         quit_requested = state.quit
@@ -218,56 +453,57 @@ def apply_pending_commands(
             sim.reset_home()
         else:
             sim.reset()
-        # 复位后统一进入重力补偿模式：此时控制器不主动保持目标，便于手动拖动。
-        if hasattr(sim, "set_control_mode"):
-            sim.set_control_mode("gravity_comp")
+        _set_mode(sim, "hold")
         state = _state_from_sim(
-            sim, paused=state.paused, selected_joint=state.selected_joint
+            sim,
+            paused=state.paused,
+            selected_joint=state.selected_joint,
+            previous=state,
         )
         state = replace(
             state,
             joint_delta=pending_joint_delta,
             gripper_delta=pending_gripper_delta,
             quit=quit_requested,
+            cartesian_target_reset=True,
+            dashboard_page="overview",
+            plot_page="off",
+            help_visible=False,
         )
 
-    # 模式切换只在请求时下发；否则沿用仿真当前模式。
-    if state.mode is not None and hasattr(sim, "set_control_mode"):
-        active_mode = sim.set_control_mode(state.mode)
+    if state.mode is not None:
+        active_mode = _set_mode(sim, state.mode)
     else:
         active_mode = getattr(sim, "control_mode", state.active_mode)
 
     targets = state.joint_targets
-    jog_time_remaining = state.jog_time_remaining
     if state.joint_delta:
-        # 单步点动：以旧目标为基准叠加增量，由仿真侧做关节限位钳制。
-        # 仿真在设置关节目标时会切回位置/速度模式，故这里重新读取实际模式。
         name = ARM_JOINT_NAMES[state.selected_joint]
         requested = targets[state.selected_joint] + state.joint_delta * joint_step
-        targets = tuple(sim.set_joint_position_targets({name: requested}))
-        active_mode = getattr(sim, "control_mode", "pos_vel")
-        jog_time_remaining = jog_hold_time
+        targets = tuple(_command_positions(sim, {name: requested}))
+        active_mode = getattr(sim, "control_mode", "position")
 
     width = state.gripper_width
     if state.gripper_delta:
-        # 夹爪宽度同样由仿真侧按机械行程钳制，返回实际生效宽度。
-        width = float(sim.set_gripper_width(width + state.gripper_delta * gripper_step))
-        jog_time_remaining = jog_hold_time
+        width = _command_gripper(sim, width + state.gripper_delta * gripper_step)
 
-    sim_state = sim.get_state()
-    return replace(
+    if state.stop_jog:
+        active_mode = _set_mode(sim, "hold")
+
+    state = replace(
         state,
         joint_targets=targets,
-        joint_positions=tuple(float(value) for value in sim_state.joint_positions[:6]),
         gripper_width=width,
         joint_delta=0,
         gripper_delta=0,
-        jog_time_remaining=jog_time_remaining,
+        jog_time_remaining=0.0,
         reset=False,
         home=False,
         mode=None,
+        stop_jog=False,
         active_mode=str(active_mode),
     )
+    return _refresh_observed_state(sim, state)
 
 
 def apply_continuous_jog(
@@ -277,63 +513,239 @@ def apply_continuous_jog(
     dt: float,
     joint_rate: float,
     gripper_rate: float,
+    cartesian_controller=None,
+    cartesian_update_period_s: float = 0.02,
 ) -> ViewerControlState:
-    """按速率推进"按住按键"的持续点动，每个仿真周期调用一次。
-
-    `dt` 为本次物理步时长（通常等于仿真 timestep，单位 s），`joint_rate` 为
-    关节点动速率（rad/s），`gripper_rate` 为夹爪点动速率（m/s）。剩余保持时间
-    归零后方向标志清零，等价于松开按键，避免键盘自动重复结束后仍继续运动。
-    """
-    if state.jog_time_remaining <= 0.0:
-        return replace(state, joint_jog_direction=0, gripper_jog_direction=0)
+    if not state.joint_jog_direction and not state.gripper_jog_direction:
+        return state
 
     targets = state.joint_targets
-    if state.joint_jog_direction:
+    speed_scale = JOG_SPEED_LEVELS[state.jog_speed_index][1]
+    cartesian_accumulator = state.cartesian_accumulator_s
+    ik_status = state.ik_status
+    ik_error = state.ik_error
+    target_position = state.target_position
+    target_rpy = state.target_rpy
+    if state.joint_jog_direction and state.interaction_mode == "joint":
         name = ARM_JOINT_NAMES[state.selected_joint]
-        requested = targets[state.selected_joint] + state.joint_jog_direction * joint_rate * dt
-        targets = tuple(sim.set_joint_position_targets({name: requested}))
+        requested = (
+            targets[state.selected_joint]
+            + state.joint_jog_direction * joint_rate * speed_scale * dt
+        )
+        targets = tuple(_command_positions(sim, {name: requested}))
+    elif state.joint_jog_direction and cartesian_controller is not None:
+        cartesian_accumulator += dt
+        rate = gripper_rate if state.interaction_mode == "xyz" else joint_rate
+        distance_or_angle = rate * speed_scale * cartesian_accumulator
+        options = getattr(cartesian_controller, "options", None)
+        tolerance = float(
+            getattr(
+                options,
+                "position_tolerance_m"
+                if state.interaction_mode == "xyz"
+                else "orientation_tolerance_rad",
+                0.0,
+            )
+        )
+        # An increment inside the IK convergence tolerance succeeds at
+        # iteration zero without changing a joint. Accumulate it instead of
+        # repeatedly reporting a no-op as CONVERGED.
+        command_due = (
+            cartesian_accumulator >= cartesian_update_period_s
+            and distance_or_angle > tolerance * 1.05
+        )
+        if command_due:
+            direction = state.joint_jog_direction
+            values = [0.0, 0.0, 0.0]
+            values[state.selected_cartesian_axis] = direction * distance_or_angle
+            delta = CartesianDelta(
+                xyz_m=values if state.interaction_mode == "xyz" else (0.0, 0.0, 0.0),
+                rpy_rad=values if state.interaction_mode == "rpy" else (0.0, 0.0, 0.0),
+                frame=state.cartesian_frame,
+            )
+            result = cartesian_controller.command_delta(delta)
+            ik_status = result.status
+            ik_error = max(result.position_error_m, result.orientation_error_rad)
+            if result.success:
+                targets = tuple(result.joint_positions)
+                _set_mode(sim, "position")
+                target_position = tuple(
+                    getattr(result, "target_position_m", state.target_position)
+                )
+                target_rpy = tuple(
+                    getattr(result, "target_rpy_rad", state.target_rpy)
+                )
+            else:
+                target_position = state.target_position
+                target_rpy = state.target_rpy
+            cartesian_accumulator = 0.0
+        else:
+            target_position = state.target_position
+            target_rpy = state.target_rpy
+    else:
+        target_position = state.target_position
+        target_rpy = state.target_rpy
 
     width = state.gripper_width
     if state.gripper_jog_direction:
-        width = float(sim.set_gripper_width(width + state.gripper_jog_direction * gripper_rate * dt))
+        width = _command_gripper(
+            sim, width + state.gripper_jog_direction * gripper_rate * speed_scale * dt
+        )
 
-    sim_state = sim.get_state()
-    # 剩余时间不会变成负数，便于上层直接判断 <= 0 判定停止。
-    remaining = max(0.0, state.jog_time_remaining - dt)
-    return replace(
+    state = replace(
         state,
         joint_targets=targets,
-        joint_positions=tuple(float(value) for value in sim_state.joint_positions[:6]),
         gripper_width=width,
-        jog_time_remaining=remaining,
-        joint_jog_direction=state.joint_jog_direction if remaining > 0.0 else 0,
-        gripper_jog_direction=state.gripper_jog_direction if remaining > 0.0 else 0,
+        jog_time_remaining=0.0,
         active_mode=str(getattr(sim, "control_mode", state.active_mode)),
+        cartesian_accumulator_s=cartesian_accumulator,
+        ik_status=ik_status,
+        ik_error=ik_error,
+        target_position=target_position,
+        target_rpy=target_rpy,
     )
+    return _refresh_observed_state(sim, state)
 
 
 def overlay_text(state: ViewerControlState) -> str:
-    """生成叠加/打印用的状态文本（角度与宽度保留 3 位小数）。
+    """Return the currently visible dashboard content for terminal diagnostics."""
+    panels = compose_dashboard(state)
+    blocks = []
+    for panel in (
+        panels.top_left,
+        panels.top_right,
+        panels.bottom_left,
+        panels.bottom_right,
+    ):
+        if panel is not None:
+            blocks.append(f"{panel.left}\n{panel.right}")
+    return "\n\n".join(blocks)
 
-    第一段是当前选中关节的模式、角度与目标（rad），第二段是夹爪目标宽度（m）
-    与运行/暂停状态；并特别提示 MuJoCo 自带控制面板显示的是力矩/力而非位置，
-    以免误读。文本变化时才输出，避免刷屏。
-    """
-    name = ARM_JOINT_NAMES[state.selected_joint]
-    run_state = "paused" if state.paused else "running"
+
+def configure_viewer_rendering(
+    viewer, *, collision_visible: bool, target_visible: bool = False
+) -> None:
+    option = getattr(viewer, "opt", None)
+    groups = getattr(option, "geomgroup", None)
+    if option is None or groups is None or len(groups) < 4:
+        return
+    lock = getattr(viewer, "lock", None)
+    with lock() if lock is not None else nullcontext():
+        groups[1] = int(target_visible)
+        groups[2] = 1
+        groups[3] = int(collision_visible)
+        # The stock Simulate UI handles the same key event after our callback.
+        # Restore its visualization flags so T/H/P/Z/X/J/C/O/V cannot make the
+        # robot transparent, hide textures/lights, or add debug overlays while
+        # those keys are being used as robot controls.
+        flags = getattr(option, "flags", None)
+        if flags is not None:
+            mujoco = importlib.import_module("mujoco")
+            for index, (_name, default, _shortcut) in enumerate(mujoco.mjVISSTRING):
+                flags[index] = int(default)
+            # Some stock shortcuts select labels or RGB coordinate frames via
+            # fields outside ``flags``.  Reset those too; otherwise controls
+            # such as Tab/F6/F7/V can leave large debug axes over the robot even
+            # when the dashboard says the collision layer is hidden.
+            option.frame = mujoco.mjtFrame.mjFRAME_NONE
+            option.label = mujoco.mjtLabel.mjLABEL_NONE
+
+
+def update_viewer_overlay(viewer, state: ViewerControlState) -> None:
+    setter = getattr(viewer, "set_texts", None)
+    if setter is not None:
+        mujoco = importlib.import_module("mujoco")
+        viewport = getattr(viewer, "viewport", None)
+        compact = bool(
+            viewport is not None
+            and (
+                int(getattr(viewport, "width", 1280)) < 1100
+                or int(getattr(viewport, "height", 720)) < 700
+            )
+        )
+        panels = compose_dashboard(state, compact=compact)
+        positions = (
+            (mujoco.mjtGridPos.mjGRID_TOPLEFT, panels.top_left),
+            (mujoco.mjtGridPos.mjGRID_TOPRIGHT, panels.top_right),
+            (mujoco.mjtGridPos.mjGRID_BOTTOMLEFT, panels.bottom_left),
+            (mujoco.mjtGridPos.mjGRID_BOTTOMRIGHT, panels.bottom_right),
+        )
+        setter(
+            [
+                (
+                    mujoco.mjtFontScale.mjFONTSCALE_100,
+                    position,
+                    panel.left,
+                    panel.right,
+                )
+                for position, panel in positions
+                if panel is not None
+            ]
+        )
+
+
+def update_ghost_overlay(ghost, viewer, joint_targets: Sequence[float]) -> bool:
+    lock = getattr(viewer, "lock", None)
+    with lock() if lock is not None else nullcontext():
+        return bool(ghost.update(viewer, joint_targets))
+
+
+def clear_ghost_overlay(ghost, viewer) -> bool:
+    lock = getattr(viewer, "lock", None)
+    with lock() if lock is not None else nullcontext():
+        return bool(ghost.clear(viewer))
+
+
+def align_cartesian_target(model, data) -> tuple[int, tuple[float, ...], tuple[float, ...]]:
+    """Place the draggable mocap target on the current end-effector pose."""
+    mujoco = importlib.import_module("mujoco")
+    body_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "ee_target"))
+    site_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "ee_site"))
+    if body_id < 0 or site_id < 0:
+        raise ValueError("scene must define ee_target mocap body and ee_site")
+    mocap_id = int(model.body_mocapid[body_id])
+    if mocap_id < 0:
+        raise ValueError("ee_target must be a mocap body")
+    data.mocap_pos[mocap_id] = data.site_xpos[site_id]
+    mujoco.mju_mat2Quat(data.mocap_quat[mocap_id], data.site_xmat[site_id])
     return (
-        f"mode: {state.active_mode}  selected: {name}  "
-        f"q: {state.joint_positions[state.selected_joint]:.3f} rad  "
-        f"target: {state.joint_targets[state.selected_joint]:.3f} rad\n"
-        f"gripper target: {state.gripper_width:.3f} m  state: {run_state}\n"
-        "MuJoCo control panel shows torque/force, not joint position.\n"
-        f"{HELP}"
+        mocap_id,
+        tuple(float(value) for value in data.mocap_pos[mocap_id]),
+        tuple(float(value) for value in data.mocap_quat[mocap_id]),
+    )
+
+
+def process_cartesian_target(
+    controller,
+    data,
+    mocap_id: int,
+    previous_pose: tuple[tuple[float, ...], tuple[float, ...]],
+    state: ViewerControlState,
+) -> tuple[tuple[tuple[float, ...], tuple[float, ...]], ViewerControlState]:
+    """Submit a dragged mocap pose once, leaving failed targets visible for diagnosis."""
+    position = tuple(float(value) for value in data.mocap_pos[mocap_id])
+    quaternion = tuple(float(value) for value in data.mocap_quat[mocap_id])
+    pose = (position, quaternion)
+    changed = any(
+        abs(current - old) > 1e-8
+        for current, old in zip(position + quaternion, previous_pose[0] + previous_pose[1])
+    )
+    if not changed:
+        return previous_pose, state
+    result = controller.command_pose(position, quaternion)
+    return pose, replace(
+        state,
+        joint_targets=(tuple(result.joint_positions) if result.success else state.joint_targets),
+        joint_jog_direction=0,
+        gripper_jog_direction=0,
+        ik_status=result.status,
+        ik_error=max(result.position_error_m, result.orientation_error_rad),
+        target_position=position,
+        target_rpy=_quaternion_wxyz_to_rpy(quaternion),
     )
 
 
 def _positive_float(value: str) -> float:
-    # argparse 类型校验：步长/速率/时长/保持时间都必须为有限正数；
-    # 0 或负值会让点动无意义或把计时逻辑推向非法分支，NaN/Inf 会污染控制器目标。
     number = float(value)
     if not math.isfinite(number) or number <= 0.0:
         raise argparse.ArgumentTypeError("must be a positive finite number")
@@ -341,22 +753,22 @@ def _positive_float(value: str) -> float:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构造独立运行时的命令行解析器。
-
-    所有物理量均为正数：角度用弧度、宽度用米、速率按秒计。`--duration` 以
-    "仿真时间"（非墙钟时间）计时，便于在无显示环境下自动限时运行。
-    """
     parser = argparse.ArgumentParser(description="Control reBotArm in the MuJoCo viewer")
-    # 未指定时由仿真对象使用其默认场景文件，避免此处硬编码模型路径。
     parser.add_argument("--model", default=None, help="MuJoCo scene XML path")
-    # 单步点动增量：关节 0.01 rad，夹爪 0.001 m。
     parser.add_argument("--joint-step", type=_positive_float, default=0.01, help="joint jog in radians")
     parser.add_argument("--gripper-step", type=_positive_float, default=0.001, help="gripper jog in metres")
-    # 按住按键时的连续点动速率。
-    parser.add_argument("--joint-rate", type=_positive_float, default=0.08, help="held joint jog rate in rad/s")
-    parser.add_argument("--gripper-rate", type=_positive_float, default=0.01, help="held gripper jog rate in m/s")
-    # 键盘自动重复有间隔，靠这段"保持时间"把离散按键事件串成连续运动；
-    # 调大更顺滑但松手后余量更长，调小更跟手但可能断续。
+    parser.add_argument(
+        "--joint-rate",
+        type=_positive_float,
+        default=0.20,
+        help="normal-gear joint jog rate in rad/s",
+    )
+    parser.add_argument(
+        "--gripper-rate",
+        type=_positive_float,
+        default=0.02,
+        help="normal-gear gripper jog rate in m/s",
+    )
     parser.add_argument(
         "--jog-hold-time",
         type=_positive_float,
@@ -369,18 +781,56 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="exit after this many seconds of simulated time",
     )
+    parser.add_argument(
+        "--no-command-input",
+        action="store_true",
+        help="disable terminal line commands while the viewer is running",
+    )
+    parser.add_argument(
+        "--verbose-status",
+        action="store_true",
+        help="also print changing real-time state to the terminal (off by default)",
+    )
     return parser
 
 
 def _decode_key(keycode: int) -> str:
-    # GLFW 的 ESC 键码为 256，转换为控制字符 "\x1b"，与 `reduce_key` 中的退出分支一致；
-    # 其它键码按 Unicode 码位转换成字符，无法转换时返回空串（等价于无操作）。
     if keycode == 256:
         return "\x1b"
+    if keycode == 333:  # GLFW_KEY_KP_SUBTRACT
+        return "-"
+    if keycode == 334:  # GLFW_KEY_KP_ADD
+        return "+"
+    special = {
+        258: "tab",
+        295: "f6",
+        296: "f7",
+        297: "f8",
+        298: "f9",
+    }
+    if keycode in special:
+        return special[keycode]
     try:
         return chr(keycode)
     except (TypeError, ValueError):
         return ""
+
+
+def _launch_passive_viewer(launch_passive: Callable, model, data, on_key):
+    """Launch while hiding one harmless GLFW/Wayland capability warning."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*Wayland: The platform does not provide the window position.*",
+            category=Warning,
+        )
+        return launch_passive(
+            model,
+            data,
+            key_callback=on_key,
+            show_left_ui=False,
+            show_right_ui=False,
+        )
 
 
 def _close_viewer_then_sim(
@@ -393,30 +843,19 @@ def _close_viewer_then_sim(
     sleep: Callable[[float], None] = time.sleep,
     timeout: float = 5.0,
 ) -> None:
-    """只有在被动查看器线程释放原生状态之后，才释放仿真资源。
-
-    `viewer.m` 是查看器公开的生命周期信号：它变为 None 表示查看器已不再持有
-    MuJoCo 模型。在确认之前释放 MjModel/MjData 属于 use-after-free，会直接让
-    进程崩溃，因此这里宁可等待或保留引用，也不提前释放。
-
-    `clock`/`sleep`/`timeout` 均可注入，便于测试中不真正睡眠。超时（默认 5 s）
-    后抛出 `TimeoutError`，同时把整套所有权图登记到 `_RETAINED_UNSAFE_VIEWERS`
-    以保持引用存活。
-    """
+    """Release native state only after the passive viewer thread lets it go."""
     if viewer is None:
-        # 查看器未启动（例如构造阶段就失败）：没有共享句柄，直接关闭仿真。
         sim.close()
         return
     try:
         viewer.close()
     except BaseException:
-        # 关闭本身抛错时，只能依据 `viewer.m` 判断查看器是否已放手；
-        # 若连这个公开信号都取不到，释放原生状态就是危险的猜测。
         model_is_released = False
         try:
             model_is_released = viewer.m is None
         except BaseException:
-            # 若这个公开的生命周期信号本身不可用，释放原生状态就只是危险的猜测。
+            # If the public lifecycle signal is itself unavailable, releasing
+            # native state would be an unsafe guess.
             pass
         if model_is_released:
             sim.close()
@@ -431,8 +870,9 @@ def _close_viewer_then_sim(
     started = clock()
     while viewer_model is not None:
         if clock() - started >= timeout:
-            # 查看器仍暴露模型时释放 MjModel/MjData 会让进程崩溃。保留整套所有权图，
-            # 并把清理失败上报出去，而不是冒险造成 use-after-free。
+            # Releasing MjModel/MjData while the viewer still exposes its model
+            # can crash the process. Retain the complete ownership graph and
+            # report the failed teardown instead of risking use-after-free.
             _RETAINED_UNSAFE_VIEWERS.append((viewer, sim, model, data))
             raise TimeoutError("MuJoCo passive viewer did not finish closing")
         sleep(0.01)
@@ -448,20 +888,8 @@ def main(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     status_stream=None,
+    command_stream=None,
 ) -> int:
-    """运行键盘控制循环，返回进程退出码。
-
-    参数：
-    - `argv`：命令行参数（None 表示读取 `sys.argv`）；
-    - `sim_factory`：仿真对象工厂，接收模型路径并返回仿真实例，便于测试替换；
-    - `launch_passive`：被动查看器启动函数，None 时延迟导入 MuJoCo 的查看器模块
-      （这样无显示环境下只做其它操作时不会强依赖查看器）；
-    - `sleep`/`clock`/`status_stream`：时间与输出注入点，默认真实睡眠/单调时钟/stderr。
-
-    返回值：正常结束 0，`KeyboardInterrupt`（Ctrl-C）返回 130。
-    副作用：启动后先把控制模式置为 `gravity_comp`，随后每周期处理按键、推进物理、
-    变化时打印状态并 `sync()` 渲染；`--duration` 到达后自动退出。
-    """
     args = build_parser().parse_args(argv)
     if status_stream is None:
         status_stream = sys.stderr
@@ -469,33 +897,82 @@ def main(
     viewer = None
     model = data = None
     try:
-        sim.reset()
-        # 启动即进入重力补偿：这是最安全的初始状态，控制器不会主动驱动关节。
-        if hasattr(sim, "set_control_mode"):
-            sim.set_control_mode("gravity_comp")
+        sim.reset_home()
+        _set_mode(sim, "hold")
         if launch_passive is None:
             launch_passive = importlib.import_module("mujoco.viewer").launch_passive
 
-        state = _state_from_sim(sim)
-        # 以仿真时间作为 `--duration` 的计时基准，与物理推进严格对应。
+        state = replace(
+            _state_from_sim(sim),
+            joint_jog_rate=args.joint_rate,
+            gripper_jog_rate=args.gripper_rate,
+        )
+        cartesian_controller = (
+            MujocoCartesianController(sim) if isinstance(sim, RebotArmMujoco) else None
+        )
+        telemetry = MujocoTelemetryHistory(
+            capacity=round(TELEMETRY_SAMPLE_HZ * TELEMETRY_WINDOW_S)
+        )
         start_simulation_time = float(sim.get_state().simulation_time)
         events = SimpleQueue()
+        command_events = SimpleQueue()
+        if command_stream is None:
+            command_stream = sys.stdin
+            command_input_enabled = (
+                not args.no_command_input
+                and hasattr(command_stream, "isatty")
+                and command_stream.isatty()
+            )
+        else:
+            command_input_enabled = not args.no_command_input
+        if command_input_enabled:
+            command_thread = start_command_reader(command_stream, command_events)
+            if command_stream is not sys.stdin and (
+                not hasattr(command_stream, "isatty") or not command_stream.isatty()
+            ):
+                command_thread.join(timeout=0.05)
         previous_status = overlay_text(state)
-        print(previous_status, file=status_stream, flush=True)
+        print(
+            "reBotArm MuJoCo viewer ready: Home + Hold. "
+            "Real-time state is shown in the viewer; press Q to quit.",
+            file=status_stream,
+            flush=True,
+        )
 
         def on_key(keycode: int) -> None:
-            # 查看器线程回调：只入队，不做任何 MuJoCo 操作，保证线程安全。
             events.put(keycode)
 
-        # 取出底层原生句柄交给查看器；生命周期由本函数负责，查看器关闭后才释放。
         model, data = sim._unsafe_viewer_handles()
-        viewer = launch_passive(
-            model,
-            data,
-            key_callback=on_key,
+        ghost = GhostArmOverlay(model)
+        figures = TelemetryFigures(max_points=500)
+        target_mocap_id = None
+        target_pose = None
+        if cartesian_controller is not None:
+            target_mocap_id, target_position, target_quaternion = align_cartesian_target(
+                model, data
+            )
+            target_pose = (target_position, target_quaternion)
+            state = replace(
+                state,
+                target_position=target_position,
+                target_rpy=_quaternion_wxyz_to_rpy(target_quaternion),
+            )
+        viewer = _launch_passive_viewer(launch_passive, model, data, on_key)
+        configure_viewer_rendering(
+            viewer, collision_visible=False, target_visible=False
         )
+        update_viewer_overlay(viewer, state)
+        displayed_dashboard = overlay_text(state)
+        last_visual_update_sim_time = float("-inf")
+        last_telemetry_sample_sim_time = float("-inf")
+        last_dashboard_update_sim_time = float("-inf")
+        plots_attached = False
+        ghost_visible = False
         try:
             while viewer.is_running():
+                state = process_command_events(sim, command_events, state, status_stream)
+                if state.quit:
+                    break
                 state = process_key_events(
                     sim,
                     events,
@@ -506,8 +983,27 @@ def main(
                 )
                 if state.quit:
                     break
+                if cartesian_controller is not None and state.cartesian_target_reset:
+                    target_mocap_id, target_position, target_quaternion = align_cartesian_target(
+                        model, data
+                    )
+                    target_pose = (target_position, target_quaternion)
+                    state = replace(
+                        state,
+                        cartesian_target_reset=False,
+                        ik_status="idle",
+                        target_position=target_position,
+                        target_rpy=_quaternion_wxyz_to_rpy(target_quaternion),
+                    )
+                if cartesian_controller is not None and target_pose is not None:
+                    target_pose, state = process_cartesian_target(
+                        cartesian_controller,
+                        data,
+                        target_mocap_id,
+                        target_pose,
+                        state,
+                    )
                 cycle_start = clock()
-                # 暂停时跳过物理步进；单步请求（single_step）时仍执行一步。
                 if not state.paused or state.single_step:
                     state = apply_continuous_jog(
                         sim,
@@ -515,31 +1011,82 @@ def main(
                         dt=sim.timestep,
                         joint_rate=args.joint_rate,
                         gripper_rate=args.gripper_rate,
+                        cartesian_controller=cartesian_controller,
                     )
                     sim.step()
-                    sim_state = sim.get_state()
-                    state = replace(
-                        state,
-                        joint_positions=tuple(float(value) for value in sim_state.joint_positions[:6]),
-                        single_step=False,
+                    state = _refresh_observed_state(sim, replace(state, single_step=False))
+                    simulation_time = float(sim.get_state().simulation_time)
+                    telemetry_due = (
+                        simulation_time < last_telemetry_sample_sim_time
+                        or simulation_time - last_telemetry_sample_sim_time
+                        >= 1.0 / TELEMETRY_SAMPLE_HZ
                     )
+                    if telemetry_due and hasattr(sim, "get_control_status"):
+                        try:
+                            telemetry.append(
+                                float(sim.get_state().simulation_time),
+                                sim.get_control_status(),
+                                sim.get_contacts() if hasattr(sim, "get_contacts") else (),
+                            )
+                        except (AttributeError, TypeError, ValueError):
+                            # Test doubles and third-party adapters may expose only
+                            # the older, smaller status record.
+                            pass
+                        last_telemetry_sample_sim_time = simulation_time
                 current_status = overlay_text(state)
-                # 仅在文本变化时输出，避免每周期刷屏拖慢主循环。
-                if current_status != previous_status:
+                if args.verbose_status and current_status != previous_status:
                     print(current_status, file=status_stream, flush=True)
                     previous_status = current_status
+                configure_viewer_rendering(
+                    viewer,
+                    collision_visible=state.collision_visible,
+                    target_visible=state.interaction_mode != "joint",
+                )
+                simulation_time = float(sim.get_state().simulation_time)
+                visual_update_due = (
+                    simulation_time < last_visual_update_sim_time
+                    or simulation_time - last_visual_update_sim_time
+                    >= 1.0 / VISUAL_UPDATE_HZ
+                )
+                if visual_update_due:
+                    if state.interaction_mode != "joint":
+                        ghost_visible = update_ghost_overlay(
+                            ghost, viewer, state.joint_targets
+                        )
+                    elif ghost_visible:
+                        clear_ghost_overlay(ghost, viewer)
+                        ghost_visible = False
+                    if state.plot_page != "off":
+                        figures.select(
+                            "tracking" if state.plot_page == "tracking" else "torque"
+                        )
+                        figures.update(
+                            telemetry.snapshot(), joint_index=state.selected_joint
+                        )
+                        plots_attached = figures.attach_active(viewer)
+                    last_visual_update_sim_time = simulation_time
+                if state.plot_page == "off" and plots_attached:
+                    figures.clear(viewer)
+                    plots_attached = False
+                dashboard_due = (
+                    simulation_time < last_dashboard_update_sim_time
+                    or simulation_time - last_dashboard_update_sim_time
+                    >= 1.0 / DASHBOARD_UPDATE_HZ
+                    or current_status != displayed_dashboard
+                )
+                if dashboard_due:
+                    update_viewer_overlay(viewer, state)
+                    displayed_dashboard = current_status
+                    last_dashboard_update_sim_time = simulation_time
                 viewer.sync()
                 elapsed = float(sim.get_state().simulation_time) - start_simulation_time
                 if args.duration is not None and elapsed >= args.duration:
                     break
-                # 按仿真步长节流为实时速度；若本周期已超时则不再睡眠（不补偿欠账）。
                 sleep(max(0.0, sim.timestep - (clock() - cycle_start)))
             return 0
         except KeyboardInterrupt:
-            # 约定俗成的 SIGINT 退出码。
             return 130
     finally:
-        # 无论正常退出还是异常，都在确认查看器放手后释放仿真资源。
         _close_viewer_then_sim(
             viewer,
             sim,

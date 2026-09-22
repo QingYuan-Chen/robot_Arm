@@ -1,60 +1,29 @@
-# 仿真节点（rebotarm_mujoco_node）在"仅运动"场景下的参数集。
-# 本文件只描述物理仿真后端：不含任何硬件通道配置，节点在 backend 不是 mujoco 时会
-# 直接拒绝启动。下面每个键都标注了含义、单位、取值范围与安全默认值。
 rebotarm_mujoco_node:
   ros__parameters:
-    # 执行后端标识。只有 "mujoco" 会被接受，其它取值使节点启动即失败，
-    # 因此不存在"配置写错就连上真机"的回退路径。
     backend: mujoco
-    # 无头标志。该物理后端要求为 true；是否需要窗口由 show_viewer 单独控制。
     headless: true
-    # 模型 XML 路径。留空表示使用本包自带的桌面场景 models/rebotarm/scene.xml；
-    # 显式给出路径时必须是带夹爪的完整场景，否则关节/执行器索引会对不上。
     model_path: ""
-    # 话题、动作与服务的前缀，例如 /rebotarm/joint_states、/rebotarm/follow_joint_trajectory。
-    # 必须与规划侧使用同一命名空间，否则两边各说各话。
     arm_namespace: rebotarm
-    # 物理推进与关节状态发布频率（Hz），有效范围 (0, 1000]。
-    # 只影响状态刷新与 CPU 占用，物理精度由模型 timestep 决定，调得过高不会更准。
     publish_rate_hz: 30.0
-    # 单条轨迹允许的最大路点数（正整数）。超出即拒绝目标：防止畸形大轨迹
-    # 占用大量内存并拖长校验/执行时间。
     max_trajectory_points: 10000
-    # 单条轨迹允许的最长时长（s，正有限值）。超出即拒绝，避免仿真被超长轨迹长时间占用。
     max_trajectory_duration_sec: 300.0
-    # 启动时的 6 个臂关节初始角（rad），顺序固定为 joint1..joint6。
-    # 必须恰好 6 个有限值，否则节点拒绝启动（不做静默补零）。
-    initial_joint_positions: [0.0, -0.1, -0.2, 0.2, 0.0, 0.0]
-    # 到位判定采用节点级统一策略：不接受单个目标自带的容差数组来放宽到位保证，
-    # 否则客户端可以自行宣布"已到位"。
-    # 位置到位容差（rad）：每个臂关节的稳态绝对误差需小于该值。
+    initial_joint_positions: [0.0, -0.8, -1.0, 0.3, 0.0, 0.0]
+    # Node-wide settling policy; per-goal tolerance overrides are not accepted.
     goal_position_tolerance: 0.02
-    # 速度到位容差（rad/s）：末段速度需小于该值才算真正停稳。
     goal_velocity_tolerance: 0.05
-    # 轨迹时间用尽后的额外收敛时间（s）：仍不满足上面两条容差即判目标失败。
     goal_time_tolerance_sec: 5.0
-    # 动作反馈发布频率（Hz）。它同时决定执行循环的休眠步长上限，
-    # 因此也是"取消请求最长响应延迟"的量级，调低会让取消变迟钝。
     feedback_rate_hz: 20.0
-    # 离屏传感默认关闭：纯运动仿真因此不依赖 EGL/GPU 渲染，无显卡环境也能直接跑。
+    diagnostic_rate_hz: 1.0
+    max_contact_force_n: 200.0
+    max_contact_penetration_m: 0.005
+    # Offscreen sensing is opt-in so motion-only simulation does not require EGL.
     virtual_camera.enabled: false
-    # 场景 XML 中定义的相机名，必须与模型里的 <camera name=...> 一致。
     virtual_camera.camera_name: fixed_camera
-    # 发布图像时使用的光学坐标系名；下游按该 frame_id 做 TF 查询。
     virtual_camera.frame_id: mujoco_fixed_camera_optical_frame
-    # 相机在物理模型中所挂载的 body 名（模型内部坐标系）。
     virtual_camera.parent_body_name: base_link
-    # 相机静态 TF 的父坐标系名（ROS 侧）；图像据此接入 TF 树，
-    # 与 parent_body_name 不一致时视觉结果会整体偏移。
     virtual_camera.parent_frame_id: base_link
-    # 离屏图像宽度（像素）。与高度一起决定渲染开销与内参。
     virtual_camera.width: 640
-    # 离屏图像高度（像素）。
     virtual_camera.height: 480
-    # 虚拟相机出图频率（Hz）。应不高于物理推进频率，否则会重复渲染同一物理状态。
     virtual_camera.rate_hz: 15.0
-    # 深度图有效上限（m）：超过该距离的像素视为无效，
-    # 调大能看得更远但深度精度下降，需与真实相机的量程对齐。
     virtual_camera.max_depth_m: 2.0
-    # 需要输出真值标注（检测框/掩码）的模型 body 名列表，仅仿真可用。
-    virtual_camera.annotation_bodies: [bottle]
+    virtual_camera.annotation_bodies: [test_cube]

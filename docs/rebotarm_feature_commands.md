@@ -1,5 +1,11 @@
 # reBotArm 功能开启指令
 
+新增仿真工具参见 [MuJoCo 功能说明](../src/rebotarm_simulation/README_mujoco.md)。
+无窗口 ROS 后端使用 `ros2 launch rebotarm_simulation mujoco_sim.launch.py`；
+独立物理步进使用 `ros2 run rebotarm_simulation rebotarm_mujoco_cli run --duration 5`。
+需要 RViz 与同实例查看器时使用上游入口
+`ros2 launch rebotarm_simulation mujoco_rviz_viewer.launch.py`。
+
 当前视觉部署只支持 Ubuntu 原生 ROS 链；不要使用历史 Windows/HTTP/MJPEG 命令。
 
 这个文档只放仍然保留的独立功能启动指令和测试顺序。

@@ -1,0 +1,15 @@
+rebotarm_real2sim_bridge:
+  ros__parameters:
+    model_path: ""
+    mapping_path: ""
+    mapping_profile: rebotarm
+    mode: mirror
+    update_rate_hz: 100.0
+    physics_steps_per_update: 5
+    source_joint_states_topic: /rebotarm/joint_states
+    source_gripper_state_topic: /rebotarm/gripper/state
+    source_arm_status_topic: /rebotarm/arm_status
+    output_joint_states_topic: /real2sim/joint_states
+    output_status_topic: /real2sim/status
+    source_timeout_sec: 0.2
+    require_gravity_comp: false

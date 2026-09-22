@@ -22,6 +22,9 @@
   <exec_depend>builtin_interfaces</exec_depend>
   <!-- 轨迹执行动作接口（FollowJointTrajectory 的目标/反馈/结果）。 -->
   <exec_depend>control_msgs</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <!-- 位姿、变换等几何消息。 -->
   <exec_depend>geometry_msgs</exec_depend>
   <!-- 启动描述与节点编排（launch 文件使用）。 -->

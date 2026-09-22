@@ -6,7 +6,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNER_PATH = ROOT / "tools/p6_single_bottle_grasp_runner.py"
+RUNNER_PATH = ROOT / "src/rebotarm_vision/rebotarm_vision/single_bottle_grasp.py"
 
 
 def _run_runner_script(script: str) -> subprocess.CompletedProcess[str]:
@@ -46,6 +46,7 @@ def bottle_plan(confidence):
     plan.candidate.class_name = 'bottle'
     plan.candidate.confidence = confidence
     plan.jaw_width = 0.07
+    plan.grasp_pose.position.z = 0.05
     return plan
 
 assert not runner._valid_bottle_plan(bottle_plan(0.3999))
@@ -73,6 +74,7 @@ def bottle_plan(jaw_width):
     plan.candidate.class_name = 'bottle'
     plan.candidate.confidence = 0.4
     plan.jaw_width = jaw_width
+    plan.grasp_pose.position.z = 0.05
     return plan
 
 assert runner._valid_bottle_plan(bottle_plan(0.085))
@@ -98,7 +100,7 @@ sys.argv = [
     '--output', '/tmp/p6-parser-test.json',
 ]
 args = runner._parse_args()
-assert args.gripper_open_max_effort == 1.0, args.gripper_open_max_effort
+assert args.gripper_open_max_effort == 1.5, args.gripper_open_max_effort
 """
     result = _run_runner_script(script)
 

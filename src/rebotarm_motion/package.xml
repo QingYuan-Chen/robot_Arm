@@ -32,6 +32,7 @@
   <exec_depend>ruckig</exec_depend>
   <!-- control_msgs：控制器动作接口定义（关节轨迹跟随动作的 Goal/Result/Feedback）。 -->
   <exec_depend>control_msgs</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
   <!-- moveit_msgs：运动规划服务与约束消息类型（规划请求、关节/位置/姿态约束）。 -->
   <exec_depend>moveit_msgs</exec_depend>
   <!-- python3-yaml：YAML 解析库的系统依赖键名；源码中通过 import yaml 读取参数文件。 -->

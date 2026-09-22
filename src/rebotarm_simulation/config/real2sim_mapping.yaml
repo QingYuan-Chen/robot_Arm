@@ -1,0 +1,8 @@
+rebotarm:
+  source_joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
+  position_scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  position_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  filter_alpha: 0.35
+  max_position_jump_rad: 0.5
+  gripper_scale: 1.0
+  gripper_offset_m: 0.0

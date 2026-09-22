@@ -341,6 +341,7 @@ def test_graspnet_inference_uses_detection_cloud_and_full_scene_for_collision(mo
         "after_nms": 1,
         "after_score_sort": 1,
         "after_projection": 1,
+        "after_object_geometry": 1,
         "after_jaw_width": 1,
         "published": 1,
         "empty_reason": "",
@@ -485,6 +486,7 @@ def test_graspnet_candidates_apply_jaw_width_filter_before_top_n_limit():
     assert candidates[0]["width_m"] == pytest.approx(0.079)
     assert stage_counts == {
         "after_projection": 3,
+        "after_object_geometry": 3,
         "after_jaw_width": 1,
         "published": 1,
     }
