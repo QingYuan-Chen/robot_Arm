@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T06:10:40+08:00",
+  "generated_at": "2026-09-23T04:38:10+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -162,9 +162,9 @@
     "[已完成、关闭前plan-only验证] operator 授权的真实视觉测试中，机械臂全程 `disabled/IDLE/status0`；fresh valid bottle plan confidence `0.9310057`、jaw `0.0749830 m`、age `2.946 s`，MoveIt `execute=false` 对 pregrasp/grasp 分别生成 `55/82` 点轨迹。未启动 VisualGraspExecutor、未 enable、未发送 trajectory 或夹爪命令；清理后 runtime、ROS daemon、8081/8088、串口占用均为空。当前队列停止，等待 operator 提供下一份规划，不自行创建 P7。"
   ],
   "git": {
-    "branch": "main",
-    "head": "35c3b33",
+    "branch": "codex/upstream-baseline-integrated",
+    "head": "dfb9494",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-07T06:10:40+08:00 | actor=codex | event=complete | note=MuJoCo最新版已替换旧实现，旧本地baseline归档已按授权移出项目 | verification=upstream main@a68c3ab; 1203 passed, 2 skipped; layering 20 passed; required compileall; three-package build; installed MJCF check; old ignored baseline absent; no hardware actions; no commit or push"
+  "last_event": "- 2026-09-23T04:38:10+08:00 | actor=codex | event=start | note=在主目录合并上游基线迁移分支，以隔离工作树文件树为准 | verification=-"
 }
