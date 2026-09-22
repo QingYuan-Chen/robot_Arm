@@ -51,8 +51,8 @@ def test_multi_pose_fixed_marker_has_near_zero_residual() -> None:
     )
     assert report["position_residual"]["max_m"] < 1e-12
     assert report["rotation_residual"]["max_deg"] < 1e-6
-    assert report["pose_diversity"]["pass"] is True
-    assert report["acceptance"]["pass"] is True
+    assert report["pose_diversity"]["pass"] is False
+    assert report["acceptance"]["pass"] is False
 
 
 def test_residual_reports_translation_error_and_insufficient_diversity() -> None:
@@ -93,3 +93,17 @@ def test_matrix_transform_rejects_non_rigid_matrix() -> None:
     invalid[0, 0] = 2.0
     with pytest.raises(ValueError, match="rotation must be orthonormal"):
         matrix_transform(invalid)
+
+
+def test_wrong_translation_along_common_axis_is_rejected():
+    from rebotarm_calibration.handeye_residual import analyze_handeye_residual, matrix_transform
+    samples = []
+    for index, angle in enumerate((-30, -15, 0, 15, 30)):
+        base = _matrix(_rotation_y(angle), (index * 0.03, 0, 0))
+        samples.append({'base_to_end': matrix_transform(base),
+                        'camera_to_marker': matrix_transform(np.linalg.inv(base))})
+    report = analyze_handeye_residual({'schema_version': 1, 'samples': samples,
+        'end_to_camera': matrix_transform(_matrix(translation=(0, 0.1, 0)))})
+    assert report['position_residual']['max_m'] < 1e-12
+    assert report['observability']['rank'] == 2
+    assert report['acceptance']['pass'] is False

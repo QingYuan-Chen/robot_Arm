@@ -4,11 +4,69 @@
 
 ## 当前焦点
 
-- Active phase / 当前阶段：P0-P6 已按当前工程范围关闭，等待 operator 提供下一份规划；不得自行创建 P7。
+- 2026-09-23：已将 `codex/upstream-baseline-migration@3a25206` 以双父合并方式落到主目录分支 `codex/upstream-baseline-integrated`，最终源码文件树以上游迁移分支为准；合并前主目录完整状态保存在远端 `codex/main-before-upstream-20260923@dfb9494`。主目录旧 `build/install/log` 已分别改名为 `*_before_upstream_baseline_20260923`，并按当前 11 包结构全新 symlink-install 构建；退役的 interactive-control/voice 残留缓存移至仓库外可恢复备份。主目录完整回归 1154 passed/14 skipped（隔离 ROS 域 119），分层 18 passed，compileall、两个 launch `--show-args`、EGL health 和退役包安装缺失检查通过。未连接串口或实机；自动测试不构成新基线实机验收。
+
+- 2026-09-23：隔离工作树选择性迁移的软件验证完成：保留上游 11 包、唯一实机控制器组合与原有 MuJoCo 启动入口；迁入本地独有 Viewer/Reach/Pick/Sim2Real/Real2Sim、正式单瓶抓取及受保护失败恢复。上游反馈序号和 5 Hz ArmStatus 心跳已具备，不搬回旧控制器。单瓶抓取最低抓取点为用户此前指定的 0.03 m，未经新基线真机复验。完整回归 1145 passed/14 skipped（隔离 ROS 域 119）；分层 18 passed；11 包 symlink-install、compileall、两个 launch `--show-args`、MuJoCo EGL/物理与 Pick 安全批次、diff check 通过。MuJoCo README 与文档测试采用 `third_party/rebotarm_mujoco_venv` 新布局；Viewer launch 归属 `rebotarm_simulation`。主目录及已有未提交改动不动；未提交、未推送，无串口或实机操作。下一步由用户决定何时把经审阅的隔离结果并入主目录，并在新基线单独进行实机验收。
+
+- 2026-09-23：用户确认以 `huangbinai/robotarm_ros2` 上游提交 `1749e3ab9db29d4998f860efb91cf2558b1a73e2` 作为新的项目起点，接受其功能包修复、去冗余、删包结果和新安装布局。迁移在隔离工作树 `codex/upstream-baseline-migration` 进行，主目录及原工作树现有未提交内容保持不动；只选择性迁回上游缺失且仍有价值的 MuJoCo、正式单瓶抓取和反馈安全能力，不恢复已退役入口。本轮无实机授权，不访问串口或发送动作。上游基线独立 symlink-install 构建 11 包通过；分层测试 18 passed、必需 compileall 通过。完整测试在补齐构建 overlay 后为 728 passed/21 skipped/3 failed，三项均依赖隔离工作树尚未安装的仓库外厂商 SDK/MotorBridge 源码树，先作为环境型基线缺口记录，不能算迁移回归。
+
+- 2026-09-22：采样区预检清单从覆盖度内部移到独立整行卡片，桌面五列、窄屏换行；相机与 TF/覆盖度卡片上沿对齐，移除旧40px补偿留白。静态截图验证、Dashboard重建、745 passed/7 skipped、分层18、compileall/diff通过；仅布局变更。
+
+- 2026-09-22：试采预检新增后端请求级检查清单：图像、CameraInfo、同期机器人 TF、ArUco 质量、姿态稳定性；每次观测重置状态，成功或超时返回最后观测的逐项结果，不把未执行项目标为通过。TCP 相机三项标记不适用；前端等待期间不宣称实时阶段完成。双包重建、完整745 passed/7 skipped、分层18、聚焦3与compileall/diff通过；无真实采样或硬件操作。
+
+- 2026-09-22：工作台新增 file 预览隔离、SSE 过期提示、后端 arm_feedback 新鲜度、运动请求互斥与未知状态人工解锁；配置锁定/复制及 TCP 参数隐藏、试采反馈、有效样本计数/明细、结果卡片和完整验证误差展示。排除/恢复保留旧报告；验证样本调整需采集证据；调整样本选择或看过验证后新增训练数据，需采集至少五个新的最终验证姿态才能通过。图像缩略图未实现，Safe Home 物理到位仍须反馈和现场确认。双包重建、全量 743 passed/7 skipped、分层18、compileall/diff通过；静态浏览器验证，无真机操作。
+
+- 2026-09-22：图标偏左上根因是 `.rail-step span` 的 display:block 覆盖低优先级 `.rail-icon` 的 flex。已用 `.rail-step > .rail-icon` 明确恢复 flex 居中并归零 margin，浏览器截图确认三个 SVG 均位于边框中心。
+
+- 2026-09-22：根据用户截图进一步统一标定流程卡片的三枚 SVG 矢量图，重画文档/相机/趋势图路径并统一圆角、线帽、线连接与视觉边界；保留卡片布局和响应式规则。浏览器页面静态渲染已检查，Dashboard 重建、页面回归 1 passed、分层 18 passed、compileall 与 diff check 通过；未启动设备。
+
+- 2026-09-22：根据手眼标定页面截图调整顶部三步流程卡片，去掉跨卡片贴边连接线，统一卡片内图标与文案垂直对齐及间距，并在窄屏改为单列。浏览器静态渲染已目视检查，Dashboard symlink-install 重建；全量 742 passed/7 skipped、分层 18 passed、两组 compileall 与 diff 检查通过。仅样式变动，未触及服务或机械臂。
+
+- 2026-09-22：手眼标定求解页删除重复的浏览器内存快照下载，仅保留“下载服务器会话 JSON”；新增人工勾选报告标记的离群样本并填写理由的排除流程。排除不删除原始样本，按样本 ID 留存排除集合与审计理由，可恢复；调整后清除旧报告、重新开放采样，后续求解只用未排除数据且仍需数量、多轴覆盖和残差门槛。TCP 暂不提供离群勾选（现有报告无对应标记）；不自动删点或部署。Dashboard/Calibration 双包重建，完整回归 742 passed/7 skipped，分层 18 passed、compileall/diff 检查通过；本轮未使用真机或真实标定会话。
+
+- 2026-09-22：手眼标定工作台“模式控制”新增“回到 Safe Home”和“确认后失能”，复用 Dashboard 既有受控整臂接口；Safe Home 提示会先停当前轨迹再运动，失能确认明确要求先确认已到 Safe Home（硬件/通信故障保护性失能除外），未引入自动回位或自动失能。五按钮紧凑排列；聚焦 88 passed、Dashboard 重建、分层 18 passed、完整 739 passed/7 skipped、compileall 与 diff 检查通过。未启动设备或发送命令。
+
+- 2026-09-22：手眼标定工作台恢复“标定板坐标系、标记边长、标记 ID、ArUco 字典”四项可编辑输入；创建会话按实际输入提交，数值字段转换为数值，恢复会话回填。页面回归测试覆盖上述链路；Dashboard symlink-install 重建、分层 18 passed、完整 739 passed/7 skipped、compileall 与 diff 检查通过。未启动设备或采样；已有会话 metadata 不受页面修改影响。
+
+- 2026-09-21：按用户要求统一视觉撤退方向为 `[-1.0, 0.0, 0.5]`，预抓取 Z 下限为 `0.04m`（base_link坐标，不是桌面净空）。同步 launch、节点默认、三个候选配置与撤退配置和参数文档；抬升下限0.12m、撤退距离0.06m保持原值。vision/bringup重建成功，安装入口show-args确认，分层18 passed，全量737 passed/7 skipped；未启动真机，未验证修改后的实际路线。
+
+- 2026-09-20：按用户同意删除独立 `visual_grasp_perception_preview.launch.py`，将其 Open3D 查看器与原始候选 Marker 节点并入唯一 `visual_grasp_system.launch.py`。主入口新增 `start_open3d_viewer`、`start_raw_candidate_markers`（默认 true）；`start_visual_ready=false` 现在也会关闭常驻视觉就绪服务。纯感知诊断通过 `use_hardware=false`、`execution_mode=plan_only`、关闭运动执行/抓取执行器来组合，不接串口。`rebotarm_bringup` 重建成功，源码/安装目录旧入口均不存在；聚焦视觉/分层测试 97 passed。全量测试 734 passed、7 skipped、1 个既有 MuJoCo 解释器测试失败（与本次合并无关）。
+- 2026-09-19：排查视觉 plan-only 查询不到 `/rebotarm/arm_status`：启动进程继承了操作者终端的 `ROS_DOMAIN_ID=100`，查询终端未设域而处于默认域 0；在域 100 中控制器存在且状态 `enabled=false`、六轴状态码 0、无错误。`tools/source_local_environment.bash` 与视觉 launch 均不设置域号；单套系统无需显式设域。已从 `docs/visual_grasp_commands.md` 删除日常视觉/仿真示例的固定域号，保留多系统并行测试可显式隔离的约定。修改仅文档，不影响既有运行进程；切换域需先安全退出再重启 launch，并让所有终端使用同一域。
+- Active phase / 当前阶段：2026-09-23 上游新基线已落到主目录独立整合分支并完成软件验证；等待新基线实机分级验收，历史 P0-P6 证据不自动继承为当前硬件通过。
 - Completed phase / 已完成阶段：P0 机械臂安全启动与执行门控、P1 MuJoCo 基线巩固与差距整合、P2 Gemini 2 SDK 与真实 RGB-D 验收、P3 完整单 Ubuntu 视觉链路、P4 Ubuntu 本地 GraspNet、P5 hand-eye/nominal TCP/MuJoCo 标定检查，以及 P6 当前工程范围均已关闭。
 - Hardware gate / 硬件门：当前没有新的硬件动作授权。P6 关闭不授权 approach、gripper、lift、retreat、自动抓取或其他后续规划中的动作。
 
+- 2026-09-14：按用户要求将旧备份中的 GraspNet 资产迁移到当前工作区：推理代码为 `third_party/graspnet-baseline`，GraspNetAPI 为 `third_party/graspnetAPI`，checkpoint 为 `.local-models/checkpoints/checkpoint-rs.tar`。模型目录和 checkpoint 存在性检查通过，checkpoint 与备份 SHA256 一致，`.venv-graspnet` CUDA/依赖检查通过；第三方资产加入精确 `.gitignore`，不纳入提交。尚未启动真实相机或执行推理。
+
+- 2026-09-14：安装系统 CUDA Toolkit 12.8 后，在当前 `.venv-graspnet` / PyTorch `2.11.0+cu128` 环境中按 RTX 4060 `sm_89` 重新编译 `third_party/graspnet-baseline/pointnet2/_ext`，扩展导入通过；GraspNet ROS 节点初始化日志为 `backend_available=True`。未启动相机、未执行真实 RGB-D 推理、未连接或操作机械臂。
+
 ## 当前事实
+
+- 2026-09-19：按用户确认统一 `moveit_hardware.launch.py` 与 `interactive_system.launch.py` 的实现：前者保留为唯一真机 MoveIt 用户入口，但已变为薄包装，固定 `use_hardware=true`、`use_moveit_preview=true`、真实关节状态及唯一状态源；硬件、MoveIt、状态发布和 RViz 组合只由后者维护。bringup 重建与两个入口 `--show-args` 通过，聚焦 102 passed；全量 686 passed/7 skipped/1 个既有 MuJoCo 默认解释器断言失败。未启动硬件或发送动作。
+
+- 2026-09-19：按用户确认收敛真机 MoveIt 启动分支：删除 `rviz_ee_drag_real.launch.py`，`moveit_hardware.launch.py` 成为唯一真机 MoveIt/MotionPlanning 入口；将唯一 `TeachRecorderNode` 从基础 MoveIt 入口移到 `rebotarm_app.launch.py`，由 Dashboard 工作台驱动录制。`rviz_ee_drag_sim.launch.py` 因拥有独立仿真执行后端继续保留。bringup 重建成功，聚焦结构/应用/视觉 wiring 100 passed；全量 686 passed/7 skipped/1 个既有 MuJoCo 默认解释器断言失败，未启动硬件或发送动作。
+
+- 2026-09-19：按用户要求移除 P0 Gate B/C 专用验收工具、console entry、无其它运行期消费者的判据模块及专属测试；现行手册撤下调用步骤。历史验收报告和历史计分保留，控制器 enable/disable、反馈验证和失败回滚不变；本次删除不代表此前模式切换失败已解决。未运行硬件测试。
+
+  验证：controller symlink-install 重建成功；残留安装命令及两个源码字节码已移入回收站，`ros2 pkg executables rebotarmcontroller` 不再列出验收工具。layering 18 passed；全量 686 passed、7 skipped、1 个既有 MuJoCo 默认解释器断言失败；必需 compileall 与 diff check 通过。
+
+- 2026-09-18：修复 `visual_grasp_system.launch.py` 默认无硬件 `plan_only` 的启动时序死锁。此前轻量仿真状态后端位于 `post_visual_ready_actions`，而默认 `move_to_visual_ready_on_start=false` 的一次性 `visual_ready_startup` 不会退出，导致 MoveIt 在后端启动前因收不到新鲜 joint state 报 `Unable to configure planning scene monitor`，视觉链也永远不启动。现在唯一的 `rebotarm_sim_trajectory_controller` 在无硬件模式下先于 MoveIt 启动；只有 `start_visual_ready=true` 且 `move_to_visual_ready_on_start=true` 才运行并等待一次性摆位，否则直接启动后续视觉链并保留常驻 `/visual_ready/move` 服务。软件冒烟日志确认 MoveIt 成功进入 `You can start planning now!`，未访问串口或真机；bringup 重建成功，聚焦 82 passed、layering 18 passed、全量 684 passed/7 skipped/1 个既有 MuJoCo 解释器断言失败，必需 compileall 与 diff check 通过。
+
+- 2026-09-18：按用户要求删除顶层混合仿真入口 `rebotarm_bringup/launch/real_perception_sim_execution.launch.py`，当前不再提供“真实相机/感知 + MuJoCo 执行”的单独一键组合。保留 `visual_grasp_system.launch.py` 用于真实感知 plan-only/显式真机后端，保留独立 MuJoCo 离线入口；历史 evidence 和活动流记录不回写。
+
+- 2026-09-18：为图片列出的包新增包级 `README.md`，随后按用户要求删除 `rebotarm_voice_control` 及其 25 个专属测试；当前保留 10 份新增包 README（其余包为 `rebotarm_calibration`、`rebotarm_dashboard`、`rebotarm_motion`、`rebotarm_moveit_config`、`rebotarm_msgs`、`rebotarm_simulation`、`rebotarm_teach`、`rebotarm_teleop`、`rebotarm_vision`、`rebotarmcontroller`）。根 README、文档索引和当前包说明已更新；历史迁移清单保留删除前快照并加注释。删除后分层测试 `18 passed`、四组 compileall 通过；全量回归 `683 passed, 7 skipped, 1 failed`，唯一失败仍为既有 `tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]` 的 MuJoCo 默认解释器断言。
+
+- 2026-09-17 为 `src/` 全部 12 个包补全阅读用中文注释（文件级职责说明 + 关键类/函数 + 参数与算法要点），只改注释与 docstring，代码语义、命名、导入与全部字符串字面量均未变动。308/309 个可注释文件已覆盖；唯一跳过 `src/rebotarm_simulation/config/mujoco_collision_baseline.json`（JSON 不支持注释，且它是带内容哈希的基准记录）。改动以 AST（剥离 docstring 与 `pass` 后比对）与 HTML/CSS/JS 注释剥离两种方式双向校验全部通过；全量回归 17 failed / 745 passed / 7 skipped，失败集合与改动前逐条一致。本轮顺带修复三项既有缺陷：`src/rebotarm_bringup/launch/{bringup,teleop_keyboard,interactive_system}.launch.py` 自初始导入提交 `921588b` 起即带 UTF-8 BOM，其中 `bringup.launch.py` 第 1 行中文注释还被 GBK 误解码损坏（含私有区字符，无法字节级还原），三个文件此前 `ast.parse` 全部失败、根本无法作为 launch 文件使用；已去除 BOM 并按还原语义重写该行注释。注意 `src/rebotarm_simulation/models/rebotarm/robot.xml` 是 AUTO-GENERATED 文件，`urdf_to_mjcf.check_generated_model` 按字节全等比对，任何手改（含加注释）都会让 `--check` 判为 stale；本轮曾误加注释，已回退为与生成器一致并排除在注释范围之外，后续如需给 MJCF 加说明应改生成器而不是提交文件。
+
+- 2026-09-13：用户进一步确认移除旧跨主机 HTTP/JSON/MJPEG 视觉兼容链。已删除远端相机/检测/GraspNet 客户端、网络 camera 配置、本机 HTTP GraspNet 回退服务与无消费者的 HTTP contract/client；保留本机推理 backend、ROS RGB-D/CameraInfo/detection 同步与候选发布。vision 默认配置改为 camera_ubuntu，主组合默认 ubuntu_native，移除 URL/轮询参数；Dashboard HTTP 与 ROS DDS 不在删除范围。此前 762 passed/7 skipped，新增缺失路径防回归与构建待本轮最终核验；未访问硬件或启动相机。
+
+- 2026-09-13 按用户要求收口 Windows：删除 tools 下 Windows 启动/服务脚本、Windows GraspNet bridge 及其依赖的旧 Open3D 查看器；删除对应专属测试。`docs/visual_grasp_commands.md` 重写为 Ubuntu 原生相机/YOLO/GraspNet、MuJoCo plan-only/benchmark 和真机安全边界；Ubuntu 视觉安装说明、七层参数和迁移差异报告已同步。通用 `graspnet_baseline_inference.py`、Ubuntu GraspNet service 和 network_mjpeg 输入仍保留，因为可用于 Ubuntu/非 Windows 兼容。完整测试在文档清理后待最终复跑。
+
+- 2026-09-13 反馈启动误报修复：SDK 直读确认六个电机 sequence 独立推进且 status=0；问题不是 sequence 必须同步。控制器强制反馈刷新原先 5 ms 重试间隔可能短于串口桥分批帧到达节奏，已调整为 50 ms，并新增 staggered feedback 回归测试；sequence 仍按每电机独立推进判定。控制器安全测试 124 passed，分层/资源/启动 34 passed，完整软件回归 812 passed/7 skipped。仅软件验证，未重新启动真机；下一步现场验证 driver_only 日志是否进入健康 `CONNECTED_DISABLED`。
+
+- 2026-09-13 MoveIt Execute 排查与文档补充：用户 MuJoCo/MoveIt 日志中 Plan 成功，但启动时 MoveItSimpleControllerManager 类不存在，控制器列表为空并导致 CONTROL_FAILED；此前只读检查确认系统缺少 ros-jazzy-moveit-simple-controller-manager、MuJoCo Action server 为 1。安装说明已显式列出该包，并补充插件/参数/Action 检查、仅仿真的重启与手动复测步骤；操作手册和迁移报告同步提示。构建、pytest、show-args 不替代执行链验证，KDL 根惯量警告不是本次根因。本次仅文档维护，未安装软件、修改 manifest、启动/停止设备或发送运动；插件安装及 Execute 修复复测尚无本轮证据，manifest 显式依赖仍待补齐。
+
+- 2026-09-13：本机新路径 `/home/huangbin/robotarm_ros2` 从源 main `aa1dcc52c7e7046f8040c2b9becd767df4d07265` 全新检出，初始工作树干净。旧目录整体移动到 `/home/huangbin/robotarm_ros2_backup_20260913_132122`，包括 .git、5 个未提交修改和全部生成文件；未恢复旧业务代码。个人远程旧 main `f2b0095a0da959b56e10140b292295b9ad9b8269` 已保存并核验为 `backup-before-rebase-20260913-132122`，通过绑定该 SHA 的 force-with-lease 替换 main。现在唯一 remote 是个人 `origin=https://github.com/huangbinai/robotarm_ros2.git`，无源仓库 remote、partial-fetch 配置或旧目录 alternates。新 13 包构建成功；系统 pytest 811 passed/7 skipped，MuJoCo pytest 817 passed/1 skipped，视觉 wrapper 15 passed，XML 去重覆盖 818 个用例。分层/资源 26、compileall、三类 launch 参数解析和 MuJoCo EGL health 通过。新 vision/GraspNet/MuJoCo venv 安装及 pip check 通过，MotorBridge 新编译为 0.4.6+rebotarm.2、feedback_sequence=true。Pinocchio 4.1.0 从新下载 ROS deb 隔离解包；日常 source `tools/source_local_environment.bash`，不 source 备份。colcon test 对 12 Python 包报无包内测试（根 tests 才是实际回归），系统 rosdep 仍不识别本地解包为 apt 安装。GraspNet 模型/原生扩展和专属 engine 未迁回；没有硬件、相机、运动、使能或校零。本轮证据及 A/B/C 差异分类见 `docs/LOCAL_PROJECT_DIFF.md`，原始日志在 `log/migration-*`。下一步先独立完善 CI/测试接线，再人工评审旧功能是否迁移。
 
 - 2026-09-06 用户要求同步安装流程与README：视觉setup改为仅打包构建时存在的默认模型，缺少PT/engine不再阻塞源码构建；启用检测时的模型路径校验保留，不静默回退。视觉依赖脚本仅安装/检查环境，不再以venv构建ROS包，PyTorch/torchvision固定到当前已安装的2.11.0+cu128/0.26.0+cu128；启动脚本通过REBOTARM_VISION_PYTHON按进程选择解释器，不激活venv、不注入全局视觉PYTHONPATH。主README、SDK说明、安装/视觉/解释器/仿真文档统一为系统Python构建、分环境运行，SDK固定版本、PT显式启动、可选外部engine、GraspNet --prefix和当前P0-P6范围状态同步；基础驱动/RViz-only预览/MuJoCo入口明确区分。TDD先复现4项旧契约失败，新增无模型/仅PT/两模型打包与文档一致性回归。无PT、无engine、无旧install的暂存源码副本在/tmp/rebot-install-audit-v5xUJa完成13包独立构建（25.2s）；仅接入已有厂商SDK后，用新install全量811 passed/7 skipped，主目录相同，分层20、compileall/bash/diff检查通过；安装后3类launch --show-args通过，无节点执行。只使用本机已有系统依赖，没有全新系统网络安装/engine导出/推理或真机验收；未改主目录build/install、现有venv、模型或其他开发工作树。准备普通提交同步main。
 - 2026-09-06 用户批准仓库历史材料整理：112个文件退出Git跟踪并保留本机，包含11份P1证据、主项目11份及Star Arm 6份历史计划/规格、P1 gap matrix、22文件旧仿真实现归档、57文件上游比较快照、未引用的yolo11n-seg.pt，以及3份只校验历史材料的测试。混合测试test_simulation_source_swap.py仅移除2个归档断言，保留正式入口/模型与无双后端检查；当前有效软件回归及Agent状态文件保留。所有退出跟踪文件与清理前HEAD逐字节一致且被忽略。现行文档入口已同步，过期双后端命令和PROVISIONAL授权说明更正，来源/固定commit/授权说明保留。yolo26s-seg.pt仍被视觉安装流程依赖，本次不撤下；不改运行代码、不访问硬件。第一次发布副本检查暴露7项本机历史计划校验（已随对应测试撤下）及4项缺少SDK/install环境；最终只补充既有SDK和install环境、不补历史材料，发布副本全量807 passed/7 skipped（含分层20），compileall和diff检查通过。准备普通提交同步main，其他分支及开发工作树不变；历史仍可从清理前f060d68追溯，模型分发流程留待单独整理。
@@ -38,7 +96,7 @@
 - Gate B 重复报告中的异常只出现在反馈数据：joint4-6 曾返回完全相同的 `-12.467574 rad` 和 `-23.435898 rad/s` 固定边界值，随后恢复基线；现场确认机械臂没有实际运动。
 - arm、gripper 和 joint-state publisher 共用串口控制器；反馈刷新现已在 controller `RLock` 内完成整个逐电机事务，enabled hold 期间也主动刷新并校验状态/软限位，异常帧不会发布为 joint states。
 - 显式 arm enable 不再启动闲置夹爪 500 Hz loop；夹爪 loop 只在收到真实夹爪 target/grasp 命令时启动。Gate B/C 验收增加 joint-state stale 检测，避免无有效样本时误通过。
-- Gate B/C 已提供 `ros2 run rebotarmcontroller p0_gate_bc_acceptance` 专用工具；只有精确输入确认词后才显式 enable，并监控位置跳变/速度、自动 disable 和写入 JSON 证据，不发送轨迹、safe-home 或夹爪命令。
+- Gate B/C 专用工具已于 2026-09-19 按用户要求移除；历史证据仍保留，不再提供该命令。
 - MuJoCo 基础闭环、ROS adapter、metrics、容差检查、step-response 和 viewer 开关已经存在。
 - Ubuntu Gemini 2 + YOLO 独立入口已经存在；P2 已按同一 serial 的当前硬件证据、既有 calibration provenance 和用户明确 acceptance decision 以 8/8 关闭。
 - 2026-08-07 P2 SDK/ROS 检查点：真实 `Orbbec Gemini 2`（USB `2bc5:0670`，serial `AY6V16300BP`，firmware `1.4.92`）已在修正后的 `640x480 RGB + 640x400 depth + HW_MODE` 连续 `120/120` 同时出帧；aligned depth 为 `640x480`，depth scale=`1.0 mm/unit`。Driver 已 fail closed 处理 profile、应用 scale 并公开 device/profile/calibration/timestamp metadata；ROS 同时发布 color/depth CameraInfo。证据：`Agent/evidence/P2/2026-08-07-gemini2-readonly-preflight.md`、`Agent/evidence/P2/2026-08-07-gemini2-sdk-ros-acceptance.md`。
@@ -391,7 +449,7 @@
 
 2026-08-13：10mm位置测试结束后按用户要求向driver_only launch发送SIGINT；launch与reBotArmController均退出，`/dev/ttyACM0`无占用，未再发送任何电机命令。
 
-2026-08-13：Current-source correction / 当前源码更正（由 Claude 的只读审计提出、随后以当前 source 复核）。本项不改写 2026-08-11/12 的历史 evidence；历史中把 `-0.105 m`、persistent zero / 持久零位或 neutral / 中性脱力描述成“当前运行逻辑”的文字，均须以本项为准。当前 active vision / 真机视觉配置和默认 launch 的 `tcp_offset_xyz` 为 `[-0.04, 0, 0] m`：`camera.yaml`、`camera_ubuntu.yaml`、`flat_graspnet.yaml`、`grasp_pose_policy.yaml`、`visual_grasp_system.launch.py`、`visual_grasp_perception_preview.launch.py` 和 `mujoco_offline_perception.launch.py` 已一致。当前 active local MuJoCo `robot.xml` 与 `urdf_to_mjcf.py` 的 `ee_site` 同样为 `-0.04 m`；`real_perception_sim_execution.launch.py` 传 `[0,0,0]` 仅为避免本地模型重复施加偏移。`-0.105 m` 目前只保留在固定 third-party upstream MuJoCo snapshot，不能再称为 active model 或 current runtime TCP。该审计只确认当前配置，不提供 physical TCP measurement / 物理 TCP 测量证据。
+2026-08-13：Current-source correction / 当前源码更正（由 Claude 的只读审计提出、随后以当时 source 复核）。本项不改写 2026-08-11/12 的历史 evidence；历史中把 `-0.105 m`、persistent zero / 持久零位或 neutral / 中性脱力描述成“当前运行逻辑”的文字，均须以本项为准。当前 active vision / 真机视觉配置和默认 launch 的 `tcp_offset_xyz` 为 `[-0.04, 0, 0] m`：`camera.yaml`、`camera_ubuntu.yaml`、`flat_graspnet.yaml`、`grasp_pose_policy.yaml`、`visual_grasp_system.launch.py`、`visual_grasp_perception_preview.launch.py` 和 `mujoco_offline_perception.launch.py` 已一致。当前 active local MuJoCo `robot.xml` 与 `urdf_to_mjcf.py` 的 `ee_site` 同样为 `-0.04 m`；当时存在的 `real_perception_sim_execution.launch.py` 传 `[0,0,0]` 仅为避免本地模型重复施加偏移，该顶层入口已于 2026-09-18 删除。`-0.105 m` 目前只保留在固定 third-party upstream MuJoCo snapshot，不能再称为 active model 或 current runtime TCP。该审计只确认当前配置，不提供 physical TCP measurement / 物理 TCP 测量证据。
 
 2026-08-13：同一当前源码审计确认，`src/rebotarmcontroller/` 已无 `gripper_zero`、`_gripper_zero_angle`、`local/state`、startup rehome / 启动回零或 `NaN unknown / 未知` 的实现引用；`~/.local/state/rebotarm/gripper_zero.json` 虽仍在磁盘上，但为不被读取的 legacy file / 遗留文件，本轮未删除。normal gripper position / 普通夹爪位置路径已恢复 upstream continuous position hold / 上游持续位置保持：`wait_gripper_target()` 到位后不清除 active position goal，`_gripper_tick()` 仍以 MIT `Kp=5`、`Kd=1` 持续发送，直至新目标覆盖或 controller 停止。此前“到位/timeout neutral + idle”的本地修复已被回退；不得把历史修复记录误作当前保护。
 
@@ -595,50 +653,133 @@ operator补充校零后测试、故障失能、手动闭合、重新使能，明
 
 第2至5项随后完成：Dashboard示教生命周期迁入teach的独立TeachReplayWorkflow，净减少615行且保留Web权限门；controller内置录制删除，标准launch用同一TeachRecorderNode，反馈批次identity/稳定header和录制同批新鲜度验证防止重复采样，发布锁防reentrant timer乱序。visual_ready节点与参数迁入motion，旧vision入口兼容。补齐manifest及AST/资源URI/依赖环检查。最终804 passed/8 skipped，layering+resources26，编译/diff通过；新非symlink install_coupling_audit共13包构建通过，controller末次重建通过。从/tmp校验新安装模块/资源并用已有MuJoCo venv成功加载nq15/nu8模型；隔离ROS domain153完成空闲节点、合成录制去重、HTTP GET/禁用POST400验证后全部退出。无串口或真实动作，未提交。旧安装空间不代表本轮结果，人工后续启动改用install_coupling_audit；实体录制吞吐/运行切换仍未验收，夹爪设备侧+2pi根因仍未闭环，P0-P6范围不变。证据：Agent/evidence/maintenance/2026-09-06-remaining-coupling-refactor.md；迁移说明：docs/coupling_migration.md。
 
-## 2026-09-07 视觉真机抓取配置化启动
+## 2026-09-17 MotorBridge v0.4.7 升级
 
-将已验收视觉抓取长命令中的35项Launch参数写入`rebotarm_bringup/config/visual_grasp_hardware.yaml`，并新增`visual_grasp_hardware.launch.py`严格加载profile、解析主项目内`.venv-vision`/`.venv-graspnet`解释器与GraspNet模型资产，再包含现有`visual_grasp_system.launch.py`。`channel`禁止写入profile且新入口不提供默认值，启动时仍必须显式指定；MotorBridge契约检查、`fuser`、ROS环境与RMW环境变量保留为启动流程。旧`gripper-unified-bus-fix/install-fix` overlay和全局视觉`PYTHONPATH`不再需要，避免覆盖当前主项目运行时或污染其他ROS进程。配置强制`use_hardware=true`并拒绝缺字段/未知字段；虚拟环境解释器路径保留symlink入口，不能解析成`/usr/bin/python3.12`，否则会丢失venv语义。标准`install/`已仅重建`rebotarm_bringup`，运行时回读关键映射与四项资产正确。验证：新profile 7项、视觉/解释器/GraspNet聚焦118项、分层20项、全量836 passed/8 skipped、required compileall、Launch `--show-args`、MotorBridge `0.4.6+rebotarm.2 feedback_sequence=true`及diff check通过。未运行`fuser`或访问串口，未启动节点、使能、运动、提交或推送；自动测试不构成新的实机验收。
+P0 Gate B/C 在 Enable 后保持阶段首先出现 `dm-serial write failed: Operation timed out`，随后控制器正确触发 `FEEDBACK_PROTECTIVE_DISABLE`；报告中最大位置跳变 0.000381 rad、最大速度 0.007326 rad/s，未触发运动阈值。按用户决定将固定基线从上游 v0.4.6 升级到 `v0.4.7@2b7b350914ace47ba06e85fcad333143de2b057b`，获得 10 ms dm-serial 超时、模式切换总预算、寄存器写 ACK 和参数保存改进；现有 feedback sequence、严格帧路由、置零新鲜 status0 门和保护失能经三方合并保留。用户级运行时已安装 `0.4.7+rebotarm.1`。focused 虚拟串口 35 passed、Rust 40 passed、layering 20 passed；全量 763 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall 与 diff 检查通过。升级期间未启动 controller 或访问串口，必须先做失能反馈稳定性和 P0 Gate B/C 复测，不能视为真机验收。证据：`Agent/evidence/maintenance/2026-09-17-motorbridge-v047-upgrade.md`。
 
-## 2026-09-07 P6 单瓶抓取 runner 配置化
+2026-09-17 operator 报告已完成 `driver_only.launch.py`、`rviz_ee_drag_sim.launch.py` 和 `rviz_ee_drag_real.launch.py` 的现场功能测试。该确认记录为 operator-reported 测试进度；最新 P0 Gate B/C 报告因工具启动前已使能而 fail closed，不将其写成升级后 Gate B/C PASSED。下一项按从底层到组合入口的顺序测试 `rebotarm_app.launch.py`：先验证网页状态、显式 Enable/保持/停止/失能，再做单关节小幅遥操；示教录制/回放和视觉抓取继续后置。
 
-用户指定的单次执行参数已写入`tools/p6_single_bottle_grasp.yaml`：namespace/runs、plan timeout与age、`10/3/3/10 s`四段时长、`0.080 m`开度、开夹`1.5 N.m`、闭合`1.0 N.m`、保持前馈`0.4 N.m`、闭合超时`4 s`及controller hold timeout `30 s`。runner新增严格`--config`两阶段解析，profile必须字段完整、类型正确且无未知项；显式CLI仍可覆盖profile。每次运行的`--confirm REAL_SINGLE_BOTTLE_GRASP`与动态`--output`禁止写入profile，保持逐次真机授权和唯一证据文件。报告`authorized_scope`原先硬编码`45/45/20/45 s`，现按实际解析参数生成，避免使用新profile时证据失真。该runner会主动调用motion/gripper服务，不得与自动视觉抓取executor并行；配套视觉链当前保持`execution_mode=plan_only`、`start_visual_grasp_executor=false`，同时保留`start_motion_execution=true`。验证：profile/runner/候选/轨迹聚焦16 passed/1 skipped、全量842 passed/8 skipped、layering20、compileall/py_compile/diff check及错误确认无报告smoke通过。未初始化ROS运行、访问串口、使能或发送动作，未提交或推送；自动测试不替代实机验收。
+2026-09-17 网页 3D 视图网格竖直和初始视角异常已修正：Three.js `GridHelper` 默认已位于 XZ 水平面，移除了额外 90° 旋转；初始相机改为地面上方斜视并对准机械臂主体。focused 113 passed，dashboard compileall 和 diff check 通过。`rebotarm_app.launch.py` 的 controller 未传入 `shutdown_safe_home`，使用 controller 默认 false；正常 Ctrl+C 会停止 loop、失能并断开串口，不会先回 Safe Home，也不会切断 24 V 实体电源。
 
-## 2026-09-07 P6 动作失败恢复同步
+2026-09-17 用户同意删除未接入任何 launch/节点的 `src/rebotarm_bringup/config/replay_profiles.yaml`；回放安全参数测试改为验证实际生效的 `teleop_control.yaml`，文档清单已同步。`src/` 只读审计另发现两个确定未进入运行链的候选：`config/driver_params.yaml`、`rebotarm_simulation/mujoco_legacy_cli.py`；本轮未删除。`rebotarm_interactive_control` 的 36 个薄 wrapper 和 vision 的 3 个迁移 shim 属于明确兼容层，要删需先决定是否破坏旧 import/console 路径。focused 97 passed；全量 763 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall 和 diff check 通过。
 
-实机失败发生在P6 runner的夹爪闭合阶段：控制器返回`success=false`、`contact=false`以及非有限`reached_position`，而报告写入使用`allow_nan=false`，导致原始动作失败后又发生JSON序列化异常，整份本轮恢复结果未落盘。由于报告缺失，现有证据不能证明当时回位命令未发出、回位失败后保持，或已回位但未记录。修复后P6报告会将设备侧`NaN/Inf`正规化为JSON `null`并原子替换，失败返回非零退出码，终端实时显示失败和恢复阶段。
+2026-09-17 用户随后明确授权退役上述三批兼容/无引用内容。已删除 `driver_params.yaml`、`mujoco_legacy_cli.py`、Vision 的 `visual_ready_node.py`/`tcp_calibration.py`/`tcp_calibration_node.py` 及两个重复 console entry，并整体删除 `rebotarm_interactive_control` 包。测试已迁移到 motion/teach/teleop/dashboard/calibration 正式导入路径，架构、README、拓扑和命令文档已同步。旧 import 与旧 console scripts 不再兼容；当前为 12 个项目 ROS 包。symlink-install 旧包残留已可恢复移至 `/tmp/rebotarm-retired-compat-DHYDGX`，bringup/vision 旧构建目录分别移至 `/tmp/rebotarm-bringup-stale-Hlcte0` 和 `/tmp/rebotarm-vision-stale-KiHvQw`。focused 252 passed，12 包 symlink build 通过；全量 759 passed/7 skipped/3 个既有 OpenCV/解释器环境失败，compileall/diff check 通过。
 
-P5/P6共用恢复链现在先停止轨迹并核验控制器状态、六轴状态码、错误码及关节反馈新鲜度，再从实时反馈受控回本轮启动baseline。回位后只有六轴位置误差不超过`0.02 rad`、速度不超过`0.05 rad/s`且连续稳定`1 s`才允许失能，总恢复验收上限`30 s`；硬件健康但回位/稳定验收失败时继续enabled hold等待人工恢复，通信丢失、反馈无效或电机/控制状态异常时才尝试保护性失能。视觉硬件profile同步固定为`execution_mode=plan_only`、`start_visual_grasp_executor=false`、`start_motion_execution=true`，由P6 runner单独持有动作发起权，加载器拒绝冲突配置。标准`install/`已重建`rebotarm_motion`和`rebotarm_bringup`。验证：恢复/profile聚焦27 passed；视觉/P5/P6/Grasp/Candidate聚焦194 passed/1 skipped；全量848 passed/8 skipped；分层20 passed；required compileall、runner py_compile、安装文件逐字节核验、Launch静态解析、MotorBridge反馈序号契约和diff check通过。未访问串口、启动ROS、使能或发送动作，自动测试不构成新的实机恢复验收；未提交、未推送。
+2026-09-17 用户授权清理无效的 `src/rebotarm_bringup/config/interactive_control.yaml`。已删除该文件及 `interactive_system.launch.py` 中的 `interactive_config` 参数文件引用，夹爪可视化节点保留显式 `arm_namespace` 参数；bringup 安装注释、当前迁移清单和分层回归测试已同步。历史旧版清单仍可保留该路径作为旧树记录。
 
-2026-09-07 01:17与01:19两次P6实机运行均完成有效瓶子候选、MoveIt规划、pregrasp、approach、夹爪open/force-close/stall/hold/release及10秒return；正常return action均`success=true`。第一次回baseline最大位置误差`0.0026703 rad`，第二次`0.0038147 rad`，均满足`0.02 rad`边界。两次最终均被报告为失败，原因是新增恢复验收错误地把TRANSIENT_LOCAL、事件驱动的`/rebotarm/arm_status`当成周期心跳：正常验收时接收年龄约`0.628 s`超过错误设置的`0.5 s`门，触发`arm_status_stale`；随后又执行一次10秒failure return，并在约`0.502/0.559 s`处再次误判，最终走保护性失能。现场`joint_states`持续新鲜、六轴状态全1且无error，controller日志确认两次夹爪动作成功，故这是验收假阴性，不是候选置信度、MoveIt、轨迹跟踪、夹爪或真实通信失败。修复删除`arm_status`接收年龄判定：ArmStatus继续严格检查enabled/control loop/六轴status/error语义，实际通信新鲜度只由周期且序列验证的六轴joint feedback判定。新增事件状态旧10秒仍可通过baseline验收的回归测试；聚焦28 passed、视觉/P5/P6/Grasp/Candidate 195 passed/1 skipped、全量849 passed/8 skipped、分层20、compileall/py_compile/diff check通过，标准`rebotarm_motion`安装态已重建。Codex仅只读检查现场ROS/topic/log/fuser，没有发送动作；当前用户视觉支撑链仍运行，controller持有`/dev/ttyACM0`且两次报告最终均为disabled/IDLE/status0。
+## 2026-09-17 bringup 硬件启动片段统一
 
-2026-09-07 01:29与01:30两次P6启动前预检报告中的`real controller has non-zero motor status`不是六轴真实电机故障：两份报告的`per_joint_status_code`均为`[255,255,255,255,255,255]`，controller日志同时记录启动期约`0.44–0.45 s`的`arm feedback stale`。`255`表示反馈未知；反馈随后恢复且`joint_states`继续更新，但事件驱动、TRANSIENT_LOCAL的`/rebotarm/arm_status`仍锁存旧故障消息，P6严格预检因而正确拒绝动作。修复位于硬件状态发布层：每个反馈故障周期只发布一次异常ArmStatus，并在首个经过反馈序号与新鲜度校验的有效六轴批次到达时主动发布一次恢复ArmStatus，以当前真实健康状态覆盖锁存的全`255`；P6启动前处于失能态，预期状态码为六轴全`0`，使能保持时才为全`1`。P6门限不放宽，`255`仍禁止执行。TDD回归直接验证启动期消息序列为`[255]*6 -> [0]*6`且持续故障不重复发送RELIABLE状态。聚焦controller测试126 passed；全量850 passed/8 skipped；分层20 passed；required compileall、py_compile、diff check及标准`rebotarmcontroller`安装态重建/导入核验通过。未访问串口、启动ROS、使能或发送动作；自动测试不构成实机验收。
+用户要求先上传既有进度再重构 launch。累计包迁移成果已作为提交 `f0620c3` 推送到 `origin/main`。随后新增 `hardware_controller.launch.py`，它成为 `rebotarm_bringup/launch` 内唯一直接声明 `reBotArmController` 的文件；`driver_only` 改为兼容薄入口，`bringup`、`moveit_hardware`、`interactive_system`、`teleop_keyboard`、`visual_ready_hold` 均通过 include 复用并保留原公开参数、默认失能和退出不自动回位语义。启动结构和功能说明位于 `src/rebotarm_bringup/launch/README.md`，架构和中文 README 已链接；分层测试增加唯一硬件 owner 约束。聚焦 107 项在加载工作空间后通过，layering 18 项通过，7 个新/迁移入口的 `--show-args` 解析通过，必需 compileall 和 diff check 通过；全量 `762 passed, 7 skipped, 3 failed`，失败为既有 OpenCV ArUco/`calibrateHandEye` API 与 MuJoCo 解释器默认断言。colcon 单包构建受旧安装空间缺失 eigenpy/coal/pinocchio package hook 阻断，独立 pip wheel 构建/安装成功。全程未访问串口、未启动控制器或发送运动命令。
 
-随后01:44视觉链中的`reBotArmController`在启动约0.10秒后以exit code 1退出，导致MoveIt从未收到joint state，01:46两次P6报告均在10秒预检后报`joint feedback unavailable`且`final_status.available=false`。根因不是反馈采集或MotorBridge回退，而是Codex此前错误地对标准`install/rebotarmcontroller`单包使用`--symlink-install`：安装态只留下egg-link并要求环境新增`build/rebotarmcontroller`，重建前已source的终端仍只有旧install site-packages，因此入口在ROS/硬件初始化前发生`PackageNotFoundError`。证据包括控制器无ROS日志、串口覆盖临时文件未更新、旧环境纯Python可稳定复现缺少包元数据；重新source后的环境可加载。已将错误的单包build/install产物备份到`/tmp/rebotarmcontroller-symlink-install-backup-20260907-0158`，以普通非symlink模式重建标准安装。修复后即使PYTHONPATH不含任何controller build路径，也能从install中的实体包目录加载distribution、console entrypoint及ArmStatus恢复代码；源码与安装副本哈希一致。全量850 passed/8 skipped、controller聚焦126 passed、分层20 passed、required compileall/diff check通过；MotorBridge仍为`0.4.6+rebotarm.2 feedback_sequence=true`。本问题的流程约束是：标准共享install不得为单包临时切换symlink模式；若必须改变安装模式，必须完整重建并验证旧终端兼容性。该修复未启动视觉链、未使能或发送动作，自动测试不构成实机验收。
+## 2026-09-18 Pinocchio 安装与 OpenCV 冲突解除
 
-用户随后确认测试无问题并授权整理后本地提交；提交范围仅包含上述视觉真机启动profile、P6配置/报告与失败恢复、ArmStatus恢复发布、对应测试及Agent记录，不包含本地实机证据、模型、build/install/log产物，也不推送远端。
+用户已安装 `ros-jazzy-pinocchio 4.1.0`，apt 同步安装 `ros-jazzy-eigenpy 3.13.0` 与 `ros-jazzy-coal 3.0.3`；三者从 `/opt/ros/jazzy` Python 路径导入成功。用户目录中覆盖系统库且缺少 `calibrateHandEye` 的 `opencv-python 5.0.0.93` 已卸载，默认 Python 恢复使用 Ubuntu `python3-opencv 4.6.0`，手眼与 ArUco API 可用，标定聚焦 6 项通过；两个项目虚拟环境的 OpenCV 4.11 未修改。旧 bringup 构建缓存仍引用已删除的 `teleop_control.yaml`，已可恢复移至 `/tmp/rebotarm-bringup-stale.JpkLpA`，随后 `rebotarm_bringup` symlink build 成功。最终 layering 18 passed、全量 `764 passed, 7 skipped, 1 failed`，唯一失败为既有 `mujoco_sim.launch.py` 默认解释器断言；必需 compileall 通过。未启动节点、访问串口或操作真机。
 
-## 2026-09-07 单次瓶体视觉抓取功能化
+## 2026-09-18 bringup 入口去重与职责澄清
 
-已实测的P6单瓶抓取runner已整理为正式`rebotarm_vision`功能，安装入口为`rebotarm_single_bottle_grasp`，实现位于`rebotarm_vision.single_bottle_grasp`，默认从随包安装的`config/single_bottle_grasp.yaml`读取已验收参数。正式实现仍只接受`bottle`、`base_link`、confidence不低于`0.4`且jaw width不超过`0.085 m`的fresh plan，动作仍为捕获本轮baseline、MoveIt预抓取/接近规划、受保护轨迹、限力闭合保持、张开释放、返回本轮baseline、稳定验收后失能；不新增lift、retreat、固定safe-home或无力传感器条件下的抓取成功分类。逐次`--confirm REAL_SINGLE_BOTTLE_GRASP`和动态`--output`仍禁止写入profile。
+`driver_only.launch.py` 在硬件片段统一后只是 `hardware_controller.launch.py` 的无行为包装，没有任何活跃 launch 消费者，因此删除；只启动控制器的公开命令改为 `hardware_controller.launch.py`。`moveit_hardware -> rebotarm_app` 是真机 MoveIt 工作台链，`teleop_keyboard -> teleop_system` 是不含 MoveIt 的键盘/软件演练链，两者不是重复执行后端且不应同时启动。同时修正 `teleop_system` 真机分支错误屏蔽示教录制器的旧逻辑：现在两种分支都只启动一个录制器，`require_motor_status` 跟随 `use_hardware`，仍默认不开始录制、不自动使能。重复的 `DeclareLaunchArgument` 是父 launch 向外重新导出子 launch 参数的显式接口；节点和硬件默认值的语义所有权仍在 `hardware_controller.launch.py`。旧 bringup build/install 缓存因仍引用已删除文件而阻断构建，已可恢复移至 `/tmp/rebotarm-bringup-driver-only-stale.WVTCin`，随后单包构建成功，5 个主要入口 `--show-args` 全部通过，安装空间不再含旧入口。layering `18 passed`，全量 `765 passed, 7 skipped, 1 failed`，唯一失败仍为既有 MuJoCo 默认解释器断言；必需 compileall 和 diff check 通过。本轮未启动控制器或访问串口。
 
-原先嵌在`tools/p5_paired_trajectory_runner.py`的ROS反馈监视与FollowJointTrajectory客户端已移入`rebotarm_motion.guarded_trajectory_client`，P5工具改为复用该正式motion实现；旧`tools/p6_single_bottle_grasp_runner.py`仅保留为兼容转发，旧P6 YAML由安装型feature profile替代。视觉硬件launch继续强制`plan_only`、关闭持续`visual_grasp_executor`并开启motion execution，确保单一动作发起者。标准非symlink `install/`已重建motion、vision和bringup；从`/tmp`且无源码`PYTHONPATH`验证ROS可发现新console entry、模块与profile均来自install，源码/安装副本哈希一致。验证为聚焦`44 passed, 1 skipped`、全量`856 passed, 8 skipped`、分层`20 passed`、required compileall/py_compile/diff check通过。未访问串口、启动ROS运行时、使能或发送动作；本次是已验收行为的产品化整理，不构成新的实机验收或授权。用户确认两命令设计后授权整理并本地提交，不推送。
+## 2026-09-18 统一示教回放实现
 
-用户确认正式功能继续使用两个独立命令：先启动`visual_grasp_hardware.launch.py`支撑链并人工检查点云、候选位姿、controller状态和现场净空，再以`rebotarm_single_bottle_grasp`携带逐次`--confirm`启动一次动作。不新增自动串联支撑链与运动的一键launch，避免启动时序或候选首次出现直接取得动作权限；现有产品代码无需调整。
+Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，保留质量分析、预处理、dry-run 令牌、MoveIt 起点对齐、碰撞预检和运行期跟踪监控。删除重复的 `TeachReplayNode`、`teach_replay.launch.py` 和 `TeachReplayNode` console entry；当前不再提供第二套命令行回放编排，命令行仅保留 `teach_record.launch.py` 独立录制。回放所需保护逻辑已由 Dashboard 使用的 workflow 统一承载。聚焦测试 `101 passed`，分层 `18 passed`，全量 `765 passed, 7 skipped, 1 known MuJoCo interpreter failure`；重建 `rebotarm_teach` 和 `rebotarm_bringup` 成功，安装空间不再包含旧回放 launch 或 console entry，未启动控制器、访问串口或运动。
+Dashboard 的 `TeachReplayWorkflow` 已定为唯一正式示教回放实现，保留质量分析、预处理、dry-run 令牌、MoveIt 起点对齐、碰撞预检和运行期跟踪监控。删除重复的 `TeachReplayNode`、`teach_replay.launch.py` 和 `TeachReplayNode` console entry；同一轮又删除无网页独立的 `teach_record.launch.py`，保留 `TeachRecorderNode` 供 `rebotarm_app` 和 `teleop_system` 组合使用。回放和录制均由 Dashboard 工作台统一提供，未启动控制器、访问串口或运动。
 
-## 2026-09-07 03:51 夹爪机械闭合零位校准
+2026-09-18 同意删除独立的 `visual_ready_hold.launch.py`；它只是真机视觉就绪摆位与常驻服务的单独包装，完整 `visual_grasp_system.launch.py` 内部已保留同一个 `rebotarm_visual_ready` 节点链。保留 `visual_grasp_perception_preview.launch.py`，用于不启动控制器的视觉只读验收。独立文件删除后，bringup 重建与两个视觉 launch 的 `--show-args` 通过，聚焦测试 `92 passed`，未启动控制器或访问串口。
 
-用户确认夹爪已人工闭合到机械零位并明确授权校准。启动前`/dev/ttyUSB0`与`/dev/ttyACM0`无人占用；仅启动`driver_only.launch.py`，controller为`CONNECTED_DISABLED/IDLE`、control loop false、六轴status全0。机械闭合位置的设备原始反馈为`6.350615 rad`，超出有效坐标域并在外部表现为gripper position `NaN/status255`，证明当时零位坐标失效。确认`/dev/ttyACM0`仅由本次controller PID 291593占用后，仅调用一次`/rebotarm/set_zero`且`joint_name=gripper`，返回`success=true/set_zero complete`；接口内部要求0.5秒内连续3个新鲜status0近零样本。
+2026-09-18 `visual_grasp_system.launch.py` 的无硬件 `plan_only` 使用配置的假关节角建立眼在手相机到 `base_link` 的 TF，因此 RViz 基座坐标不能用于验收实物位置；真实定位需保持真机失能并读取新鲜关节反馈，再核对手眼标定。完整视觉入口已关闭非实测的物体示意圆柱、中心绿点和类别文字，保留 TCP、接近轴和夹爪轴。计划时效默认改为按模式选择：`plan_only=3.0 s`、`execute=1.0 s`，仍允许显式覆盖；避免人工依次查看话题后纯规划立即因原 1 s 门限失败，同时不放宽真实执行默认安全门。
 
-外部复核采集10个不同反馈时间戳，约0.217秒持续推进，映射位置全部为`0.000003433 m`（约`0.0034 mm`），status均为0，ArmStatus error_codes清空，六轴继续disabled/IDLE/status0。100Hz ROS发布会重复50Hz硬件批次，因此首个错误的“10条消息时间戳必须全部唯一”检查被更正为按不同反馈时间戳计数；未因此再次写零。随后Ctrl-C停止临时controller，PID退出且两个串口均释放。全程未enable、未发送六轴/夹爪运动、未切模式或写其他参数。本次只验证当前运行实例的闭合零位，未验证24V断电后的持久保持。
+2026-09-18 视觉 `plan_only` 已从后台可达性检查改为连续 RViz 轨迹预览：`PoseExecutionNode` 可仅在 launch 启用时把成功的 `execute=false` 轨迹发布为 `/display_planned_path`，视觉 RViz 加载只读 MoveIt 轨迹显示；执行器把上一阶段最后关节状态作为下一阶段虚拟起点。`ExecutePose` 新增可选 `preview_start_joint_state`，任何携带该虚拟起点的 `execute=true` 请求在规划和 Action 下发前 fail closed，真实执行语义不变。
 
-## 2026-09-07 视觉抓取候选时空一致性加固
+2026-09-18 用户纯规划再次遇到 `no fresh valid grasp plan received`。最新 executor 日志证实当前新进程已是 3.0 s 门，仍有 valid plan 到达时 age=3.02–4.69 s 被丢弃；候选 IK filter 实测一次 Top-10 求解约 2 s，之前还要经历采集和 GraspNet 推理。只将 `visual_grasp_system` 的 `plan_only` 默认门限改为 10 s，`execute/real` 默认 1 s 不变；执行器服务报错细分为无计划、到达时过期与缓存过期。无硬件纯规划窗口不是实物对齐或真机执行的安全证明。
 
-异常候选的高置信度不能证明位姿正确：失败证据中的抓取点`z=0.040520 m`仍有`0.6678`置信度，而同一基线成功点约`z=0.243771 m`。实机硬件profile现固定只选择`bottle`，并把`base_link`抓取高度下限设为`0.05 m`；单瓶执行入口再次检查同一下限。候选TF改为按深度图采集时间查询，计划年龄也从“ROS消息收到多久”改为传感器时间戳年龄，继续使用`1.5 s`上限。
+2026-09-19 视觉 `plan_only` 的中途卡顿已改为完整序列一次发布：各运动阶段仍由 `ExecutePose(execute=false)` 独立规划并以前段终点作为虚拟起点，但设置 `suppress_preview=true`，全部阶段成功后再经运动层 `PublishTrajectoryPreview` 服务用一条 `DisplayTrajectory` 携带所有轨迹；任一阶段失败不发布半条预览。默认 `plan_only_stage_pause_sec` 从 3 s 改为 0 s，plan-only 不再套用机械稳定等待，RViz `State Display Time` 从 0.05 s 调为 0.03 s。真实执行路径、`FollowJointTrajectory` 和 1 s 执行计划时效门均未放宽。四包 symlink build 成功，focused 82 passed、layering 18 passed、全量 694 passed/7 skipped/1 个既有 MuJoCo 默认解释器失败，compileall 与 diff check 通过；未启动控制器或操作真机。
 
-GraspNet输出新增独立三维几何门：抓取中心必须落在YOLO瓶体分割点云的鲁棒包络加`0.015 m`余量内。单瓶执行入口要求连续3个不同传感器时间戳的计划稳定，窗口内XY最大距离`0.015 m`、Z跨度`0.010 m`、夹爪宽度跨度`0.010 m`。fixed `base_axis`配置覆盖候选姿态，所以此窗口不比较上游姿态。验证为聚焦`128 passed,1 skipped`、全量`864 passed,8 skipped`、分层`20 passed`、两包构建、required compileall和launch静态解析通过；未启动相机/ROS运行时、未访问串口、未使能或发送运动，需另行实机复验。
+- 2026-09-19 calibration 软件防护：新增手眼相对旋转约束满秩/条件数门，单轴运动即使低残差也拒绝；TCP 采集增加总超时、TF 新鲜度/时间推进/稳定窗口，ArUco 增加图像内参 frame/尺寸/时间/畸变与重投影/面积/距离门，按图像时刻查 TF；失败结果严格 JSON、无部署 YAML。标定相关34通过、分层18通过，全量697 passed/7 skipped/1 failed（原有 MuJoCo 默认解释器检查），compileall/diff通过，calibration symlink build通过。未进行相机/真机运行验收，未修改部署参数。独立 TF 检查命令、会话恢复和物理标定验收仍属后续扩展。
 
-## 2026-09-07 MuJoCo最新版整合
+2026-09-19 网页标定持续目标：新增 handeye_workflow.py 和 rebotarm_handeye_calibration CLI，五算法训练集选择、独立留出集对训练参考验证、跨集合唯一样本/重复姿态校验、坐标系元数据和输入哈希；原子 JSON 保存保留旧结果。新增4个测试，手眼相关13通过；分层18，全量703 passed/7 skipped/1既有MuJoCo默认解释器失败；calibration build、安装入口help、compileall/diff通过。ROS采集适配器、Dashboard页面、重力补偿接线、恢复与完整流程验证尚未完成，目标继续；未访问硬件。
 
-`/home/a/project/rebot_refer`已更新到`huangbinai/robotarm_ros2 main@a68c3ab924080b94f039270b568de464218d7512`，其最新版MuJoCo实现已替换主项目旧active runtime。新增控制/碰撞栈、Viewer关节与笛卡尔操作和速度档位、Reach/Pick环境、Sim2Real轨迹记录/回放/比较/随机化、只读Real2Sim Bridge及ROS/MoveIt/批量验收工具；删除旧`mujoco_adapter_core`、`mujoco_runner`、`mujoco_model_profile`、`mujoco_metrics`、legacy/limit/grasp-quality实现和专属测试，被Git忽略的`third_party/rebotarm_simulation_current_baseline`旧本地归档也按用户授权移入系统回收站。主项目继续保留`virtual_camera.py`、`paired_trajectory_analysis.py`、MoveIt联动launch，并新增`scene_bottle.xml`隔离瓶体视觉场景；通用`scene.xml`保留上游`test_cube`。
+2026-09-19 网页标定检查点：新增 SessionStore 持久会话，客户端 UUID、幂等 request_id、revision 并发校验、原子保存与重启恢复；训练/验证样本分组、求解/重开/人工接受/终止。新增 CalibrationCommand.srv（接口定义，ROS 回调尚未实现），不含运动命令。两项集成测试覆盖完整持久化生命周期和失败不修改；两包构建与生成接口导入通过，分层18，全量705 passed/7 skipped/1既有MuJoCo解释器失败，compileall/diff通过。仍须接入ROS采集节点、Dashboard页面和重力补偿操作、完成浏览器和软件流程验收；未操作硬件。
 
-本地适配继续以MoveIt URDF为模型权威源，保持J2/J3上限`0.02 rad`、J4-J6力矩`7 N.m`和`ee_site=-0.04 m`。固件参考参数已移入simulation包，资源加载不再反向读取bringup；`urdf_to_mjcf`修复了安装态从模块路径误猜仓库根的问题，现在从`/tmp`导入install副本也能按package share校验模型。验证：全量`1203 passed,2 skipped`，分层`20 passed`，模型/安装态回归`39 passed`，required compileall，MoveIt/simulation/bringup三包普通构建，三个launch参数解析，源码/安装场景逐字节一致，`MJCF is up to date`和`git diff --check`通过。未访问串口、启动ROS节点、使能或发送运动；未提交、未推送。
+2026-09-19 网页标定 ROS 适配：handeye_capture_node 已注册独立只读节点，CalibrationCommand 接入会话；采样按图像时间查 base→end、检查内参/坐标系/质量/稳定窗口；不依赖旧手眼外参，无硬件命令客户端。修正采样重试使用持久 request_inputs 保证幂等。真实ROS绑定子进程验证无相机时超时且不修改会话、拒绝网页伪造样本；节点构造和包重建通过。全量706 passed/7 skipped/1既有MuJoCo解释器失败，分层18，compileall/diff通过。正向合成ROS集成、Dashboard页面与重力补偿接线仍未完成；未开启相机/控制器、未真机操作。
+
+2026-09-19 网页标定：Dashboard 增加 /calibration 静态页和 /api/calibration/command 路由，CalibrationClient 转发 ROS 命令并向现有 SSE 状态写入进度；页面支持会话/采样/求解/接受/下载初版，未接重力补偿。dashboard 构建通过、分层18+client1通过；全量706通过/7跳过/2失败，其中旧页面安装资源断言已随新增页面修正并聚焦重验，另一个为既有MuJoCo解释器失败。浏览器实测、ROS正向闭环、运动控制互斥和launch组合仍待完成，目标保持active；未操作硬件。
+
+2026-09-19 网页标定正向ROS测试通过：合成ArUco图像/CameraInfo/动态TF经真实服务稳定窗口采样成功，时间一致、距离正确、重试不追加。rebotarm_app增加默认关闭calibration开关及话题/目录参数，bringup build和show-args通过。全量708 passed/7 skipped/1既有MuJoCo解释器失败，分层18。核对controller退出重力补偿用最后目标角保持，非重新采当前位置。网页重力补偿接线、浏览器验收、完整流程/不确定度等仍待完成；未启动真机。
+
+2026-09-19 网页标定覆盖与不确定度：ROS响应新增训练/验证各自样本数、位移/旋转跨度和可观测性门，网页可显示；选中算法增加固定seed训练集bootstrap经验区间与失败次数，不影响holdout选择也不宣称物理精度。输入哈希排除旧报告和会话历史。相关8项通过；两包构建成功，全量710 passed/7 skipped/1既有MuJoCo解释器失败，分层18、compileall/diff通过。重力补偿网页控制/互斥、浏览器完整流程验收仍待完成，目标未完成。
+
+2026-09-19 标定网页接入显式enable和gravity start/stop按钮；start/stop要求操作确认与执行开关、新鲜enabled无错状态，start拒绝示教/回放/键盘/网页目标冲突。Dashboard请求串行锁及重力占用门阻止新操作，超时不自动失能。新增gate/dispatch测试2项通过，dashboard build成功；全量712 passed/7 skipped/1既有MuJoCo失败，layering18、compileall通过。仅初步网页边界接线，HTTP→ROS替身全流程、外部状态恢复、浏览器验收未完成；未操作真机。
+
+2026-09-19 网页标定HTTP并发修复：calibration只读请求不再持有operator锁，避免慢采样/求解延迟停止；客户端传输异常清busy并报告结果未知；HTTP按calibration success字段返回200，修正原仅accepted造成成功误400。新增真实HTTP页面/请求测试、并发停止和传输异常测试；focused4通过，dashboard build、layering18、compileall/diff通过，全量715 passed/7 skipped/1既有MuJoCo解释器失败。浏览器完整流程和外部重力模式恢复仍未完成，无真机操作。
+
+2026-09-19 标定页面脚本并发修复：采样/求解请求等待期间不禁用gravity-stop，armCommand允许独立stop绕过采样busy；Node执行实际页面脚本与DOM/transport替身证明未返回capture时stop仍发出，非真实浏览器验收。dashboard重建成功，分层18，全量716 passed/7 skipped/1既有MuJoCo解释器失败，compileall/diff通过。真实浏览器完整交互、外部模式状态恢复等仍待完成；未操作硬件。
+
+2026-09-19 实际浏览器检查：隔离localhost18765使用真实页面/HTTP/SessionStore/solver，创建、5训练+5验证、求解、software-test人工接受、刷新恢复成功，最终accepted=true/deployed=false。先验证节点未连接错误提示。合成姿态由测试后端供应，不是ROS现场采集；完整浏览器ROS链仍待联调。临时tab和server已关闭，未操作硬件。
+
+2026-09-19 HTTP→ROS正向标定联调：原真实ROS采集测试改经生产HTTP/CalibrationClient，采样与幂等通过。Dashboard arm_status观测外部GRAVITY_COMP也建立操作占用保护。退出/超时迟到结果恢复尚需完善，未将当前实现视为完成。build与分层18通过；无硬件操作。
+
+2026-09-19 标定重力补偿超时恢复：GravityRequestTracker保留未完成future并拒绝重复模式请求，迟到结果记录完成时刻；明确stop加完成后新鲜enabled无错IDLE反馈才解除占用，stop成功不立刻解除。测试覆盖重复点击、迟到响应、旧/过期反馈。dashboard build、layering18、compileall/diff通过，全量717 passed/7 skipped/1既有MuJoCo失败。需继续真实Dashboard节点集成门测试与需求逐项审计；无真机操作。
+
+2026-09-19 实际Dashboard节点集成通过：tests/test_handeye_capture_runtime现构造实际TeleopStatusPanelNode并使用其HTTP server/ROS client，GET/calibration、软件模式gravity请求拒绝、真实ROS合成采样与幂等通过2项。新增docs/calibration_acceptance.md逐项区分已验证/部分/未完成，保留相机预览、友好报告、阈值追溯、TCP/TF页面、MuJoCo和完整联调缺口。未运行真机服务。
+
+2026-09-19 网页标定结果与追溯：新增算法比较表和折叠JSON，采样保存实际阈值/库版本/源码SHA256（排除存储目录）；真实ROS采样测试验证。两包build通过，分层18，全量718 passed/7 skipped/1既有MuJoCo失败，compileall/diff通过。仍需预览、实际控制服务替身联调、导出验收等，目标继续。
+
+2026-09-19 网页只读快照：CalibrationCommand preview读新鲜图像、640限宽JPEG与原时间/frame信息，页面手动刷新明确非实时；图像不进入SSE/存储。实际Dashboard→ROS合成测试解码通过，客户端测试确认不广播图像。三包build通过，全量719 passed/7 skipped/1既有MuJoCo失败，分层18/compileall/diff通过。浏览器预览视觉复查及剩余验收待完成，无真机操作。
+
+2026-09-19 实际Dashboard控制替身联调通过：隔离domain181仅假enable/start/stop服务，未使能/未确认/历史源时间反馈被拒绝；显式enable→start→键盘冲突拒绝→stop→新鲜IDLE明确解除且不重复stop。修复arm_status新鲜度仅看接收时间的问题，纳入header源时间。dashboard build、layering18、相关4通过，全量720 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过；无真机操作。
+
+2026-09-19 标定导出/TF检查：脚本下载处理器生成Blob内容与当前会话完全一致，包含失败报告和原样本；网页增加独立tf_check，只检查base→end新鲜非零时戳/刚体变换，不依赖旧手眼。实际Dashboard ROS验证通过。两包build、分层18、全量720 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。浏览器最新预览/表格复查、TCP与MuJoCo计划项仍待完成，目标继续。
+
+2026-09-19 TCP网页计划分支：metadata.mode=tcp复用会话/TF稳定采样，新增tcp_workflow训练pivot独立验证，不用相机；网页选择模式与TCP结果摘要。持久流程测试验证正确偏移、验证固定点移动20mm拒绝，相关6通过。两包build、分层18、全量721 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。ROS TCP与浏览器此分支仍待联调，目标未完成；无硬件操作。
+
+2026-09-19 TCP实际ROS无相机采样验证：真实Dashboard集成测试停止图像发布并清空缓存，TCP会话只用动态TF稳定采样成功，样本不含camera_to_marker；网页恢复会话回填mode和参数，避免显示默认手眼。相关3通过；验收清单更新以区分已实现和待验证，不标目标完成。
+
+2026-09-19 标定超时与页面隔离：CalibrationClient保留未完成future，超时后再次请求PENDING不重复下发，结束后可刷新；SSE压缩为session_id/command/revision/结果，不广播全部数据集；页面仅显示当前会话进度。相关8通过，dashboard build、分层18、全量722 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。剩余浏览器新页面与MuJoCo组合验收仍待完成，目标active，无硬件操作。
+
+2026-09-19 canonical MuJoCo运动学→手眼求解验证新增：配置third_party/rebotarm_mujoco_venv加载当前scene，20组限位内FK姿态分14训练6验证，恢复已知外参，验证最大位置误差<1e-7m。仅模型/求解组合，非渲染/网页/硬件闭环。全量723 passed/7 skipped/1既有MuJoCo默认解释器断言，分层18、compileall/diff通过；生产代码无修改无需重建。验收缺口继续保留，目标active。
+
+2026-09-19 连续采样稳定窗口修复：新增0.2s有效样本间隔门，断流/回退/移动/质量失败重置，等待新帧和TF允许重试；保存稳定样本数/时长。相关4通过含真实ROS手眼/TCP采样；calibration build、分层18、全量725 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。目标仍未完成，未触碰真机。
+
+2026-09-19 最新浏览器实际ROS联调：domain183实际Dashboard+capture+合成图像/TF，快照视觉显示、TF检查、手眼采样1项、TCP创建采样1项及刷新模式恢复通过。浏览器下载事件5秒未确认，不计文件下载验收通过，保留Blob内容测试证据。临时tab/server停止，无真实硬件连接。仍有下载/多姿态整体闭环等验收缺口，目标active。
+
+2026-09-19 标定服务器附件下载：新增现有HTTP GET export，校验session_id经ROS读取持久会话，attachment/no-store响应；页面提供服务器保存数据包与当前快照两个导出。实际HTTP/ROS比较附件样本一致、非法ID拒绝；相关4通过，dashboard build/分层18/全量725 passed,7 skipped,1既有MuJoCo失败/compileall/diff通过。浏览器下载完成信号仍待复查，目标未完成。
+
+2026-09-19 TCP完整实际HTTP/ROS会话通过：动态TF12姿态，经6训练6验证真实稳定采样、求解、人工接受、磁盘新实例恢复、附件导出，恢复已知偏移1e-6m容差，revision14/deployed=false。测试不注入样本，无相机/硬件。全量725 passed/7 skipped/1既有MuJoCo失败，分层18/compileall/diff通过，纯测试修改无需重建；手眼多姿态图像完整链等仍待完成。
+
+2026-09-19 手眼透视图像全链通过：真实Dashboard HTTP/ROS接收16姿态ArUco投影图像+对应动态TF，经PnP/稳定采样10训练6验证→求解→人工接受，恢复已知相机平移误差<5mm，deployed=false。不注入样本，不接硬件。完整测试2通过，全量725 passed/7 skipped/1既有MuJoCo失败，分层18/compileall/diff通过。测试变更不需构建。仍需剩余验收项收口，目标active。
+
+2026-09-19 下载/SSE验收：实际in-app浏览器点击服务器保存数据包链接成功收到download事件（不同于旧Blob未确认），页面保持calibration；HTTP/ROS附件内容一致性已有测试。新增两个SSE并发连接、断开/重连最新revision和status可用测试通过。全量726 passed/7 skipped/1既有MuJoCo失败，分层18/compileall/diff通过；测试临时ROS进程已停止，无硬件。更新验收清单，目标继续最终审计。
+
+2026-09-19 网页标定收口文档：新增docs/calibration_web_usage.md覆盖现有Dashboard入口、独立只读节点、避免重复控制器、手眼/TCP采样/独立验证、显式重力操作、超时恢复、服务器导出与关闭不失能。同步calibration/dashboard README与架构ROS边界；安装空间四入口、离线CLI help、工作台calibration参数解析验证通过，layering18/diff通过。此轮为文档，无生产代码变化。目标保留待完成审计项。
+
+2026-09-19 标定会话采集条件冻结：SessionStore入库对照首样本CameraInfo/provenance，内参/阈值/源码版本变化及来源缺失混入均拒绝；跨训练验证与重启恢复保留，失败不改数据。新增3个场景及完整ROS流程相关7通过；calibration build，分层18，全量729 passed/7 skipped/1既有MuJoCo失败，compileall/diff通过。无真机操作，目标继续最终验收。
+
+2026-09-19 会话原型收口：删除本目标早期未接线CalibrationSession及专属测试，正式状态统一SessionStore；新增失败报告不能接受、reopen失效旧结果、返回值隔离测试。calibration重建后旧模块find_spec=None，store可导入。相关7通过，分层18、全量729 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。目标仍需最终证据收口，无真机操作。
+
+2026-09-19 标定完整证据哈希修复：手眼/TCP统一覆盖完整样本含内参/时戳/采集来源，排除旧报告/状态/请求历史；另存solver_provenance源码/库版本。测试7通过验证证据变则哈希变、工作流状态不影响。calibration build、分层18、全量730 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。目标继续收口，无硬件操作。
+
+2026-09-19 报告离群诊断与浏览器收口：median/MAD加分辨率下限和绝对门标记异常，不删样本不改变门；真实浏览器使用验证样本15偏移50mm的报告，五方法RMS20.412mm/最大50mm、验证失败/未部署与离群样本可读。相关8通过，两包已重建；最新全量731 passed/7 skipped/1既有MuJoCo失败，分层18/compileall/diff通过，临时服务tab关闭。剩余MuJoCo与图像链组合证据尚需收口，目标active，无硬件。
+
+2026-09-19 MuJoCo投影成像组合测试：canonical末端FK24姿态→1920x1440透视图像→实际ArUco/PnP→16训练8验证求解通过，平移恢复<5mm。初始低分辨率最近邻失败，修正生成器物理外边缘与插值，未放宽生产门。不是光照/遮挡渲染验收。全量732 passed/7 skipped/1既有MuJoCo解释器失败，分层18/compileall/diff通过；仅测试/证据变更无需重建，无真机。
+
+2026-09-19 完成审计补话题选择：网页会话支持image_topic/camera_info_topic，ROS校验名称并切换订阅清缓存、代次拒绝旧回调；实际alternate话题采样及切回默认完整手眼链通过。发现并修正_camera_subscriptions与ROS内部成员避免重名。两包build、分层18、全量732 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过，无硬件。目标继续剩余契约/证据收口。
+
+2026-09-19 标定会话审计补齐：created_at/updated_at UTC、跨训练验证sample_index/recorded_at、每次变更audit含revision/request_id/operation/接受操作者；幂等重试不重复记录。相关10通过含完整ROS链；calibration build、分层18、全量733 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。无真机操作，目标继续证据收口。
+
+2026-09-19 最终契约审计：HTTP标定响应补schema_version/session_id/state/revision，ROS失败回读持久状态（无相机capture失败仍active/revision0），不声称失败已修改会话；接口注释补tf_check并文档映射规划命令名。相关8通过，三包build、分层18、全量734 passed/7 skipped/1既有MuJoCo失败、compileall/diff通过。无硬件，目标继续最终证据收口。
+
+2026-09-19 网页标定软件目标完成：最终将canonical MuJoCo FK→24张投影图像→ArUco/PnP数据载入隔离会话，实际浏览器通过真实Dashboard/ROS求解16训练8验证，PARK验证位置RMS0.374mm/最大0.710mm；人工software-audit确认、服务器附件下载事件、刷新恢复通过，磁盘accepted/revision26/deployed=false。临时tab与ROS进程退出0。完整验收矩阵在docs/calibration_acceptance.md，操作说明calibration_web_usage.md。最后完整回归734 passed/7 skipped/1既有MuJoCo默认解释器失败，分层18/build/compileall/diff通过；回归后仅证据文档变化。保留用户修改，未提交推送。真实相机/重力补偿/物理精度未验收，另需现场授权，不影响本目标软件完成定义。
+
+2026-09-20 arm_status恢复发布修复：视觉入口启动负载可让首次反馈晚于0.15s并锁存255/stale，后续joint_states和单关节反馈虽恢复status0，成功路径却未刷新TRANSIENT_LOCAL arm_status。JointStatePublisher现于每次成功反馈批次后同步publish_status，并新增启动stale后恢复回归测试。rebotarmcontroller重建通过，定向127、分层18、全量736 passed/7 skipped、compileall/diff通过；失能只读真机复核arm_status六轴0/error_codes空、joint_states约100Hz，未使能未运动。
+
+2026-09-20 arm_status发布节流优化：成功反馈路径改为状态内容变化立即发布，状态不变时由100Hz反馈定时器提供0.2s/5Hz低频心跳；服务/动作状态变更仍用force即时发布。新增变化、恢复、心跳与使能状态测试。rebotarmcontroller重建通过，定向128、分层18、全量737 passed/7 skipped、compileall/diff通过；未启动真机。
+
+2026-09-20 视觉execute计划窗口：现场filtered plan到达年龄约2.8s，高于原1s默认并被安全门拒绝；visual_grasp_system对execute的默认max_plan_age_sec改为4.0s，plan_only保持10.0s，仍保留采集原始时间戳而不重打时间。bringup重建、visual wiring73、分层18、全量737 passed/7 skipped、compileall/diff通过；未执行真机运动。
+
+2026-09-21 视觉预抓取几何简化：彻底删除固定5cm base-Z预抓取偏移及其ROS/launch/YAML接口；visual_grasp_system默认preserve_candidate_pose下，pregrasp仅沿GraspNet候选TCP局部X接近轴反向退让6cm，保留base_link下0.04m绝对Z下限。抓后safe_retreat仍独立使用归一化[-1,0,0.5]固定基座安全方向。视觉定向109、分层18、全量737 passed/7 skipped、compileall/diff、vision/bringup重建与安装参数检查通过；未启动真机。
+
+2026-09-21 抓后撤退与接近路径统一：删除独立垂直lift阶段及固定safe_retreat_axis/min_lift/视觉抬升验证接口；执行序列改为pregrasp→grasp→close/contact+closure验证→沿实际grasp到pregrasp方向撤退6cm。撤退目标仍逐阶段走MoveIt规划、碰撞预检与跟踪门；pregrasp 0.04m绝对Z下限保留。定向111、分层18、全量738 passed/7 skipped、compileall/diff、vision/bringup重建及安装参数清理检查通过；未启动真机。
+
+2026-09-21 视觉夹取第四级运动档：普通移动/最终接近/抓后撤退速度缩放默认调整为0.15/0.05/0.10，全阶段加速度缩放为0.10；四项由visual_grasp_system公开launch参数统一传给视觉执行器与PoseExecutionNode，节点独立启动默认值同步。vision/bringup重建成功，安装入口show-args确认默认值，全量739 passed/7 skipped、分层18、compileall通过；仅完成软件验证，尚未进行第四级真机安全验收。
+
+2026-09-21 视觉夹取暂定上限档：按用户要求将普通移动/最终接近/抓后撤退速度缩放默认提高到0.25/0.08/0.15，全阶段加速度缩放提高到0.12；joint_limits未改，四项仍可由visual_grasp_system启动参数覆盖回退。vision/bringup重建成功，安装入口show-args确认，全量739 passed/7 skipped、分层18、compileall通过；未启动真机，暂定上限尚未完成真机安全验收。用户维护的docs/USER_MAINTAINED_TODO.md未修改。

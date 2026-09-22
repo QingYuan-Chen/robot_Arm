@@ -89,10 +89,18 @@ def test_visual_grasp_launch_exposes_adaptive_gripper_and_retreat_params():
         "gripper_grasp_velocity_threshold",
         "gripper_grasp_min_closure_distance_m",
         "safe_retreat_enabled",
-        "safe_retreat_min_lift_z_m",
         "safe_retreat_distance_m",
-        "safe_retreat_axis_xyz",
         "safe_home_after_grasp",
     ):
         assert f'DeclareLaunchArgument("{name}"' in text
         assert f'"{name}": {name}' in text
+
+    for retired_name in (
+        "lift_z_m",
+        "candidate_safe_lift_min_z_m",
+        "safe_retreat_min_lift_z_m",
+        "safe_retreat_axis_xyz",
+        "visual_lift_check_enabled",
+        "visual_lift_min_delta_m",
+    ):
+        assert retired_name not in text

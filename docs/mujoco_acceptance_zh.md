@@ -108,7 +108,7 @@ joint4/joint5/joint6 motor forcerange = -12.5 12.5
 ```bash
 cd ~/robotarm_ros2_mujoco_acceptance
 source /opt/ros/jazzy/setup.bash
-source ~/robotarm_ros2/.venv-mujoco-ros/bin/activate
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 export PYTHONPATH=src/rebotarm_simulation
 ```
 
@@ -241,7 +241,7 @@ forces 不全为 0
 ```bash
 cd ~/robotarm_ros2_mujoco_acceptance
 source /opt/ros/jazzy/setup.bash
-source ~/robotarm_ros2/.venv-mujoco-ros/bin/activate
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 python -m colcon build --symlink-install --packages-select rebotarm_simulation
 source install/setup.bash
 ```
@@ -256,7 +256,7 @@ ros2 launch rebotarm_simulation mujoco_sim.launch.py
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/robotarm_ros2/.venv-mujoco-ros/bin/activate
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 cd ~/robotarm_ros2_mujoco_acceptance
 source install/setup.bash
 

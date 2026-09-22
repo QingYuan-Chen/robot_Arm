@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -10,33 +9,29 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = ROOT / "src" / "rebotarm_interactive_control"
-if str(PACKAGE_ROOT) not in sys.path:
-    sys.path.insert(0, str(PACKAGE_ROOT))
-
-from rebotarm_interactive_control.status_panel_state import (  # type: ignore[import-not-found]
+from rebotarm_dashboard.status_panel_state import (
     StatusSnapshot,
     TeleopStatusStore,
     clamp_preview_value,
     encode_sse_event,
     format_angle_readout,
 )
-from rebotarm_interactive_control.status_panel_api import (  # type: ignore[import-not-found]
+from rebotarm_dashboard.status_panel_api import (
     StatusPanelApiError,
     dispatch_post_request,
     is_allowed_post_path,
     post_paths,
 )
-from rebotarm_interactive_control.arm_command_api import (  # type: ignore[import-not-found]
+from rebotarm_dashboard.arm_command_api import (
     arm_command_is_replay_locked,
     normalize_arm_command,
     should_stop_trajectory_before_arm_command,
     status_state,
 )
-from rebotarm_interactive_control.trajectory_safety_monitor import (  # type: ignore[import-not-found]
+from rebotarm_motion.trajectory_safety_monitor import (
     evaluate_replay_tracking,
 )
-from rebotarm_interactive_control.teach_recording import (  # type: ignore[import-not-found]
+from rebotarm_teach.teach_recording import (
     ReplayStartBand,
     TeachSample,
     analyze_teach_trajectory,
@@ -64,12 +59,12 @@ from rebotarm_interactive_control.teach_recording import (  # type: ignore[impor
     validate_teach_replay_stop_request,
     write_prepared_teach_record,
 )
-from rebotarm_interactive_control.teleop_core import (  # type: ignore[import-not-found]
+from rebotarm_teleop.teleop_core import (
     KeyboardCommandMapper,
     TeleopTargetPlanner,
     validate_web_keyboard_command,
 )
-from rebotarm_interactive_control.web_robot_assets import (  # type: ignore[import-not-found]
+from rebotarm_dashboard.web_robot_assets import (
     DEFAULT_GRIPPER_LIMITS_M,
     clamp_gripper_opening,
     gripper_opening_to_finger_joint_positions,
@@ -81,7 +76,7 @@ from rebotarm_interactive_control.web_robot_assets import (  # type: ignore[impo
     rewrite_package_mesh_uris,
     safe_mesh_path,
 )
-from rebotarm_interactive_control.web_execute import (  # type: ignore[import-not-found]
+from rebotarm_teleop.web_execute import (
     interpolate_joint_points,
     validate_web_gripper_request,
     validate_web_execute_request,
@@ -959,7 +954,7 @@ class TeachRecordingCoreTests(unittest.TestCase):
             TeachSample(0.2, ("joint1",), (0.2,), (), (), {}, "GRAVITY_COMP"),
         ]
 
-        with patch("rebotarm_interactive_control.trajectory_time_parameterization.ruckig_python_available", return_value=True):
+        with patch("rebotarm_motion.trajectory_time_parameterization.ruckig_python_available", return_value=True):
             prepared = prepare_teach_replay_samples(
                 samples,
                 retime_enabled=True,
@@ -1040,7 +1035,7 @@ class TeachRecordingCoreTests(unittest.TestCase):
 
     def test_interpolate_joint_positions_rejects_length_mismatch(self) -> None:
         with self.assertRaises(ValueError):
-            from rebotarm_interactive_control.teach_recording import interpolate_joint_positions
+            from rebotarm_teach.teach_recording import interpolate_joint_positions
 
             interpolate_joint_positions(
                 current_positions=(0.0, 1.0),
@@ -1533,6 +1528,17 @@ const fetch = () => {fetchCalls++; throw Error('Unexpected request');};
 '''
     result = subprocess.run([node, "-e", script], text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_dashboard_robot_view_uses_horizontal_ground_grid_and_above_ground_camera():
+    html = (
+        ROOT
+        / "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "camera.position.set(0.72, 0.56, 0.72);" in html
+    assert "controls.target.set(0, 0.22, 0);" in html
+    assert "grid.rotation.x" not in html
 
 
 if __name__ == "__main__":

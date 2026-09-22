@@ -236,6 +236,25 @@ def test_visual_marker_builder_shows_tcp_approach_and_gripper_open_axis():
     assert by_ns["visual_gripper_open_axis"].points[1].y == pytest.approx(0.02)
 
 
+def test_preview_markers_hide_object_shape_center_and_label():
+    from rebotarm_vision.visual_grasp_marker_node import VisualGraspMarkerBuilder
+
+    plan = _plan()
+    markers = VisualGraspMarkerBuilder(
+        show_object_marker=False,
+        show_object_center_marker=False,
+        show_object_label=False,
+    ).build(
+        plan, frame_id="base_link", stamp=types.SimpleNamespace(sec=0, nanosec=0)
+    )
+    by_ns = {marker.ns: marker for marker in markers.markers}
+
+    assert "visual_object" not in by_ns
+    assert "visual_object_center" not in by_ns
+    assert "visual_object_label" not in by_ns
+    assert by_ns["visual_grasp_tcp"].pose.position.z == pytest.approx(0.30)
+
+
 def test_visual_marker_builder_deletes_markers_for_invalid_plan():
     from rebotarm_msgs.msg import GraspPlan
     from visualization_msgs.msg import Marker

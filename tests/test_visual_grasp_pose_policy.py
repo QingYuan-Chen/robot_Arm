@@ -20,7 +20,6 @@ def test_base_axis_policy_uses_visual_position_but_fixed_reachable_orientation()
         pregrasp_distance_m=0.08,
         tcp_offset_xyz=(-0.04, 0.0, 0.0),
         target_base_offset_xyz=(0.0, 0.01, 0.0),
-        pregrasp_z_offset_m=0.05,
         grasp_z_offset_m=0.0,
     )
 
@@ -31,7 +30,7 @@ def test_base_axis_policy_uses_visual_position_but_fixed_reachable_orientation()
 
     assert grasp.position == pytest.approx((0.48, -0.017, 0.229))
     assert grasp.orientation == pytest.approx((0.0, 0.0, 0.0, 1.0))
-    assert pregrasp.position == pytest.approx((0.40, -0.017, 0.279))
+    assert pregrasp.position == pytest.approx((0.40, -0.017, 0.229))
     assert pregrasp.orientation == grasp.orientation
 
 
@@ -44,7 +43,6 @@ def test_base_axis_policy_normalizes_approach_axis():
         pregrasp_distance_m=0.10,
         tcp_offset_xyz=(0.0, 0.0, 0.0),
         target_base_offset_xyz=(0.0, 0.0, 0.0),
-        pregrasp_z_offset_m=0.0,
         grasp_z_offset_m=0.0,
     )
 
@@ -80,7 +78,6 @@ def test_official_geometry_policy_uses_candidate_tcp_orientation_for_pregrasp_ax
         pregrasp_distance_m=0.08,
         tcp_offset_xyz=(0.0, 0.0, 0.0),
         target_base_offset_xyz=(0.0, 0.0, 0.0),
-        pregrasp_z_offset_m=0.0,
         grasp_z_offset_m=0.0,
     )
 
@@ -108,7 +105,6 @@ def test_hybrid_geometry_policy_uses_base_axis_pregrasp_with_candidate_yaw():
         pregrasp_distance_m=0.08,
         tcp_offset_xyz=(0.0, 0.0, 0.0),
         target_base_offset_xyz=(0.0, 0.0, 0.0),
-        pregrasp_z_offset_m=0.05,
         grasp_z_offset_m=0.0,
     )
 
@@ -119,7 +115,7 @@ def test_hybrid_geometry_policy_uses_base_axis_pregrasp_with_candidate_yaw():
     )
 
     assert grasp.position == pytest.approx((0.44, -0.02, 0.18))
-    assert pregrasp.position == pytest.approx((0.36, -0.02, 0.23))
+    assert pregrasp.position == pytest.approx((0.36, -0.02, 0.18))
     assert grasp.orientation == pytest.approx((0.0, 0.0, 0.70710678, 0.70710678))
     assert pregrasp.orientation == grasp.orientation
 
@@ -134,7 +130,6 @@ def test_preserve_candidate_pose_keeps_graspnet_tcp_orientation_and_uses_end_lin
         pregrasp_distance_m=0.08,
         tcp_offset_xyz=(0.0, 0.0, 0.0),
         target_base_offset_xyz=(0.0, 0.0, 0.0),
-        pregrasp_z_offset_m=0.0,
         grasp_z_offset_m=0.0,
     )
 

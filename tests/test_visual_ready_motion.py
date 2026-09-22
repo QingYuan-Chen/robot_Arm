@@ -4,11 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from rebotarm_motion.visual_ready_node import VisualReadyNode
-from rebotarm_vision.visual_ready_node import VisualReadyNode as LegacyVisualReadyNode
 
 
-def test_legacy_visual_ready_entrypoint_resolves_to_motion_owner():
-    assert LegacyVisualReadyNode is VisualReadyNode
+def test_visual_ready_entrypoint_is_owned_by_motion_package():
     assert VisualReadyNode.__module__ == "rebotarm_motion.visual_ready_node"
 
 
@@ -26,8 +24,7 @@ def test_ready_motion_preserves_endpoints_duration_and_smoothstep():
 
 def test_visual_ready_launches_use_motion_package():
     root = Path(__file__).resolve().parents[1]
-    for name in ("visual_grasp_system.launch.py", "visual_ready_hold.launch.py"):
-        source = (root / "src/rebotarm_bringup/launch" / name).read_text()
-        for prefix in source.split('executable="rebotarm_visual_ready"')[:-1]:
-            assert 'package="rebotarm_motion"' in prefix[-90:]
-        assert '[FindPackageShare("rebotarm_motion"), "config", "visual_ready.yaml"]' in source
+    source = (root / "src/rebotarm_bringup/launch" / "visual_grasp_system.launch.py").read_text()
+    for prefix in source.split('executable="rebotarm_visual_ready"')[:-1]:
+        assert 'package="rebotarm_motion"' in prefix[-90:]
+    assert '[FindPackageShare("rebotarm_motion"), "config", "visual_ready.yaml"]' in source

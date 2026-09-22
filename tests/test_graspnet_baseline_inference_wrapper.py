@@ -55,32 +55,6 @@ def test_graspnet_wrapper_converts_graspnet_array_rows_to_json_candidates():
     assert np.asarray(candidates[0]["rotation_matrix"]) == pytest.approx(np.eye(3))
 
 
-def test_grasp_candidates_must_lie_inside_independent_object_cloud_geometry():
-    module = _load_wrapper()
-    rows = np.zeros((2, 17), dtype=np.float32)
-    rows[:, 4:13] = np.eye(3, dtype=np.float32).reshape(-1)
-    rows[0, 13:16] = [0.01, -0.01, 0.40]
-    rows[1, 13:16] = [0.01, -0.01, 0.20]
-    object_points = np.asarray(
-        [
-            [-0.02, -0.03, 0.37],
-            [0.03, -0.03, 0.37],
-            [-0.02, 0.02, 0.43],
-            [0.03, 0.02, 0.43],
-        ],
-        dtype=np.float32,
-    )
-
-    filtered = module.filter_grasp_array_by_object_cloud_geometry(
-        rows,
-        object_points=object_points,
-        margin_m=0.01,
-    )
-
-    assert filtered.shape == (1, 17)
-    assert filtered[0, 13:16] == pytest.approx([0.01, -0.01, 0.40])
-
-
 def test_graspnet_wrapper_builds_scene_cloud_from_full_depth_image():
     module = _load_wrapper()
     depth_mm = np.array(

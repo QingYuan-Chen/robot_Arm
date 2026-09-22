@@ -12,9 +12,25 @@ def test_upstream_mujoco_entrypoint_and_launch_are_installed():
 
     assert "rebotarm_mujoco_node = rebotarm_simulation.mujoco_ros_node:main" in setup_text
     assert "rebotarm_mujoco_adapter = rebotarm_simulation.mujoco_ros_adapter_node:main" not in setup_text
-    assert 'install_resources("launch/*.launch.py")' in setup_text
+    assert 'glob("launch/*.launch.py")' in setup_text
     assert "<exec_depend>control_msgs</exec_depend>" in package_text
     assert "<exec_depend>rebotarm_msgs</exec_depend>" in package_text
+
+
+def test_mujoco_specialized_launches_select_desktop_or_headless_mode():
+    desktop_text = (
+        ROOT / "src/rebotarm_simulation/launch/mujoco_rviz_viewer.launch.py"
+    ).read_text(encoding="utf-8")
+    headless_text = (
+        ROOT / "src/rebotarm_simulation/launch/mujoco_headless.launch.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"use_rviz": "true"' in desktop_text
+    assert '"use_mujoco_viewer": "true"' in desktop_text
+    assert '"use_rviz": "false"' in headless_text
+    assert '"use_mujoco_viewer": "false"' in headless_text
+    assert desktop_text.count("mujoco_moveit_sim.launch.py") == 1
+    assert headless_text.count("mujoco_moveit_sim.launch.py") == 1
 
 
 def test_mujoco_only_launch_accepts_namespace_and_initial_state_overrides():
@@ -70,7 +86,11 @@ def test_mujoco_moveit_launch_starts_upstream_node_and_moveit_without_fake_joint
     assert "simulation_backend" not in launch_text
     assert 'demo.launch.py' in launch_text
     assert '"use_fake_joint_states": "false"' in launch_text
-    assert 'DeclareLaunchArgument("python_executable"' in launch_text
+    assert '"show_viewer": use_mujoco_viewer' in launch_text
+    assert 'DeclareLaunchArgument(' in launch_text
+    assert '"use_mujoco_viewer"' in launch_text
+    assert 'DeclareLaunchArgument(' in launch_text
+    assert '"python_executable"' in launch_text
     assert "prefix=python_executable" in launch_text
 
 
@@ -103,3 +123,6 @@ def test_active_mujoco_cli_does_not_dispatch_to_current_legacy_runtime():
     assert "_dispatch_legacy_command" not in cli_text
     assert "mujoco_legacy_cli" not in cli_text
     assert "rebotarm_mujoco_legacy_cli" not in setup_text
+    assert not (
+        ROOT / "src/rebotarm_simulation/rebotarm_simulation/mujoco_legacy_cli.py"
+    ).exists()

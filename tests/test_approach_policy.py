@@ -12,7 +12,7 @@ if str(VISION_SRC) not in sys.path:
     sys.path.insert(0, str(VISION_SRC))
 
 
-def test_approach_policy_builds_pregrasp_by_retreating_along_approach_axis_and_lifting():
+def test_approach_policy_builds_pregrasp_by_retreating_along_approach_axis():
     from rebotarm_vision.approach_policy import ApproachPolicyConfig, build_pregrasp_tcp
 
     pregrasp = build_pregrasp_tcp(
@@ -20,11 +20,10 @@ def test_approach_policy_builds_pregrasp_by_retreating_along_approach_axis_and_l
         approach_axis_xyz=(1.0, 0.0, 0.0),
         config=ApproachPolicyConfig(
             pregrasp_distance_m=0.08,
-            pregrasp_z_offset_m=0.05,
         ),
     )
 
-    assert pregrasp == pytest.approx((0.34, 0.03, 0.105))
+    assert pregrasp == pytest.approx((0.34, 0.03, 0.055))
 
 
 def test_approach_policy_can_raise_flat_pregrasp_to_minimum_height_without_changing_grasp():
@@ -35,7 +34,6 @@ def test_approach_policy_can_raise_flat_pregrasp_to_minimum_height_without_chang
         approach_axis_xyz=(0.5, 0.0, -0.8660254),
         config=ApproachPolicyConfig(
             pregrasp_distance_m=0.06,
-            pregrasp_z_offset_m=0.0,
             pregrasp_min_z_m=0.12,
         ),
     )

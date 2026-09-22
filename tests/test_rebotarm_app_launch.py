@@ -20,7 +20,7 @@ def test_rebotarm_app_launch_exposes_simple_modes_and_profiles() -> None:
     assert 'DeclareLaunchArgument("profile"' not in launch_text
     assert 'DeclareLaunchArgument("name", default_value="teach_record")' in launch_text
     assert "moveit_hardware.launch.py" in launch_text
-    assert 'executable="TeachRecorderNode"' not in launch_text
+    assert 'executable="TeachRecorderNode"' in launch_text
     assert 'executable="TeachReplayNode"' not in launch_text
     assert "_idle_recorder_node(" not in launch_text
     assert "Teach Trajectory card" in launch_text
@@ -42,7 +42,7 @@ def test_rebotarm_app_launch_exposes_simple_modes_and_profiles() -> None:
     assert '"use_rviz": "false"' in launch_text
     assert 'arguments=["-d", web_rviz_config]' in launch_text
     assert '"web_teleop_status.rviz"' in launch_text
-    assert "_keyboard_node(" in launch_text
+    assert 'executable="TeleopKeyboardNode"' not in launch_text
     assert 'safe_name = os.path.basename(safe_name.replace("\\\\", "/")) or "teach_record"' in launch_text
     assert 'return f"teleop_records/{safe_name}"' in launch_text
 
@@ -60,52 +60,104 @@ def test_web_teleop_rviz_is_robot_status_only() -> None:
     assert "EndEffectorTarget" not in rviz_text
 
 
-def test_replay_profiles_keep_safe_defaults_in_config() -> None:
-    profiles = yaml.safe_load(
-        _read("src/rebotarm_bringup/config/replay_profiles.yaml")
+def test_operator_configs_are_split_by_consumer() -> None:
+    common = yaml.safe_load(_read("src/rebotarm_bringup/config/operator_common.yaml"))
+    keyboard = yaml.safe_load(_read("src/rebotarm_bringup/config/keyboard_control.yaml"))
+    web = yaml.safe_load(_read("src/rebotarm_bringup/config/web_teleop.yaml"))
+    teach = yaml.safe_load(_read("src/rebotarm_bringup/config/teach_control.yaml"))
+
+    common_params = common["/**"]["ros__parameters"]
+    keyboard_params = keyboard["/**"]["ros__parameters"]
+    web_params = web["/**"]["ros__parameters"]
+    teach_params = teach["/**"]["ros__parameters"]
+
+    assert "deadman_required" in keyboard_params
+    assert "deadman_key" in keyboard_params
+    assert not (set(keyboard_params) & set(teach_params))
+    assert "web_execute_enabled" in web_params
+    assert "web_keyboard_default_step_rad" in web_params
+    assert "replay_monitor_enabled" in teach_params
+    assert "collision_check_enabled" in teach_params
+    assert "joint_names" in common_params
+    assert "joint_lower_limits" in common_params
+
+    assert "deadman_required" not in web_params
+    assert "deadman_key" not in web_params
+    assert "web_execute_enabled" not in teach_params
+
+    assert teach_params["sample_rate_hz"] == 150.0
+    assert teach_params["filter_sample_rate_hz"] == 150.0
+    assert teach_params["resample_rate_hz"] == 150.0
+
+    hardware_launch = _read(
+        "src/rebotarm_bringup/launch/hardware_controller.launch.py"
     )
-
-    assert profiles["default_profile"] == "safe"
-    assert {"safe", "normal", "large"}.issubset(profiles["profiles"])
-
-    safe = profiles["profiles"]["safe"]
-    assert safe["dry_run"] is False
-    assert safe["speed"] <= 0.2
-    assert safe["collision_check_enabled"] is True
-    assert safe["use_moveit_start_align"] is True
-    assert safe["max_replay_velocity_rad_s"] <= 3.0
-    assert safe["max_replay_acceleration_rad_s2"] <= 5.0
-    assert safe["max_replay_jerk_rad_s3"] <= 30.0
-
-    large = profiles["profiles"]["large"]
-    assert large["speed"] <= profiles["profiles"]["normal"]["speed"]
-    assert large["large_motion_max_speed"] <= 1.0
-
-
-def test_teach_recording_uses_higher_sampling_defaults() -> None:
-    teleop_config = yaml.safe_load(
-        _read("src/rebotarm_bringup/config/teleop_control.yaml")
-    )
-    params = teleop_config["/**"]["ros__parameters"]
-
-    assert params["sample_rate_hz"] == 150.0
-    assert params["filter_sample_rate_hz"] == 150.0
-    assert params["resample_rate_hz"] == 150.0
+    assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in hardware_launch
 
     for launch_path in (
-        "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
-        "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
         "src/rebotarm_bringup/launch/bringup.launch.py",
-        "src/rebotarm_bringup/launch/interactive_basic.launch.py",
         "src/rebotarm_bringup/launch/teleop_keyboard.launch.py",
     ):
-        launch_text = _read(launch_path)
-        assert 'DeclareLaunchArgument("joint_state_rate", default_value="100.0")' in launch_text
+        assert "hardware_controller.launch.py" in _read(launch_path)
+    moveit_hardware = _read(
+        "src/rebotarm_bringup/launch/moveit_hardware.launch.py"
+    )
+    assert "interactive_system.launch.py" in moveit_hardware
+    assert "hardware_controller.launch.py" not in moveit_hardware
 
-    driver_params = yaml.safe_load(_read("src/rebotarm_bringup/config/driver_params.yaml"))
-    assert driver_params["reBotArmController"]["ros__parameters"]["joint_state_rate"] == 100.0
 
+def test_launches_reference_consumer_specific_operator_configs() -> None:
+    keyboard = _read("src/rebotarm_bringup/launch/teleop_keyboard.launch.py")
+    system = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
+    app = _read("src/rebotarm_bringup/launch/rebotarm_app.launch.py")
+
+    assert "keyboard_control.yaml" in keyboard
+    assert "operator_common.yaml" in keyboard
+    assert "keyboard_control.yaml" in system
+    for text in (system, app):
+        assert "web_teleop.yaml" in text
+        assert "teach_control.yaml" in text
+        assert "operator_common.yaml" in text
+    for text in (keyboard, system, app):
+        assert "teleop_control.yaml" not in text
+
+
+def test_keyboard_no_hardware_mode_uses_one_simulated_trajectory_backend() -> None:
+    keyboard = _read("src/rebotarm_bringup/launch/teleop_keyboard.launch.py")
+
+    assert keyboard.count('executable="rebotarm_sim_trajectory_controller"') == 1
+    assert "condition=UnlessCondition(use_hardware)" in keyboard
+    assert 'executable="joint_state_publisher"' not in keyboard
+    assert 'executable="reBotArmController"' not in keyboard
+    assert "hardware_controller.launch.py" in keyboard
+    assert 'parameters=[{"arm_namespace": arm_namespace}]' in keyboard
+
+
+def test_teleop_system_forwards_execution_mode_to_dashboard() -> None:
+    system = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
+
+    assert 'DeclareLaunchArgument("execution_mode", default_value="execute")' in system
+    assert 'execution_mode = LaunchConfiguration("execution_mode")' in system
+    assert '"execution_mode": execution_mode' in system
+    assert '"web_execute_enabled": web_execute_enabled' in system
+
+
+def test_dashboard_hides_and_blocks_hardware_only_commands_in_simulation() -> None:
+    node = _read(
+        "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py"
+    )
+    html = _read(
+        "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html"
+    )
+
+    assert '"use_hardware": bool(self.get_parameter("use_hardware").value)' in node
+    assert 'if not self._use_hardware:' in node
+    assert "hardware arm command unavailable in simulation mode" in node
+    assert 'id="hardware-arm-command-row"' in html
+    assert "const useHardware = panelConfig.use_hardware === true;" in html
+    assert "hardwareArmCommandRow.hidden = !useHardware" in html
+    assert "button.disabled = !useHardware ||" in html
 
 def test_common_commands_document_recommends_one_entrypoint() -> None:
     doc = _read("docs/rebotarm_common_commands.md")
@@ -126,7 +178,8 @@ def test_feature_commands_document_web_teleop_next_to_rviz_drag() -> None:
 
     assert "## RViz MoveIt 末端拖动" in doc
     assert "## 网页遥操作" in doc
-    assert "ros2 launch rebotarm_bringup rviz_ee_drag_real.launch.py" in doc
+    assert "ros2 launch rebotarm_bringup moveit_hardware.launch.py" in doc
+    assert "rviz_ee_drag_real.launch.py" in doc
     assert "ros2 launch rebotarm_bringup rebotarm_app.launch.py" in doc
     assert "channel:=auto" in doc
     assert "网页关节 Preview / Execute / Stop" in doc

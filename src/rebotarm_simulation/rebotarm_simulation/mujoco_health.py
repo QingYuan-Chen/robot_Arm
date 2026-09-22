@@ -10,6 +10,7 @@ import sys
 from typing import Callable
 
 from .mujoco_sim import RebotArmMujoco
+from .mujoco_legacy_health import check_model_health
 
 
 EXPECTED_JOINT_COUNT = 8

@@ -23,7 +23,7 @@
 
 ```bash
 cd ~/robotarm_ros2_mujoco_acceptance
-source ~/robotarm_ros2/.venv-mujoco-ros/bin/activate
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 export PYTHONPATH="$PWD/src/rebotarm_simulation:${PYTHONPATH:-}"
 mkdir -p logs/sim2real
 ```

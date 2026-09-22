@@ -1,51 +1,66 @@
-import os
+# 真机 MoveIt 启动入口：interactive_system.launch.py 的真机专用包装。
+#
+# 本文件不复制硬件控制器、状态发布器或 MoveIt 的节点定义。
+# interactive_system.launch.py 负责共享实现，本文件只固定选择真机、MoveIt、
+# 真实关节状态和唯一状态源。启动后仍保持失能，执行前须显式调用
+# /rebotarm/enable。
 
-import yaml
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
-def load_yaml(package_name, relative_path):
-    package_path = get_package_share_directory(package_name)
-    absolute_path = os.path.join(package_path, relative_path)
-    with open(absolute_path, "r", encoding="utf-8") as file:
-        return yaml.safe_load(file)
-
-
 def generate_launch_description():
+    """固定使用真机后端的 MoveIt 包装入口。"""
     bringup_share = FindPackageShare("rebotarm_bringup")
-    moveit_share = FindPackageShare("rebotarm_moveit_config")
+    interactive_launch = PathJoinSubstitution(
+        [bringup_share, "launch", "interactive_system.launch.py"]
+    )
+    interactive_rviz = PathJoinSubstitution(
+        [bringup_share, "rviz", "interactive_system.rviz"]
+    )
 
-    arm_config = LaunchConfiguration("arm_config")
-    gripper_config = LaunchConfiguration("gripper_config")
-    arm_namespace = LaunchConfiguration("arm_namespace")
-    channel = LaunchConfiguration("channel")
-    joint_state_rate = LaunchConfiguration("joint_state_rate")
-    hardware_feedback_rate_hz = LaunchConfiguration("hardware_feedback_rate_hz")
-    gripper_position_torque_cap_nm = LaunchConfiguration("gripper_position_torque_cap_nm")
-    gripper_position_max_speed_rad_s = LaunchConfiguration("gripper_position_max_speed_rad_s")
-    gripper_position_timeout_margin_sec = LaunchConfiguration("gripper_position_timeout_margin_sec")
-    gripper_feedback_stale_timeout_sec = LaunchConfiguration("gripper_feedback_stale_timeout_sec")
-    teach_record_path = LaunchConfiguration("teach_record_path")
-    teach_record_rate_hz = LaunchConfiguration("teach_record_rate_hz")
-    cmd_arbitration = LaunchConfiguration("cmd_arbitration")
-    frame_id = LaunchConfiguration("frame_id")
-    ee_frame_id = LaunchConfiguration("ee_frame_id")
-    use_rviz = LaunchConfiguration("use_rviz")
-
-    demo_launch = PathJoinSubstitution([moveit_share, "launch", "demo.launch.py"])
+    forwarded = {
+        "arm_config": LaunchConfiguration("arm_config"),
+        "gripper_config": LaunchConfiguration("gripper_config"),
+        "arm_namespace": LaunchConfiguration("arm_namespace"),
+        "channel": LaunchConfiguration("channel"),
+        "shutdown_safe_home": LaunchConfiguration("shutdown_safe_home"),
+        "joint_state_rate": LaunchConfiguration("joint_state_rate"),
+        "hardware_feedback_rate_hz": LaunchConfiguration("hardware_feedback_rate_hz"),
+        "gripper_position_torque_cap_nm": LaunchConfiguration(
+            "gripper_position_torque_cap_nm"
+        ),
+        "gripper_position_max_speed_rad_s": LaunchConfiguration(
+            "gripper_position_max_speed_rad_s"
+        ),
+        "gripper_position_timeout_margin_sec": LaunchConfiguration(
+            "gripper_position_timeout_margin_sec"
+        ),
+        "gripper_feedback_stale_timeout_sec": LaunchConfiguration(
+            "gripper_feedback_stale_timeout_sec"
+        ),
+        "grasp_hold_timeout_sec": LaunchConfiguration("grasp_hold_timeout_sec"),
+        "cmd_arbitration": LaunchConfiguration("cmd_arbitration"),
+        "frame_id": LaunchConfiguration("frame_id"),
+        "ee_frame_id": LaunchConfiguration("ee_frame_id"),
+        "use_hardware": "true",
+        "use_moveit_preview": "true",
+        "use_local_rviz": LaunchConfiguration("use_rviz"),
+        "start_passive_joint_state_publisher": "false",
+        "use_moveit_fake_joint_states": "false",
+        "rviz_config": interactive_rviz,
+    }
 
     return LaunchDescription(
         [
             DeclareLaunchArgument(
                 "arm_config",
-                default_value=PathJoinSubstitution([bringup_share, "config", "arm.yaml"]),
+                default_value=PathJoinSubstitution(
+                    [bringup_share, "config", "arm.yaml"]
+                ),
             ),
             DeclareLaunchArgument(
                 "gripper_config",
@@ -55,61 +70,21 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument("channel", default_value=""),
+            DeclareLaunchArgument("shutdown_safe_home", default_value="false"),
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("hardware_feedback_rate_hz", default_value="50.0"),
             DeclareLaunchArgument("gripper_position_torque_cap_nm", default_value="1.0"),
             DeclareLaunchArgument("gripper_position_max_speed_rad_s", default_value="1.5"),
             DeclareLaunchArgument("gripper_position_timeout_margin_sec", default_value="1.5"),
             DeclareLaunchArgument("gripper_feedback_stale_timeout_sec", default_value="0.15"),
-            DeclareLaunchArgument("teach_record_path", default_value="teleop_records/teach_record.jsonl"),
-            DeclareLaunchArgument("teach_record_rate_hz", default_value="150.0"),
+            DeclareLaunchArgument("grasp_hold_timeout_sec", default_value="30.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
             DeclareLaunchArgument("frame_id", default_value="base_link"),
             DeclareLaunchArgument("ee_frame_id", default_value="end_link"),
             DeclareLaunchArgument("use_rviz", default_value="true"),
-            Node(
-                package="rebotarmcontroller",
-                executable="reBotArmController",
-                name="reBotArmController",
-                output="screen",
-                parameters=[
-                    {
-                        "arm_config": arm_config,
-                        "gripper_config": gripper_config,
-                        "channel": channel,
-                        "joint_state_rate": joint_state_rate,
-                        "hardware_feedback_rate_hz": hardware_feedback_rate_hz,
-                        "gripper_position_torque_cap_nm": gripper_position_torque_cap_nm,
-                        "gripper_position_max_speed_rad_s": gripper_position_max_speed_rad_s,
-                        "gripper_position_timeout_margin_sec": gripper_position_timeout_margin_sec,
-                        "gripper_feedback_stale_timeout_sec": gripper_feedback_stale_timeout_sec,
-                        "cmd_arbitration": cmd_arbitration,
-                        "arm_namespace": arm_namespace,
-                        "frame_id": frame_id,
-                        "ee_frame_id": ee_frame_id,
-                    }
-                ],
-            ),
-            Node(
-                package="rebotarm_teach",
-                executable="TeachRecorderNode",
-                name="teach_recorder_node",
-                output="screen",
-                parameters=[{
-                    "arm_namespace": arm_namespace,
-                    "record_path": teach_record_path,
-                    "sample_rate_hz": teach_record_rate_hz,
-                    "start_on_launch": False,
-                    "keyboard_quit_enabled": False,
-                }],
-            ),
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(demo_launch),
-                launch_arguments={
-                    "use_rviz": use_rviz,
-                    "arm_namespace": arm_namespace,
-                    "use_fake_joint_states": "false",
-                }.items(),
+                PythonLaunchDescriptionSource(interactive_launch),
+                launch_arguments=forwarded.items(),
             ),
         ]
     )

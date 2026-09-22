@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 venv_dir="${repo_root}/.venv-graspnet"
 python_bin="${venv_dir}/bin/python"
+export PYTHONNOUSERSITE=1
 
 if [[ ! -x "${python_bin}" ]]; then
   python3 -m venv "${venv_dir}"

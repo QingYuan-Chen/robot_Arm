@@ -34,7 +34,7 @@ def test_single_bottle_profile_pins_accepted_run_parameters() -> None:
             "runs": 1,
             "plan_timeout_sec": 45.0,
             "max_plan_age_sec": 1.5,
-            "min_grasp_z_m": 0.05,
+            "min_grasp_z_m": 0.03,
             "plan_stability_frames": 3,
             "plan_stability_xy_tolerance_m": 0.015,
             "plan_stability_z_tolerance_m": 0.010,
@@ -73,12 +73,12 @@ def test_runner_loads_profile_and_allows_explicit_cli_override(tmp_path: Path) -
     assert args.namespace == "rebotarm"
     assert args.runs == 1
     assert args.pregrasp_sec == 10.0
-    assert args.min_grasp_z_m == 0.05
+    assert args.min_grasp_z_m == 0.03
     assert args.plan_stability_frames == 3
     assert args.approach_sec == 3.0
     assert args.hold_sec == 4.0
     assert args.return_sec == 10.0
-    assert args.min_grasp_z_m == 0.05
+    assert args.min_grasp_z_m == 0.03
     assert args.plan_stability_frames == 3
     assert args.gripper_open_m == 0.080
     assert args.gripper_open_max_effort == 1.5

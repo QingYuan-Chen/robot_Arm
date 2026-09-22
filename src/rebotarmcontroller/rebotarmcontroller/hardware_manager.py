@@ -1,3 +1,31 @@
+"""硬件管理核心：真实电机的唯一访问点与最后一道执行安全。
+
+本模块属于硬件包，向上层（服务/动作/话题适配层）暴露一个
+``HardwareManager``；它独占厂商控制库的机械臂实例、串口/总线通道与
+唯一的 500 Hz 硬件控制循环，是整条链路中唯一真正向电机写命令的地方。
+
+主要职责：
+- 连接/断开、使能/失能（真机默认失能，必须显式 enable 才能运动）；
+- 反馈采集与校验：位置/速度/力矩、状态码、软限位、时效性、接收序号；
+- 位置-速度（pos_vel）轨迹跟踪、safe_home、trajectory_stop 的落地点；
+- 夹爪的位置移动、抓取闭合与有界保持；
+- 重力补偿（MIT 模式 + 广义重力前馈）与低层 JointMotorCmd 直通；
+- 拒绝不安全的低层命令：未连接/未使能、反馈过期、越限、状态码异常。
+
+并发的关键约定：
+- 电机命令与反馈读写共享同一条总线，因此所有写操作都通过
+  ``_patch_controller_bus`` / ``_wrap_motor_bus`` 打上的总线重入锁串行化；
+- ``_motor_lifecycle_lock`` 保护连接/使能/失能/置零等生命周期迁移，
+  与运动命令互斥；
+- ``_gripper_lock`` 保护夹爪状态机；``_feedback_lock`` 保护已验证反馈样本。
+
+安全约束（务必保持）：
+- 真机启动后处于失能态，只有新鲜反馈 + 显式使能才允许运动；
+- 反馈过期（超过 ``_gripper_feedback_stale_timeout_sec``）或状态码异常时，
+  控制循环会执行保护性失能；
+- 任何安全校验失败都必须抛出异常，不得静默降级为"继续运动"。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,25 +44,24 @@ from .conversions import fk_to_pose
 _LOG = logging.getLogger(__name__)
 
 _G_MAX_DIST_M = 0.09
-# CAD/software travel is 90 mm, but the currently installed gripper's
-# operator-confirmed mechanical limit is 85 mm after the gear damage.
-# Keep the mapping range above intact for feedback interpretation while
-# refusing to command beyond this real-hardware limit.
+# 结构设计/软件标称行程为 90 mm，但当前安装的夹爪在齿轮损坏后，经操作员确认
+# 的机械极限只有 85 mm。保留上面的映射量程用于反馈解释，但绝不下发超过真实
+# 硬件极限的命令。
 _G_VERIFIED_OPEN_LIMIT_M = 0.085
+# 全开位置对应的电机原始角度（rad，负方向为张开）。位置-角度线性映射的另一端。
 _G_ANGLE_OPEN = -5.0
-# DM4310 feedback spans +/-12.5 rad in 16 bits. Allow two quantization
-# steps for the open endpoint and zero verification, not motion arrival tolerance.
+# DM4310 的 16 位反馈覆盖 +/-12.5 rad。这里给张开端点与置零验证留两个量化步长，
+# 它是"反馈有效性"容差，不是运动到位容差。
 _G_COORDINATE_TOL_RAD = 2.0 * 25.0 / 65535.0
-# Operator-approved 1 mm closed feedback tolerance, not a command or zeroing margin.
+# 操作员批准的 1 mm 闭合反馈容差（换算成电机角），不是命令容差或置零余量。
 _G_CLOSED_FEEDBACK_TOL_RAD = 0.001 * abs(_G_ANGLE_OPEN) / _G_MAX_DIST_M
 _G_ZERO_VERIFY_TIMEOUT_SEC = 0.5
 _G_ZERO_VERIFY_SAMPLES = 3
 _G_OPEN_SOFT_LIMIT = -4.9
 _G_ARRIVE_TOL = 0.12
 _G_TAU_MAX = 1.5
-# Normal position moves use a bounded commanded-position ramp.  The 0.5 rad/s
-# default matches the existing web/keyboard teleop speed baseline; it remains a
-# dedicated gripper parameter so the two mechanisms can be tuned independently.
+# 常规位置移动使用有界的位置斜坡命令。默认 0.5 rad/s 与既有 Web/键盘遥操作
+# 速度基线一致；它仍是独立的夹爪参数，以便两条机构分别整定。
 _G_POSITION_MAX_SPEED_RAD_S = 0.5
 _G_POSITION_MAX_SPEED_MIN_RAD_S = 0.05
 _G_POSITION_MAX_SPEED_MAX_RAD_S = 3.0
@@ -45,18 +72,15 @@ _G_FEEDBACK_STALE_TIMEOUT_MAX_SEC = 2.0
 _HARDWARE_FEEDBACK_RATE_HZ = 50.0
 _HARDWARE_FEEDBACK_RATE_MIN_HZ = 20.0
 _HARDWARE_FEEDBACK_RATE_MAX_HZ = 100.0
-# These are motor-side torque limits for the MOVE phase only; what prevents
-# driving into a mechanical stop after arrival is the neutral+idle release in
-# _release_gripper_position_target.
+# 下面两个是 MOVE 阶段专用的电机侧力矩上限；到位后防止继续顶住机械限位的，
+# 是 _release_gripper_position_target 里的"中性 + 空闲"释放。
 #
-# 2026-08-14: measured on real hardware after the gear repair.  Under a 0.40 N.m
-# cap a 0 -> 10 -> 0 mm no-load cycle stalled at 7.86-8.02 mm and 1.83-1.93 mm;
-# all three legs needed kp*err of 0.536-0.594 N.m, i.e. they stopped at cap
-# saturation rather than at the target, leaving ~2 mm of steady-state error that
-# only passed _G_ARRIVE_TOL by as little as 0.02 mm.  Transmission resistance is
-# therefore genuinely high.  The 2026-09-04 operator decision is to use the
-# known-good Web teleop default of 1.0 N.m, retain 1.5 N.m only as the
-# configurable ceiling, and bound motion with the 0.5 rad/s ramp above.
+# 2026-08-14：齿轮修复后在真机上实测。0.40 N.m 上限下，0 -> 10 -> 0 mm 空载
+# 循环三段分别在 7.86-8.02 mm 与 1.83-1.93 mm 处堵转；三段都需要
+# kp*err = 0.536-0.594 N.m，即都是撞到上限饱和而非到达目标，留下约 2 mm
+# 稳态误差，仅以最小 0.02 mm 的余量通过 _G_ARRIVE_TOL。可见传动阻力确实很大。
+# 2026-09-04 操作员决定：采用 Web 遥操作已验证可用的默认值 1.0 N.m，仅把
+# 1.5 N.m 保留为可配置上限，并用上面的 0.5 rad/s 斜坡限制运动速度。
 _G_LARGE_MOVE_MAX_TAU_NM = 1.0
 _G_LARGE_MOVE_MAX_TAU_CAP_NM = 1.5
 _G_KP_MOVE = 5.0
@@ -66,25 +90,22 @@ _G_GRASP_CLOSE_KP = 0.0
 _G_GRASP_CLOSE_KD = 0.5
 _G_GRASP_HOLD_KP = 5.0
 _G_GRASP_HOLD_KD = 1.0
-# NOTE on grip force: grasp_holding commands
+# 关于夹持力的说明：grasp_holding 下发的是
 #   kp*(hold_angle - pos) + kd*(-vel) + hold_force
-# with hold_angle frozen at the stall position, so the POSITION term dominates
-# and hold_force is only a feed-forward addition.  Actual grip force is
-# therefore governed by how deep close_force drove the jaws before stalling,
-# not by hold_force.  2026-08-14 real hardware, same hold_force=0.4 both runs:
-#   close_force 0.4 -> stalled 2.02 mm into a 50 mm bottle, held 0.271-0.286 N.m
-#                      (still creeping closed after 10 s; would not grip)
-#   close_force 1.0 -> stalled 15.21 mm in (30% compression), 0.423-0.437 N.m
-#                      (0.158 mm elastic pushback; gripped)
-# Do not treat hold_force as the grip-force knob when tuning.
+# 其中 hold_angle 冻结在堵转位置，因此位置项占主导，hold_force 只是前馈叠加。
+# 实际夹持力取决于闭合阶段 close_force 把夹爪推到多深才堵转，而不是 hold_force。
+# 2026-08-14 真机、两次 hold_force 均为 0.4：
+#   close_force 0.4 -> 推进 2.02 mm 后堵转（50 mm 瓶子），保持 0.271-0.286 N.m
+#                      （10 s 后仍在缓慢闭合；夹不住）
+#   close_force 1.0 -> 推进 15.21 mm（压缩 30%），保持 0.423-0.437 N.m
+#                      （弹性回弹 0.158 mm；夹住了）
+# 整定时不要把 hold_force 当成夹持力旋钮。
 _G_GRASP_CLOSE_FORCE_DEFAULT = 0.40
 _G_GRASP_CLOSE_FORCE_MAX = 1.0
 _G_GRASP_HOLD_FORCE_DEFAULT = 0.40
-# grasp_holding loads the motor continuously at 500 Hz.  Upstream never exits
-# that state, so a successful grasp held torque until the next command or
-# controller shutdown -- the same continuous-load mechanism implicated in the
-# 2026-08-12 Joint4 over-temperature.  Hold is therefore bounded and always
-# ends with a neutral release.
+# grasp_holding 会以 500 Hz 持续加载电机。上游从不退出该状态，因此一次成功
+# 抓取会把力矩一直顶到下一条命令或控制器关闭——这正是 2026-08-12 Joint4 过温
+# 所涉及的持续加载机理。故保持必须有时限，且总以中性释放收尾。
 _G_GRASP_HOLD_TIMEOUT_DEFAULT_SEC = 30.0
 _G_GRASP_HOLD_TIMEOUT_MAX_SEC = 120.0
 _G_GRASP_VEL_THRESHOLD = 0.04
@@ -99,42 +120,44 @@ _GC_KP = 7.0
 _GC_KD = 0.8
 _GC_TAU_SCALE = np.ones(6, dtype=np.float64)
 _FEEDBACK_REFRESH_RETRIES = 3
-_FEEDBACK_RETRY_INTERVAL_SEC = 0.005
+# DM 串口桥可能分多个轮询周期才把六帧电机反馈取回。5 ms 短于实测的帧节拍，
+# 会把首帧晚于 joint1/joint2 到达的健康关节误判为失败。
+_FEEDBACK_RETRY_INTERVAL_SEC = 0.05
 _UINT64_MAX = (1 << 64) - 1
 _UINT64_HALF_RANGE = 1 << 63
 
+# 各关节硬件软限位（rad）。这是"接受反馈"的合法性区间，同时用于 safe_home 目标
+# 校验；超出即视为反馈异常并触发保护逻辑，而不是放宽到 URDF 的完整量程。
 _JOINT_POSITION_LIMITS_RAD = {
     "joint1": (-2.8, 2.8),
-    # The confirmed mechanical zero is the joint2 nominal upper endpoint.
-    # Keep a small positive software margin for encoder quantization/backlash;
-    # this is not an additional commanded workspace.
+    # joint2 的标称上端点即已确认的机械零点。这里保留很小的正向软件余量以吸收
+    # 编码器量化/回差，并不是额外的可命令工作空间。
     "joint2": (-3.14, 0.02),
-    # Operator-approved J3 upper margin, matching J2; no encoder offset is applied.
+    # 操作员批准的 J3 上余量，与 J2 相同；不施加任何编码器偏置。
     "joint3": (-3.14, 0.02),
     "joint4": (-1.87, 1.57),
     "joint5": (-1.57, 1.57),
     "joint6": (-3.14, 3.14),
 }
 
-# The vendor ArmEndPos.safe_home drives every joint to 0 rad.  For this arm that
-# is a folded posture, not an open one: joint3's origin is -0.264 m in x while
-# joint4's is +0.2426 m, so with joints 2-5 near zero the forearm folds back onto
-# the upper arm and link2/link5 close to ~1.6 mm.  MoveIt's
-# CheckStartStateCollision then aborts every planning request from there
-# ("1 contact(s) detected : link2 - link5"), so nothing can be planned out of the
-# zero pose and it is unusable as a resting posture.
-#
-# Rest at the visual-ready posture instead: 33.2 mm measured link2/link5
-# clearance, and physically the same compact stance as zero (end_link horizontal
-# reach 0.254 m vs 0.260 m, 24 mm higher), so it costs nothing mechanically and
-# does not leave the arm extended under gravity.  This is also the posture
-# tests/test_paired_trajectory_protocol.py already treats as the canonical
-# working pose, and it matches the "safe_home" named state in the MoveIt SRDF
-# and the MuJoCo keyframes.
-_SAFE_HOME_JOINT_POSITIONS = (-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0)
+# 厂商 ArmEndPos.safe_home 会把每个关节都驱到 0 rad。对本机械臂而言那是"折叠"
+# 姿态而非张开姿态：joint3 原点在 x 方向为 -0.264 m，joint4 为 +0.2426 m，
+# 因此当 2-5 关节接近零时，前臂会折回贴上臂，link2/link5 间距缩到约 1.6 mm。
+# MoveIt 的 CheckStartStateCollision 随后会否决从该处发出的每一个规划请求
+# （"1 contact(s) detected : link2 - link5"），即零位不可用于规划，也就无法作为
+# 停放姿态。这里改为停在"视觉就绪"姿态：link2/link5 实测间隙 33.2 mm，且机械
+# 上与零位同样是紧凑站姿（end_link 水平伸展 0.254 m 对 0.260 m，高 24 mm），
+# 因此不增加机械代价，也不会让手臂在重力下长期外伸。该姿态同时是
+# tests/test_paired_trajectory_protocol.py 视为标准工作位姿的姿态，并与 MoveIt
+# SRDF 中的 "safe_home" 命名状态以及 MuJoCo keyframe 一致。
+_SAFE_HOME_JOINT_POSITIONS = (0.0, 0.0, -0.017453292519943295, 0.0, 0.0, 0.0)
+# safe_home 到位判据：所有关节残差的最大值需小于该阈值（rad）。
 _SAFE_HOME_ARRIVE_TOL_RAD = 0.02
 _SAFE_HOME_TIMEOUT_SEC = 30.0
 
+# 生命周期状态集合。真机路径固定按
+# DISCONNECTED -> CONNECTED_DISABLED -> ENABLING -> ENABLED_HOLD
+# ->（TRAJECTORY_RUNNING）-> DISABLING 迁移；没有"自动使能"的捷径。
 _LIFECYCLE_STATES = {
     "DISCONNECTED",
     "CONNECTED_DISABLED",
@@ -147,12 +170,24 @@ _LIFECYCLE_STATES = {
 
 @dataclass(frozen=True)
 class _VerifiedFeedbackSample:
+    """一条已验证的电机反馈快照（不可变）。
+
+    ``state`` 是厂商 SDK 的状态对象（pos/vel/torq/status_code），``sequence``
+    是该电机反馈帧的接收序号（uint64），``observed_at`` 是本地单调时钟的观测
+    时刻。序号用于证明"这是一帧新反馈"而非缓存旧值；时间戳用于时效性判断。
+    """
+
     state: object
     sequence: int
     observed_at: float
 
 
 def apply_gravity_compensation_tau_scale(tau: np.ndarray) -> np.ndarray:
+    """对广义重力力矩逐关节施加补偿增益。
+
+    参数 ``tau``：形状为 (6,) 的关节力矩（N.m）。返回值是副本，形状匹配
+    ``_GC_TAU_SCALE`` 时按增益缩放，否则原样返回（调用方不应依赖就地修改）。
+    """
     scaled = np.array(tau, dtype=np.float64, copy=True)
     if scaled.shape == _GC_TAU_SCALE.shape:
         scaled *= _GC_TAU_SCALE
@@ -160,7 +195,18 @@ def apply_gravity_compensation_tau_scale(tau: np.ndarray) -> np.ndarray:
 
 
 class HardwareManager:
-    """Owns the single RobotArm instance used by the ROS driver."""
+    """持有 ROS 驱动所用的唯一 RobotArm 实例。
+
+    生命周期：``connect()`` -> ``enable()`` -> 运动/夹爪命令 -> ``disable()``
+    -> ``shutdown()``。构造阶段只解析配置与参数上下限、把厂商 SDK 加入模块
+    搜索路径，并给控制器/电机打上总线锁；真正的串口打开发生在 ``connect()``。
+
+    并发的回调模型：使能与运动都跑在厂商的唯一控制线程（``start_control_loop``
+    启动）里，该线程是总线上唯一的写入者；ROS 定时器线程只允许读取已缓存的
+    已验证反馈（``refresh_feedback_if_due`` 会拒绝在循环运行期间做同步刷新）。
+    因此任何跨线程状态都由 ``_motor_lifecycle_lock`` / ``_gripper_lock`` /
+    ``_feedback_lock`` 保护。
+    """
 
     def __init__(
         self,
@@ -234,6 +280,8 @@ class HardwareManager:
         cfg_path = Path(arm_cfg).expanduser() if arm_cfg else self.default_arm_cfg()
         cfg_path = self._arm_cfg_with_channel(cfg_path, channel)
         self._arm = RobotArm(cfg_path=str(cfg_path))
+        # 重力补偿用的动力学模型：pinocchio 模型 + 数据缓冲 + 末端帧 id，
+        # 计算函数引用缓存在实例上，避免在 500 Hz 回路里重复导入。
         self._gc_model = load_robot_model()
         self._gc_data = self._gc_model.createData()
         self._gc_ee_frame_id = self._gc_model.getFrameId(_GC_EE_FRAME)
@@ -246,6 +294,8 @@ class HardwareManager:
         self._gripper_cfg = None
         self._gripper_mot = None
         self._gripper_ctrl = None
+        # 夹爪角度语义：0 rad = 完全闭合，_G_ANGLE_OPEN = 完全张开；
+        # _gripper_target_angle 是斜坡中间值，_gripper_goal_angle 是最终目标。
         self._gripper_target_angle = 0.0
         self._gripper_goal_angle = 0.0
         self._gripper_target_effort = _G_DEFAULT_FORCE
@@ -259,18 +309,19 @@ class HardwareManager:
         self._gripper_pos = 0.0
         self._gripper_vel = 0.0
         self._gripper_torque = 0.0
+        # 255 是"状态未知/无效"的哨兵值，不是电机上报的状态码。
         self._gripper_status_code = 255
         self._gripper_feedback_updated_monotonic: float | None = None
         self._gripper_feedback_error: str | None = "gripper feedback not received"
         self._gripper_zero_error: str | None = None
         self._gripper_command_error: str | None = None
         self._gripper_position_result = "idle"
+        # 待发送的中性命令：(角度, 原因, 是否标记成功)，由硬件循环消费。
         self._gripper_neutral_pending: tuple[float, str, bool] | None = None
         self._gripper_target_timeout_sec = 0.0
         self._gripper_target_deadline_monotonic: float | None = None
-        # Arm and gripper commands share the vendor's one hardware loop.  These
-        # compatibility fields remain observable for diagnostics, but no
-        # independent gripper thread is created.
+        # 机械臂与夹爪命令共用厂商的同一个硬件循环。以下兼容字段只保留可观测性
+        # 用于诊断，不会创建独立的夹爪线程。
         self._gripper_loop_thread: None = None
         self._gripper_loop_running = False
         self._gripper_last_tick_monotonic: float | None = None
@@ -278,9 +329,14 @@ class HardwareManager:
         self._feedback_lock = threading.RLock()
         self._feedback_next_refresh_monotonic: float | None = None
         self._verified_feedback_by_label: dict[str, _VerifiedFeedbackSample] = {}
+        # 请求-响应式反馈验证状态：baseline 记录请求前的接收序号，deadline 是
+        # 该次请求的截止时刻，只有序号前进才算收到新帧。
         self._feedback_request_baseline_by_label: dict[str, int] = {}
         self._feedback_request_deadline_by_label: dict[str, float] = {}
         self._feedback_error_by_label: dict[str, str] = {}
+        # 启动时的强制刷新可能要跨多个轮询周期才收齐电机帧；在这个有界收集窗口
+        # 内不要发布中间态的 "pending" 错误。
+        self._feedback_force_refresh_active = False
         self._arm_feedback_updated_monotonic: float | None = None
         self._arm_feedback_error: str | None = "arm feedback not received"
         self._motor_lifecycle_lock = threading.RLock()
@@ -291,6 +347,7 @@ class HardwareManager:
         self._lifecycle_state = "DISCONNECTED"
         self._state_machine = "IDLE"
         self._error_codes: list[str] = []
+        # 重力补偿运行态：目标关节角、误差积分（抗漂移）、锁定计数与上一帧角度。
         self._gravity_comp_active = False
         self._gravity_comp_q_target: np.ndarray | None = None
         self._gravity_comp_integral: np.ndarray | None = None
@@ -307,10 +364,13 @@ class HardwareManager:
 
     @staticmethod
     def _workspace_root() -> Path:
+        # 本文件位于 <workspace>/src/rebotarmcontroller/rebotarmcontroller/，
+        # 因此 parents[3] 即工作空间根目录。
         return Path(__file__).resolve().parents[3]
 
     @classmethod
     def _sdk_candidates(cls) -> list[Path]:
+        """厂商 SDK 的候选根目录（按优先级排列，含开发机历史路径）。"""
         workspace = cls._workspace_root()
         return [
             workspace / "third_party" / "reBotArm_control_py",
@@ -324,6 +384,11 @@ class HardwareManager:
 
     @classmethod
     def _ensure_rebot_sdk_in_syspath(cls) -> Path:
+        """把厂商 SDK 根目录插入 sys.path 并返回该目录。
+
+        插入位置为 0，确保本地 SDK 优先于任何同名安装包；找不到时抛出
+        FileNotFoundError 并列出全部候选路径，便于现场排查。
+        """
         for root in cls._sdk_candidates():
             if (root / "reBotArm_control_py").is_dir():
                 root_str = str(root)
@@ -338,6 +403,11 @@ class HardwareManager:
 
     @staticmethod
     def _arm_cfg_with_channel(cfg_path: Path, channel: str) -> Path:
+        """按需把串口通道写进机械臂配置，返回实际使用的配置文件路径。
+
+        ``channel`` 为空或为 "auto" 时原样返回原配置（由厂商自动选择）；否则把
+        ``channel`` 键覆盖后写到 /tmp 下的临时 YAML，避免改动仓库内的配置。
+        """
         normalized_channel = str(channel or "").strip()
         if not normalized_channel or normalized_channel.lower() == "auto":
             return cfg_path
@@ -393,6 +463,8 @@ class HardwareManager:
 
     @property
     def ready_for_motion(self) -> bool:
+        # 只有"已连接 + 已使能 + 位于保持或轨迹执行状态"才允许运动；
+        # 上层必须以此为准，不得只看 enabled。
         return bool(
             self._connected
             and self._enabled
@@ -411,6 +483,11 @@ class HardwareManager:
 
     @property
     def error_codes(self) -> list[str]:
+        """累计错误码 + 当前反馈健康状态派生出的错误项。
+
+        反馈类错误是在读取时按最新时效性实时派生的，不会写入 ``_error_codes``；
+        这样"反馈恢复"后无需清理历史即可自动消失。
+        """
         codes = list(self._error_codes)
         arm_feedback_failure = self._arm_feedback_failure_reason()
         if arm_feedback_failure is not None:
@@ -425,6 +502,11 @@ class HardwareManager:
         return codes
 
     def set_state_machine(self, state: str) -> None:
+        """设置对外可见的子系统状态机，并在必要时同步生命周期状态。
+
+        TRAJ_RUNNING 需要已使能才会切到 TRAJECTORY_RUNNING；回到 IDLE 且已使能
+        时切到 ENABLED_HOLD（即"使能但保持当前位置"）。
+        """
         if state not in ("IDLE", "TRAJ_RUNNING", "LOWLEVEL_STREAMING", "GRAVITY_COMP"):
             raise ValueError(f"unsupported state machine value: {state}")
         self._state_machine = state
@@ -443,6 +525,7 @@ class HardwareManager:
             raise RuntimeError("hardware is not connected")
 
     def _require_enabled(self) -> None:
+        """运动类命令的统一安全门：未连接或未显式使能一律拒绝。"""
         self._require_connected()
         if not self._enabled:
             raise RuntimeError(
@@ -453,6 +536,12 @@ class HardwareManager:
         self.refresh_feedback_if_due(force=True)
 
     def _feedback_controller_groups(self):
+        """把关节与夹爪按所属控制器分组，返回 [(ctrl, [(label, motor), ...]), ...]。
+
+        同一控制器下的电机共享一条总线，因此每个控制器只需一次
+        request_feedback + poll_feedback_once 事务即可取回其全部电机反馈。
+        缺少电机/控制器映射时抛错，宁可失败也不要静默漏采反馈。
+        """
         groups: list[tuple[object, list[tuple[str, object]]]] = []
 
         def add(ctrl, label: str, motor) -> None:
@@ -482,6 +571,11 @@ class HardwareManager:
 
     @staticmethod
     def _feedback_state_with_sequence(label: str, motor) -> tuple[object, int]:
+        """读取 (状态, 接收序号)；依赖打过补丁的 MotorBridge 提供序号接口。
+
+        没有 ``get_state_with_sequence`` 就无法证明反馈是"新帧"，因此在采集路径
+        上直接报错，而不是退化为读缓存。
+        """
         getter = getattr(motor, "get_state_with_sequence", None)
         if not callable(getter):
             raise RuntimeError(
@@ -496,6 +590,12 @@ class HardwareManager:
 
     @staticmethod
     def _feedback_sequence_advanced(sequence: int, baseline: int) -> bool:
+        """判断接收序号是否相对基线"向前"推进，可容忍 uint64 回绕。
+
+        采用模 2^64 差值：差值落在 (0, 2^63) 视为推进，落在 (2^63, 2^64) 视为
+        落后（回绕的另一半）。序号从 0 且基线非 0 时判为未推进——那是计数器
+        复位，不能当作新帧。
+        """
         current = int(sequence)
         previous = int(baseline)
         if not 0 <= current <= _UINT64_MAX or not 0 <= previous <= _UINT64_MAX:
@@ -506,11 +606,10 @@ class HardwareManager:
         return 0 < delta < _UINT64_HALF_RANGE
 
     def _verified_feedback_sample(self, label: str) -> _VerifiedFeedbackSample:
-        """Return one immutable controller-owned feedback snapshot.
+        """返回一条不可变的、由控制循环写入的已验证反馈快照。
 
-        MotorBridge cache reads belong exclusively to the acquisition path.
-        Consumers take the already-verified sample under ``_feedback_lock``;
-        reading it must never alter its receive sequence or observation time.
+        读 MotorBridge 缓存只属于采集路径。消费者在 ``_feedback_lock`` 下取用
+        已经验证过的样本；读取它不得改变其接收序号或观测时间。
         """
         with self._feedback_lock:
             sample = self._verified_feedback_by_label.get(label)
@@ -522,6 +621,8 @@ class HardwareManager:
         self,
         labels: Sequence[str],
     ) -> tuple[_VerifiedFeedbackSample, ...]:
+        # 一次性原子读取多个标签，避免同一控制周期内取到不同批次的数据；
+        # 任一标签缺失即整体失败（多关节命令不能基于部分反馈执行）。
         with self._feedback_lock:
             samples = tuple(
                 self._verified_feedback_by_label.get(label) for label in labels
@@ -532,12 +633,18 @@ class HardwareManager:
         return samples  # type: ignore[return-value]
 
     def _feedback_response_window_sec(self) -> float:
+        """一次反馈请求允许的响应窗口：取两种节拍假设与重试次数的较大者。"""
         return max(
             self._hardware_feedback_period_sec * _FEEDBACK_REFRESH_RETRIES,
             _FEEDBACK_RETRY_INTERVAL_SEC * _FEEDBACK_REFRESH_RETRIES,
         )
 
     def _validate_feedback_sample(self, label: str, state) -> None:
+        """校验单条反馈的合法性：有限数值 + 位于该关节硬件软限位内。
+
+        关节越限或非有限值都说明编码器/通信异常，必须报错，绝不能当作有效
+        位置参与运动命令。
+        """
         if label == "gripper":
             self._validated_gripper_feedback_values(state)
             return
@@ -566,6 +673,7 @@ class HardwareManager:
         sequence: int,
         observed_at: float,
     ) -> None:
+        """校验通过后登记为"已验证反馈"，并清除该标签的错误标记。"""
         self._validate_feedback_sample(label, state)
         sample = _VerifiedFeedbackSample(
             state=state,
@@ -578,6 +686,11 @@ class HardwareManager:
             self._record_gripper_feedback(state, observed_at=observed_at)
 
     def _sync_feedback_health(self) -> None:
+        """把逐标签的反馈状态汇总为机械臂/夹爪级健康状态。
+
+        机械臂侧只要任一关节有错误就报错；缺少样本且不在强制刷新窗口内时标为
+        "verified feedback pending"。夹爪只在自己的标签有错误或样本缺失时报错。
+        """
         arm_labels = list(self.joint_names)
         arm_errors = [
             self._feedback_error_by_label[label]
@@ -589,11 +702,12 @@ class HardwareManager:
         ]
         if arm_errors:
             self._record_arm_feedback_error("; ".join(arm_errors))
-        elif missing_arm:
+        elif missing_arm and not getattr(self, "_feedback_force_refresh_active", False):
             self._record_arm_feedback_error(
                 "verified feedback pending: " + ",".join(missing_arm)
             )
         else:
+            # 机械臂新鲜度取所有关节中"最旧"的观测时刻，即短板决定整体时效。
             self._record_arm_feedback_success(
                 min(
                     self._verified_feedback_by_label[label].observed_at
@@ -615,6 +729,11 @@ class HardwareManager:
         *,
         observed_at: float,
     ) -> None:
+        """结算所有未完成的反馈请求：序号前进则登记样本，超时则记录错误。
+
+        每个待决请求只结算一次；无论成功还是超时都会清掉 baseline/deadline，
+        避免过期的截止时间影响下一条命令。
+        """
         for label, baseline in list(
             self._feedback_request_baseline_by_label.items()
         ):
@@ -656,6 +775,7 @@ class HardwareManager:
 
     @staticmethod
     def _require_feedback_sequence_api(groups) -> None:
+        """确认全部电机都支持带序号的反馈读取，否则反馈无法被证明为"新帧"。"""
         for _ctrl, entries in groups:
             for label, motor in entries:
                 if not callable(getattr(motor, "get_state_with_sequence", None)):
@@ -672,6 +792,7 @@ class HardwareManager:
             _LOG.info("arm feedback recovered updated=%.6f", observed_at)
 
     def _record_arm_feedback_error(self, reason: str) -> None:
+        # 只在错误内容变化时打日志，避免 500 Hz 回路上刷屏。
         message = str(reason)
         changed = message != self._arm_feedback_error
         self._arm_feedback_error = message
@@ -679,6 +800,11 @@ class HardwareManager:
             _LOG.error("arm feedback error: %s", message)
 
     def _arm_feedback_failure_reason(self, *, now: float | None = None) -> str | None:
+        """机械臂反馈的失效原因；健康时返回 None。
+
+        先看是否有显式错误；否则用单调时钟计算反馈年龄，超过
+        ``_gripper_feedback_stale_timeout_sec`` 即判定为过期（运动命令必须被拒绝）。
+        """
         if self._arm_feedback_error is not None:
             return f"arm feedback unavailable: {self._arm_feedback_error}"
         updated = self._arm_feedback_updated_monotonic
@@ -698,6 +824,14 @@ class HardwareManager:
         observed_at: float,
         inspect_after_poll: bool = False,
     ) -> None:
+        """执行一轮共享总线反馈事务：先结算旧请求，再请求新帧。
+
+        流程：按控制器分组读一次缓存观测 -> 结算上一轮待决请求 -> 为尚无基线
+        的标签建立 baseline/deadline -> 持总线锁执行 request_feedback +
+        poll_feedback_once。``inspect_after_poll`` 为真时在轮询结束后立即再读一次
+        并结算（用于强制刷新），否则只结算轮询前的观测。任一控制器组失败都会
+        记录该组电机错误，并在最后以异常抛出，绝不静默继续。
+        """
         groups = self._feedback_controller_groups()
         self._require_feedback_sequence_api(groups)
         observations: dict[str, tuple[object, int]] = {}
@@ -733,6 +867,8 @@ class HardwareManager:
             lock = getattr(ctrl, "_bus_lock", None)
 
             def transaction() -> None:
+                # 同一控制器上的"请求 + 轮询"必须在一次持锁事务内完成，
+                # 否则别的线程可能在两者之间插入自己的帧，导致错配。
                 for _label, motor in entries:
                     motor.request_feedback()
                 ctrl.poll_feedback_once()
@@ -780,6 +916,13 @@ class HardwareManager:
             raise RuntimeError("shared feedback batch failed: " + "; ".join(group_errors))
 
     def _force_feedback_refresh(self) -> None:
+        """同步强制刷新：必须拿到"请求之后新到"的反馈，否则报错。
+
+        用于使能、置零、夹爪命令等需要当下真实状态的场合。先记录每个标签的
+        基线序号与上一份样本，再最多重试 ``_FEEDBACK_REFRESH_RETRIES`` 次，
+        直到样本对象被替换且序号相对基线前进；全部失败时抛出最后一个错误或
+        汇总缺失原因。
+        """
         groups = self._feedback_controller_groups()
         self._require_feedback_sequence_api(groups)
         initial: dict[str, tuple[object, int]] = {}
@@ -804,6 +947,7 @@ class HardwareManager:
             label: sequence
             for label, (_state, sequence) in initial.items()
         }
+        # 记住旧样本对象：即使序号相同，样本对象未变也说明没收到新帧。
         prior_samples = {
             label: self._verified_feedback_by_label.get(label)
             for label in required_baselines
@@ -823,23 +967,27 @@ class HardwareManager:
             self._feedback_request_deadline_by_label.pop(label, None)
 
         last_error: Exception | None = None
-        for attempt in range(_FEEDBACK_REFRESH_RETRIES):
-            attempt_error: Exception | None = None
-            try:
-                self._refresh_feedback_batch(
-                    observed_at=time.monotonic(),
-                    inspect_after_poll=True,
-                )
-            except Exception as exc:
-                last_error = exc
-                attempt_error = exc
-            if attempt_error is None and all(
-                forced_sample_satisfies(label, baseline)
-                for label, baseline in required_baselines.items()
-            ):
-                return
-            if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
-                time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+        self._feedback_force_refresh_active = True
+        try:
+            for attempt in range(_FEEDBACK_REFRESH_RETRIES):
+                attempt_error: Exception | None = None
+                try:
+                    self._refresh_feedback_batch(
+                        observed_at=time.monotonic(),
+                        inspect_after_poll=True,
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    attempt_error = exc
+                if attempt_error is None and all(
+                    forced_sample_satisfies(label, baseline)
+                    for label, baseline in required_baselines.items()
+                ):
+                    return
+                if attempt + 1 < _FEEDBACK_REFRESH_RETRIES:
+                    time.sleep(_FEEDBACK_RETRY_INTERVAL_SEC)
+        finally:
+            self._feedback_force_refresh_active = False
 
         missing = []
         for label, baseline in required_baselines.items():
@@ -865,11 +1013,11 @@ class HardwareManager:
         force: bool = False,
         now: float | None = None,
     ) -> bool:
-        """Run at most one shared-bus feedback batch at the configured rate.
+        """按配置频率最多执行一轮共享总线反馈批次。
 
-        While the vendor command loop is active, only that loop may transact on
-        the bus.  ROS timers call this method too, but are reduced to cache-only
-        readers until the command loop stops.
+        厂商命令循环运行时，只有该循环可以在总线上发起事务。ROS 定时器也会
+        调用本方法，但在命令循环停止前它们被降级为"只读缓存"：``force=True``
+        时直接抛出 RuntimeError，否则返回 False。
         """
         observed_at = time.monotonic() if now is None else float(now)
         control_thread = getattr(self._arm, "_ctrl_thread", None)
@@ -885,6 +1033,7 @@ class HardwareManager:
             return False
         with self._feedback_lock:
             due = self._feedback_next_refresh_monotonic
+            # 1e-12 的容差用于抵消浮点加法误差，避免恰好到期的周期被推迟。
             if not force and due is not None and observed_at + 1e-12 < due:
                 return False
             self._feedback_next_refresh_monotonic = (
@@ -903,6 +1052,7 @@ class HardwareManager:
 
     @staticmethod
     def _validated_gripper_feedback_values(state) -> tuple[float, float, float, int]:
+        """拆出夹爪反馈的 (位置 rad, 速度 rad/s, 力矩 N.m, 状态码)，并做有限性检查。"""
         if state is None:
             raise RuntimeError("gripper feedback unavailable")
         position = float(state.pos)
@@ -951,6 +1101,10 @@ class HardwareManager:
         return max(current - updated, 0.0)
 
     def _gripper_feedback_failure_reason_locked(self, *, now: float | None = None) -> str | None:
+        """夹爪反馈失效原因（调用方需持有 ``_gripper_lock``）。
+
+        依次检查：显式错误 -> 数据过期 -> 坐标合法性（置零错误或原始角越界）。
+        """
         if self._gripper_feedback_error is not None:
             return f"gripper feedback unavailable: {self._gripper_feedback_error}"
         age = self._gripper_feedback_age_sec(now=now)
@@ -962,6 +1116,12 @@ class HardwareManager:
         return self._gripper_coordinate_failure_reason_locked()
 
     def _gripper_coordinate_failure_reason_locked(self) -> str | None:
+        """夹爪原始角度坐标的合法性检查（调用方需持有 ``_gripper_lock``）。
+
+        有效区间是 [_G_ANGLE_OPEN - 量化容差, _G_CLOSED_FEEDBACK_TOL_RAD]，
+        即"从全开到闭合零点附近"。越界说明零点未标定或编码器异常，必须拒绝
+        使用该反馈（例如合拢方向越界会让力矩变成前馈而持续顶紧）。
+        """
         if self._gripper_zero_error is not None:
             return self._gripper_zero_error
         position = self._gripper_pos
@@ -978,6 +1138,7 @@ class HardwareManager:
         return None
 
     def _refresh_gripper_feedback(self):
+        """同步强制刷新并返回夹爪的已验证状态对象（拿不到新帧即报错）。"""
         if self._gripper_mot is None or self._gripper_ctrl is None:
             raise RuntimeError("gripper feedback unavailable: motor/controller not initialized")
         self.refresh_feedback_if_due(force=True)
@@ -990,6 +1151,13 @@ class HardwareManager:
         refresh: bool = True,
         check_freshness: bool = True,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
+        """取出全部关节的 (位置 rad, 速度 rad/s, 力矩 N.m, 状态码列表)。
+
+        ``refresh`` 为真时先做一次同步强制刷新；``check_freshness`` 为真时要求
+        整体反馈未过期；``expected_status`` 非空时要求每个电机的状态码完全一致
+        （0 = 失能，1 = 使能）。任一关节缺失、非有限、越软限位或状态码不符都会
+        抛错，调用方不得继续运动。
+        """
         if refresh:
             self.refresh_feedback_if_due(force=True)
         if check_freshness:
@@ -1051,6 +1219,7 @@ class HardwareManager:
             )
 
     def _disable_all_motors(self) -> None:
+        """失能机械臂与夹爪；逐个收集错误后统一抛出，保证两边都尝试过。"""
         errors: list[str] = []
         try:
             self._arm.disable()
@@ -1065,6 +1234,13 @@ class HardwareManager:
             raise RuntimeError("; ".join(errors))
 
     def connect(self) -> None:
+        """连接硬件并停留在"已连接但失能"状态。
+
+        顺序：机械臂连接 -> 初始化夹爪 -> 校验全部关节与夹爪反馈。若发现任何
+        电机状态码非 0（即上电后仍处于使能态），先显式失能再重新校验，绝不带着
+        未知的使能状态进入后续流程。任一步失败都会走 ``_disconnect_after_failed_connect``
+        清理，避免留下半开的串口或后台线程。
+        """
         if self._connected:
             return
         try:
@@ -1089,6 +1265,7 @@ class HardwareManager:
             raise
 
     def _disconnect_after_failed_connect(self) -> None:
+        """连接失败后的尽力清理；每一步单独吞掉异常，只为把状态复位。"""
         try:
             self._stop_gripper_loop()
         except Exception:
@@ -1110,6 +1287,10 @@ class HardwareManager:
         self._set_lifecycle_state("DISCONNECTED")
 
     def shutdown(self) -> None:
+        """关闭流程：停循环、失能、断开，并绕开厂商的归零式收尾。
+
+        顺序很关键——先停夹爪/重力补偿/控制循环，再失能，最后断开。
+        """
         if not self._connected:
             return
         try:
@@ -1120,13 +1301,11 @@ class HardwareManager:
                 self._disable_all_motors()
             except Exception:
                 pass
-            # ArmEndPos.end() runs the vendor safe_home() before disconnecting, and
-            # that targets the all-zero folded pose (see _SAFE_HOME_JOINT_POSITIONS).
-            # The control loop is already stopped and the motors already disabled at
-            # this point, so the call cannot move the arm at all -- it only polls for
-            # its full 30 s timeout and leaves _q_target at zero for whoever enables
-            # next.  Retire the controller directly; a deliberate safe_home belongs to
-            # the driver's shutdown hook, which runs earlier while still enabled.
+            # ArmEndPos.end() 会在断开前执行厂商 safe_home()，而它指向全零折叠
+            # 姿态（见 _SAFE_HOME_JOINT_POSITIONS）。此处控制循环已停止、电机已
+            # 失能，因此该调用根本无法移动机械臂——它只会白白轮询满 30 s 超时，
+            # 并把 _q_target 留成零，影响下一次使能。故直接把该控制器标记为已停止；
+            # 有意的 safe_home 属于驱动的关闭钩子，那一步更早、且仍处于使能态。
             self._endpos_ctrl._running = False
             self._arm.disconnect()
         finally:
@@ -1135,6 +1314,11 @@ class HardwareManager:
             self._set_lifecycle_state("DISCONNECTED")
 
     def get_joint_state(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """返回 (位置, 速度, 力矩)；未连接时退回厂商原始状态读取。
+
+        已连接时要求状态码与使能状态一致（使能 -> 1，失能 -> 0），并在控制循环
+        未运行时顺带刷新反馈。
+        """
         with self._motor_lifecycle_lock:
             if not self._connected:
                 return self._arm.get_state()
@@ -1146,6 +1330,7 @@ class HardwareManager:
             return positions, velocities, torques
 
     def get_cached_joint_state(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """与 ``get_joint_state`` 相同，但不触发新的总线事务（只读缓存）。"""
         with self._motor_lifecycle_lock:
             if not self._connected:
                 return self._arm.get_state()
@@ -1157,23 +1342,26 @@ class HardwareManager:
             return positions, velocities, torques
 
     def get_cached_joint_sample(self):
-        """Return validated values and their receive identity in one atomic read."""
+        """在一次原子读取中同时返回校验后的数值与其接收标识。"""
         with self._motor_lifecycle_lock, self._feedback_lock:
             values = self._validated_joint_feedback(
                 expected_status=1 if self._enabled else 0, refresh=False,
             )
+            # 序号用于上层判断两个样本是否来自同一批反馈（避免混用新旧帧）。
             sequences = tuple(
                 sample.sequence for sample in self._verified_feedback_samples(self.joint_names)
             )
             return (*values, sequences)
 
     def hold_current_position(self) -> np.ndarray:
+        """把当前关节角写成保持目标，使机械臂停在原地。"""
         q, _, _ = self.get_joint_state()
         current = np.array(q, dtype=np.float64, copy=True)
         self._endpos_ctrl._q_target[:] = current
         return current
 
     def stop_active_motion(self) -> None:
+        """立即停止正在下发的轨迹：置停止标志、取消移动、保持当前位置。"""
         with self._motor_lifecycle_lock:
             self._endpos_ctrl._stop_send.set()
             self._endpos_ctrl._moving = False
@@ -1187,6 +1375,7 @@ class HardwareManager:
     def _validated_safe_home_target(
         self, target: Optional[Sequence[float]] = None
     ) -> np.ndarray:
+        """校验 safe_home 目标：长度、有限性，以及逐关节是否在软限位内。"""
         if target is None:
             return self.safe_home_target()
         values = np.array([float(value) for value in target], dtype=np.float64)
@@ -1215,13 +1404,12 @@ class HardwareManager:
         vlim: Optional[float] = None,
         timeout_sec: Optional[float] = None,
     ) -> np.ndarray:
-        """Drive the arm to a collision-free resting posture.
+        """把机械臂驱到无碰撞的停放姿态。
 
-        Replaces ArmEndPos.safe_home, which hardcodes an all-zero target; see
-        _SAFE_HOME_JOINT_POSITIONS for why the zero pose cannot be rested in.
-        The vendor velocity override and arrival polling are kept, but arrival is
-        checked against the requested target rather than against zero, and the
-        move is never allowed to exceed the vendor's own homing speed.
+        替代 ArmEndPos.safe_home（它把目标硬编码为全零）；零位为何不能停放见
+        _SAFE_HOME_JOINT_POSITIONS 的说明。保留厂商的速度覆盖与到位轮询机制，
+        但到位判据改为"相对请求目标"而不是零，且速度绝不允许超过厂商自身的
+        回零速度。结束时无论成功失败都清掉速度覆盖、保持当前位置并回到 IDLE。
         """
         goal = self._validated_safe_home_target(target)
         ctrl = self._endpos_ctrl
@@ -1243,6 +1431,7 @@ class HardwareManager:
             send_thread = ctrl._send_thread
             self.set_state_machine("TRAJ_RUNNING")
         try:
+            # 先等在途的发送线程收尾，再开始轮询到位情况。
             if send_thread is not None:
                 send_thread.join()
             deadline = time.monotonic() + (
@@ -1268,6 +1457,14 @@ class HardwareManager:
                 self.set_state_machine("IDLE")
 
     def enable(self) -> None:
+        """显式使能：真机运动的唯一入口。
+
+        前置条件（全部满足才继续）：已连接、反馈状态码为 0（失能）、夹爪坐标
+        合法。随后把当前角度写成保持目标 -> 进入位置-速度模式 -> 使能电机 ->
+        校验状态码为 1 -> 启动统一控制循环。任何一步失败都会执行
+        ``_rollback_failed_enable``；回滚本身也失败时保留 _enabled=True 并追加
+        ENABLE_ROLLBACK_FAILED，绝不谎报"已安全失能"。
+        """
         from motorbridge import Mode
 
         with self._motor_lifecycle_lock:
@@ -1288,6 +1485,7 @@ class HardwareManager:
                         coordinate_failure = self._gripper_coordinate_failure_reason_locked()
                     if coordinate_failure is not None:
                         raise RuntimeError(coordinate_failure)
+                # 先把目标设为当前角度，使能瞬间不会产生位置阶跃。
                 self._endpos_ctrl._q_target[:] = positions
                 if self._arm.mode_pos_vel() is False:
                     raise RuntimeError("failed to enter position-velocity control mode")
@@ -1312,6 +1510,12 @@ class HardwareManager:
                 raise RuntimeError(f"enable failed and was rolled back: {exc}") from exc
 
     def _rollback_failed_enable(self) -> str | None:
+        """使能失败后的回滚：停循环、失能、并验证状态码确为 0。
+
+        返回 None 表示已确认失能；返回字符串表示回滚未完成——此时保持
+        _enabled=True（宁可以为仍在使能，也不要误判为已失能），追加
+        ENABLE_ROLLBACK_FAILED 并把生命周期置为 DISABLING。
+        """
         rollback_errors: list[str] = []
         try:
             self._stop_gripper_loop()
@@ -1326,6 +1530,7 @@ class HardwareManager:
         except Exception as exc:
             rollback_errors.append(f"disable command: {exc}")
         if not rollback_errors:
+            # 只有失能命令本身没报错才值得校验反馈；否则反馈可能已经不可信。
             try:
                 self._validated_joint_feedback(expected_status=0)
                 self._validated_gripper_status(expected_status=0)
@@ -1342,6 +1547,11 @@ class HardwareManager:
         return None
 
     def disable(self) -> None:
+        """失能：先标记未使能（阻止新的运动命令），再停循环并验证状态码为 0。
+
+        验证失败时恢复 _enabled 原值并追加 DISABLE_VERIFICATION_FAILED，让上层
+        知道"可能仍在使能"，而不是假装已经安全停下。
+        """
         with self._motor_lifecycle_lock:
             self._require_connected()
             self._set_lifecycle_state("DISABLING")
@@ -1364,6 +1574,11 @@ class HardwareManager:
                 self._set_lifecycle_state("CONNECTED_DISABLED")
 
     def set_mode(self, mode: str) -> bool:
+        """切换电机控制模式："mit" / "pos_vel" / "vel"（大小写与空格不敏感）。
+
+        切模式前必须先停循环并退出重力补偿；若目标模式与当前模式相同，仅在
+        pos_vel 且已使能时确保控制循环在跑（或保持当前位置）。
+        """
         self._require_connected()
         mode = mode.strip().lower()
         if mode not in ("mit", "pos_vel", "vel"):
@@ -1392,8 +1607,13 @@ class HardwareManager:
         return bool(ok)
 
     def set_zero(self, joint_name: str = "") -> bool:
-        # Serialize calibration against enable/disable. Keep acquiring raw
-        # feedback even for an invalid coordinate so explicit zero can repair it.
+        """标定零点。空字符串表示全部关节，``"gripper"`` 表示夹爪。
+
+        必须处于"已连接未使能"状态——标定期间电机不得带电运动。整个标定与
+        使能/失能/置零共用 ``_motor_lifecycle_lock`` 串行化。
+        """
+        # 标定需与使能/失能串行化。即使当前坐标非法也继续采集原始反馈，
+        # 以便显式置零可以修复它。
         with self._motor_lifecycle_lock:
             self._require_connected()
             if self._enabled:
@@ -1412,6 +1632,13 @@ class HardwareManager:
             return bool(ok)
 
     def _set_gripper_zero(self) -> bool:
+        """夹爪置零并验证：要求在超时内连续若干帧都接近零位。
+
+        验证必须基于"置零之后新到"的帧（``_refresh_gripper_feedback`` 会重建
+        接收序号基线，置零前的缓存样本无法满足）。校验失败时保留
+        ``_gripper_zero_error``：仅凭"有新帧"不能证明标定成功，必须等到下一次
+        显式置零验证通过才清除。
+        """
         if self._gripper_mot is None:
             raise RuntimeError("gripper is not initialized")
         self._stop_gripper_loop()
@@ -1425,8 +1652,8 @@ class HardwareManager:
                 consecutive = 0
                 position = float("nan")
                 while time.monotonic() < deadline:
-                    # Force refresh captures a new receive-sequence baseline;
-                    # a pre-zero cached sample cannot satisfy this request.
+                    # 强制刷新会重建接收序号基线；置零前缓存下来的样本无法满足
+                    # 本次验证请求。
                     state = self._refresh_gripper_feedback()
                     position, _velocity, _torque, status = (
                         self._validated_gripper_feedback_values(state)
@@ -1437,6 +1664,7 @@ class HardwareManager:
                         )
                     if time.monotonic() >= deadline:
                         break
+                    # 必须是"连续"多帧接近零位，单帧偶然命中不算通过。
                     consecutive = (
                         consecutive + 1 if abs(position) <= _G_COORDINATE_TOL_RAD else 0
                     )
@@ -1455,12 +1683,13 @@ class HardwareManager:
             except Exception as exc:
                 message = f"gripper set_zero failed: {exc}"
                 with self._gripper_lock:
-                    # New frames alone do not prove an unsuccessful calibration.
-                    # Retain the failure until explicit zero is verified.
+                    # 仅凭新帧并不能证明标定失败已消除；在显式置零验证通过之前
+                    # 一直保留该失败标记。
                     self._gripper_zero_error = message
                 raise RuntimeError(message) from exc
 
     def ensure_pos_vel_control(self) -> None:
+        """确保处于位置-速度模式且统一控制循环在运行（否则保持当前位置）。"""
         self._require_enabled()
         if self.mode != "pos_vel":
             self._stop_control_loop()
@@ -1471,6 +1700,12 @@ class HardwareManager:
             self.hold_current_position()
 
     def send_joint_motor_cmd(self, joint_name: str, cmd) -> None:
+        """低层单关节直通命令（JointMotorCmd）。
+
+        未显式给出的字段回落到当前反馈值或关节默认增益，避免用零值覆盖。命令
+        送入后状态机切到 LOWLEVEL_STREAMING，提示上层这不是轨迹跟踪。
+        mode：0 = MIT，1 = 位置-速度，2 = 速度（需电机支持 send_vel）。
+        """
         self._require_enabled()
         if joint_name not in self._arm._motor_map:
             raise KeyError(f"unknown joint: {joint_name}")
@@ -1502,6 +1737,13 @@ class HardwareManager:
         self.set_state_machine("LOWLEVEL_STREAMING")
 
     def start_gravity_compensation(self) -> None:
+        """进入重力补偿：MIT 模式 + 广义重力前馈 + 目标位置 PI 锁定。
+
+        流程：停掉位置-速度循环与发送线程 -> 刷新反馈并把当前角度设为目标 ->
+        以 _GC_KP/_GC_KD 进入 MIT 模式 -> 启动统一控制循环执行
+        ``_gravity_hardware_tick``。补偿期间操作员可以推动机械臂（目标会跟随），
+        停止时再回到位置-速度保持。
+        """
         self._require_enabled()
         self.stop_gravity_compensation()
         self._stop_control_loop()
@@ -1522,6 +1764,7 @@ class HardwareManager:
         self.set_state_machine("GRAVITY_COMP")
 
     def stop_gravity_compensation(self) -> None:
+        """退出重力补偿：用最后的目标角接管位置-速度保持，避免姿态跌落。"""
         if not self._gravity_comp_active:
             return
         hold_target = (
@@ -1553,6 +1796,11 @@ class HardwareManager:
 
     @staticmethod
     def _angles_near_reference(values: np.ndarray, reference: np.ndarray) -> np.ndarray:
+        """把角度解到与参考值最接近的等价分支上。
+
+        差值先按模 2*pi 折到 (-pi, pi]，再加回参考值；用于抵消编码器在
+        +/-pi 处的跳变，避免重力补偿把跨圈跳变误判为大幅运动。
+        """
         delta = values - reference
         delta = (delta + np.pi) % (2.0 * np.pi) - np.pi
         return reference + delta
@@ -1563,6 +1811,7 @@ class HardwareManager:
         request: bool = False,
         reference: np.ndarray | None = None,
     ) -> np.ndarray:
+        # request 参数保留为兼容接口：实际采集一律通过统一反馈批次完成。
         del request
         q, _qd = self._read_gravity_comp_feedback(reference=reference)
         return q
@@ -1572,6 +1821,11 @@ class HardwareManager:
         *,
         reference: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
+        """重力补偿回路的反馈读取：(角度 rad, 角速度 rad/s)。
+
+        要求全部电机状态码为 1（补偿期间必须使能），并做软限位/有限性校验；
+        角度会解到与上一帧最接近的分支，结果同时更新 ``_gravity_comp_q_last``。
+        """
         joint_names = self.joint_names
         with self._feedback_lock:
             feedback_failure = self._arm_feedback_failure_reason()
@@ -1600,6 +1854,15 @@ class HardwareManager:
         return self._gravity_comp_q_last.copy(), qd
 
     def _gravity_comp_tick(self, arm, dt: float) -> None:
+        """重力补偿的单周期控制律（运行在统一控制循环里）。
+
+        1) 读反馈；2) 用动力学模型算广义重力力矩并按增益缩放，作为前馈 tau；
+        3) 目标角误差积分（限幅 +/-0.5 rad*s）用于抵消稳态摩擦/模型误差；
+        4) 用末端雅可比把关节速度映到笛卡尔空间：一旦线速度/角速度超过阈值，
+        说明人正在拖动，于是把目标角更新为当前角并衰减积分（"跟随"模式）；
+        否则累加锁定计数（"锁定"模式）。
+        下发时位置/速度目标固定，仅用 tau 项补偿重力，因此机械臂呈现"轻"的手感。
+        """
         del dt
         if not self._gravity_comp_active or self._gravity_comp_q_target is None:
             return
@@ -1622,11 +1885,13 @@ class HardwareManager:
             self._gc_ee_frame_id,
             self._gc_pin.ReferenceFrame.WORLD,
         )
+        # 空间速度前三维是线速度、后三维是角速度（世界系表达）。
         spatial_velocity = jacobian @ qd
         linear_speed = float(np.linalg.norm(spatial_velocity[:3]))
         angular_speed = float(np.linalg.norm(spatial_velocity[3:]))
 
         if linear_speed > _GC_VEL_THRESHOLD or angular_speed > _GC_W_VEL_THRESHOLD:
+            # 检测到外部拖动：目标随之移动，并把积分项衰减 10%。
             self._gravity_comp_q_target = q.copy()
             self._gravity_comp_lock_counter = 0
             self._gravity_comp_integral *= 0.9
@@ -1643,6 +1908,7 @@ class HardwareManager:
         )
 
     def current_pose(self):
+        """用厂商正运动学把当前关节角换算成 Pose（供状态发布使用）。"""
         from reBotArm_control_py.kinematics import compute_fk
 
         q, _, _ = self.get_joint_state()
@@ -1650,6 +1916,7 @@ class HardwareManager:
         return fk_to_pose(position, rotation)
 
     def get_joint_status_codes(self) -> list[int]:
+        """返回各关节状态码；反馈整体失效时统一返回 255（未知）。"""
         if self._arm_feedback_failure_reason() is not None:
             return [255] * len(self.joint_names)
         codes: list[int] = []
@@ -1662,6 +1929,12 @@ class HardwareManager:
         return codes
 
     def init_gripper(self, cfg_path: str) -> None:
+        """按配置初始化夹爪电机，并挂到机械臂同一控制器/总线上。
+
+        夹爪必须与机械臂共用同一个控制器对象（同一串口），否则无法保证总线
+        事务的原子性。初始化阶段保持单线程：首次新鲜反馈校验由本方法同步完成，
+        位置/抓取入口再按需启动统一控制循环。
+        """
         from reBotArm_control_py.actuator.gripper import load_cfg as load_gripper_cfg
 
         gcfg = load_gripper_cfg(cfg_path)
@@ -1688,11 +1961,17 @@ class HardwareManager:
 
         self._patch_controller_bus(ctrl)
         self._wrap_motor_bus(self._gripper_mot, ctrl._bus_lock)
-        # Keep initialization single-threaded while the arm and gripper perform
-        # their first fresh-feedback validation on the shared serial bus.  The
-        # position/grasp entry points start this loop on demand.
+        # 机械臂与夹爪在共享串口上完成首次新鲜反馈校验期间，保持初始化单线程。
+        # 位置/抓取入口会按需启动该循环。
 
     def set_gripper_target(self, position_m: float, max_effort: float = 0.0) -> None:
+        """下发夹爪位置目标（异步）：只登记目标，实际下发由 500 Hz 循环完成。
+
+        ``position_m``：0 表示完全闭合、正值为张开距离（m），会被夹到
+        [0, _G_VERIFIED_OPEN_LIMIT_M]；``max_effort`` <= 0 时使用默认力矩
+        ``_G_DEFAULT_FORCE``，否则夹到 [0.05, 位置力矩上限]。
+        超时按"角度行程 / 最大速度 + 余量"估算，供 ``wait_gripper_target`` 使用。
+        """
         self._require_enabled()
         if not self.control_loop_active:
             raise RuntimeError(
@@ -1709,6 +1988,7 @@ class HardwareManager:
         if status != 1:
             raise RuntimeError(f"gripper status_code={status}, expected 1 before position command")
         distance = float(np.clip(position_m, 0.0, _G_VERIFIED_OPEN_LIMIT_M))
+        # 线性映射：距离 -> 电机角；再取软限位，避免贴死机械端点。
         target = max((distance / _G_MAX_DIST_M) * _G_ANGLE_OPEN, _G_OPEN_SOFT_LIMIT)
         effort = _G_DEFAULT_FORCE if max_effort <= 0.0 else float(max_effort)
         now = time.monotonic()
@@ -1769,8 +2049,16 @@ class HardwareManager:
             return self._gripper_feedback_error
 
     def wait_gripper_target(self, timeout: float | None = None) -> bool:
-        # Remember which goal this waiter owns so neither the arrival nor the
-        # timeout path can release a newer command issued in the meantime.
+        """阻塞等待当前位置命令完成；返回是否到位。
+
+        只等待"自己那一次"的命令：先记住目标角，若期间出现更新的命令（目标角
+        变化）立即返回 False，避免旧等待者误判或误释放新命令。到位后必须调用
+        ``_release_gripper_position_target`` 解除 MIT 位置命令（完成一次定位移动
+        不等于抓取保持，不能继续顶住目标）。
+        超时同样结束本次命令的所有权并取消位置命令，不留残余力矩。
+        """
+        # 记住本次等待归属于哪个目标，这样"到位"与"超时"两条路径都不会释放
+        # 期间新下发的命令。
         with self._gripper_lock:
             owned_goal = self._gripper_goal_angle
             deadline = self._gripper_target_deadline_monotonic
@@ -1800,15 +2088,14 @@ class HardwareManager:
                     and abs(self._gripper_pos - owned_goal) < _G_ARRIVE_TOL
                 )
             if arrived:
-                # A completed positioning move is not a grasp hold.  Release the
-                # MIT position command before acknowledging success so the motor
-                # cannot keep driving toward the target after this returns.
+                # 一次定位移动完成并不等于抓取保持。在确认成功之前先释放 MIT
+                # 位置命令，使得本函数返回后电机不会继续朝目标推进。
                 self._release_gripper_position_target(owned_goal)
                 time.sleep(1.0 / _G_CTRL_RATE)
                 continue
             time.sleep(0.02)
-        # A timeout also ends this command's ownership of the gripper: stop
-        # driving instead of leaving a stale position hold running.
+        # 超时同样结束本次命令对夹爪的所有权：停止下发，而不是留下一个过期的
+        # 位置保持命令。
         self.cancel_gripper_position_command(
             "gripper target timeout: "
             f"goal={owned_goal:.6f}rad feedback={self._gripper_pos:.6f}rad"
@@ -1816,6 +2103,7 @@ class HardwareManager:
         return False
 
     def set_gripper_position(self, position_m: float, max_effort: float = 0.0) -> tuple[bool, float]:
+        """同步版位置命令：下发并等待到位，返回 (是否到位, 实际位置 m)。"""
         self.set_gripper_target(position_m, max_effort)
         reached = self.wait_gripper_target()
         return reached, self.gripper_position_m()
@@ -1830,6 +2118,17 @@ class HardwareManager:
         min_closure_distance_m: float = _G_GRASP_MIN_CLOSURE_M,
         hold_timeout_sec: float | None = None,
     ) -> tuple[bool, bool, float, float, float, str]:
+        """闭合抓取：检测"堵转"即认为接触，随后进入有界保持。
+
+        判据（三者同时满足才算抓住）：已过 ``min_close_time_sec``、闭合行程
+        >= ``min_closure_distance_m``、速度绝对值 <= ``velocity_threshold``。
+        这里没有力传感器，因此这些条件表示"闭合推进 + 速度堵转"，即堵转检测，
+        而不是实测接触力。
+        返回 (是否检测到堵转, 是否进入保持, 接触位置 m, 当前位置 m, 保持力矩 N.m, 说明)。
+        保持阶段有时限（``hold_timeout_sec``，默认取配置值，上限
+        ``_G_GRASP_HOLD_TIMEOUT_MAX_SEC``），到时或超时路径都会中性释放，
+        不会让电机长期带电顶紧。
+        """
         self._require_enabled()
         if not self.control_loop_active:
             raise RuntimeError(
@@ -1844,8 +2143,7 @@ class HardwareManager:
 
         close_effort = float(np.clip(close_force, 0.05, _G_GRASP_CLOSE_FORCE_MAX))
         hold_effort = float(np.clip(hold_force, 0.05, _G_TAU_MAX))
-        # A grasp hold is always bounded; an unbounded hold keeps loading the
-        # motor at 500 Hz with no exit path.
+        # 抓取保持必须有界；无界保持会让电机以 500 Hz 持续加载且没有退出路径。
         requested_hold = (
             self._grasp_hold_timeout_sec
             if hold_timeout_sec is None
@@ -1894,6 +2192,7 @@ class HardwareManager:
                 and abs(float(self._gripper_vel)) <= velocity_limit
             ):
                 with self._gripper_lock:
+                    # 冻结当前角度作为保持目标：位置项因此把夹爪按在堵转点。
                     self._gripper_hold_angle = float(self._gripper_pos)
                     self._gripper_hold_force = hold_effort
                     self._gripper_hold_deadline = time.monotonic() + hold_timeout
@@ -1906,15 +2205,14 @@ class HardwareManager:
                     contact_position_m,
                     contact_position_m,
                     hold_effort,
-                    # No force sensor: this is closure travel plus a velocity
-                    # stall, i.e. stall detection, not a measured contact force.
+                    # 没有力传感器：这里是"闭合行程 + 速度堵转"，即堵转检测，
+                    # 不是实测接触力。
                     "closing stalled; holding "
                     f"(bounded to {hold_timeout:g} s)",
                 )
             time.sleep(0.01)
 
-        # Upstream switched to idle here without neutralizing, leaving the last
-        # closing torque applied.
+        # 上游此处在切到 idle 时没有做中性化，导致最后一次闭合力矩一直被施加。
         with self._gripper_lock:
             self._release_grasp_hold_locked("close timeout before stall")
         return (
@@ -1927,6 +2225,11 @@ class HardwareManager:
         )
 
     def get_gripper_state(self) -> tuple[float, float, float, int]:
+        """返回夹爪 (位置 rad, 速度 rad/s, 力矩 N.m, 状态码)。
+
+        状态码 255 表示"未知/不可用"：反馈缺失、过期、坐标非法或读取异常时都会
+        返回 255，调用方据此判定夹爪不可信。
+        """
         with self._gripper_lock:
             position = self._gripper_pos
             velocity = self._gripper_vel
@@ -1958,14 +2261,17 @@ class HardwareManager:
         return position, velocity, torque, status
 
     def gripper_position_m(self) -> float:
+        """把夹爪原始角度换算为开口距离（m，0 表示闭合）。"""
         with self._gripper_lock:
             if self._gripper_coordinate_failure_reason_locked() is not None:
+                # 坐标非法时返回 NaN，让上层无法把无效值当距离使用。
                 return float("nan")
             distance = (self._gripper_pos / _G_ANGLE_OPEN) * _G_MAX_DIST_M
-        # Only endpoint excursions within the verified feedback tolerances reach this clamp.
+        # 只有落在已验证反馈容差内的端点越界才会到这里被夹紧。
         return float(np.clip(distance, 0.0, _G_MAX_DIST_M))
 
     def gripper_reached_target(self) -> bool:
+        """查询当前位置命令是否到位（不会推进状态机）。"""
         with self._gripper_lock:
             if self._gripper_position_result == "succeeded":
                 return True
@@ -1979,6 +2285,11 @@ class HardwareManager:
             return abs(self._gripper_pos - goal) < _G_ARRIVE_TOL
 
     def send_gripper_motor_cmd(self, cmd) -> None:
+        """低层夹爪直通命令（JointMotorCmd）：未给出的字段回落到反馈或配置增益。
+
+        直通后夹爪状态机被置为 idle，避免与高层位置/抓取命令互相干扰。
+        mode：0 = MIT，1 = 位置-速度，2 = 速度。
+        """
         self._require_enabled()
         if self._gripper_mot is None or self._gripper_cfg is None:
             raise RuntimeError("gripper is not initialized")
@@ -2009,6 +2320,10 @@ class HardwareManager:
             self._gripper_mode = "idle"
 
     def _patch_arm_bus_lock(self) -> None:
+        """给机械臂（含夹爪）控制器与电机方法统一加上总线互斥。
+
+        只打一次补丁：``_bus_lock_patched`` 防止重复包装导致锁嵌套。
+        """
         for ctrl in self._arm._ctrl_map.values():
             self._patch_controller_bus(ctrl)
 
@@ -2021,6 +2336,11 @@ class HardwareManager:
 
     @staticmethod
     def _patch_controller_bus(ctrl) -> None:
+        """给控制器的 poll_feedback_once/enable_all/disable_all 包上可重入锁。
+
+        这几个方法内部会做多次总线读写，必须在同一把锁内完成，否则与其他线程
+        的电机命令交错会串帧。重复调用是幂等的。
+        """
         if not hasattr(ctrl, "_bus_lock"):
             ctrl._bus_lock = threading.RLock()
         if hasattr(ctrl, "_bus_lock_patched"):
@@ -2037,12 +2357,14 @@ class HardwareManager:
         for attr in ("poll_feedback_once", "enable_all", "disable_all"):
             if hasattr(ctrl, attr):
                 wrapped = _wrap(getattr(ctrl, attr))
+                # 标记位用于 _wrap_motor_bus 判定是否已包装，避免重复加锁。
                 wrapped._rebotarm_locked = True
                 setattr(ctrl, attr, wrapped)
         ctrl._bus_lock_patched = True
 
     @staticmethod
     def _wrap_motor_bus(mot, lock) -> None:
+        """把单个电机的总线类方法包上同一把锁（幂等，已包装的跳过）。"""
         def _wrap(fn, _lock=lock):
             def _locked(*args, **kwargs):
                 with _lock:
@@ -2067,6 +2389,10 @@ class HardwareManager:
                 setattr(mot, attr, wrapped)
 
     def _start_pos_vel_loop(self, target: np.ndarray | None = None) -> None:
+        """启动统一硬件控制循环（位置-速度跟踪），并把控制器标记为运行中。
+
+        ``target`` 为空时以当前角度为目标（保持不动）。
+        """
         if self.control_loop_active:
             return
         if target is None:
@@ -2083,7 +2409,7 @@ class HardwareManager:
         self._hardware_control_tick(arm, dt, self._gravity_comp_tick)
 
     def _protective_disable_from_hardware_loop(self, reason: str) -> None:
-        """Stop the sole writer and disable controllers without self-joining."""
+        """停掉唯一写入者并请求控制器失能，且不自连接（避免线程自 join 死锁）。"""
         message = str(reason)
         with self._gripper_lock:
             if self._gripper_active:
@@ -2094,9 +2420,8 @@ class HardwareManager:
                         "FEEDBACK_PROTECTIVE_NEUTRAL_FAILED"
                     )
 
-        # RobotArm.disable()/stop_control_loop() join ``_ctrl_thread`` and must
-        # never be called by that same thread.  Returning from this callback
-        # releases ownership naturally after the vendor loop observes False.
+        # RobotArm.disable()/stop_control_loop() 会 join ``_ctrl_thread``，绝不能被
+        # 该线程自己调用。本回调返回后，厂商循环读到 False 自然释放线程所有权。
         self._arm._running = False
         self._endpos_ctrl._running = False
         self._endpos_ctrl._stop_send.set()
@@ -2136,7 +2461,13 @@ class HardwareManager:
         )
 
     def _hardware_control_tick(self, arm, dt: float, arm_callback) -> None:
-        """Single owner for arm command, feedback batch, and gripper command."""
+        """机械臂命令、反馈批次与夹爪命令的唯一所有者。
+
+        每周期顺序：刷新反馈 -> 检查反馈健康 -> 执行模式回调（位置跟踪或重力
+        补偿）-> 推进夹爪状态机。若反馈刷新或回调因反馈类错误失败，则执行保护性
+        失能并结束本次 tick；非反馈类异常继续向上抛出（由厂商循环处理），
+        以免把编程错误当成"反馈故障"而静默失能。
+        """
         try:
             self.refresh_feedback_if_due()
         except Exception:
@@ -2172,9 +2503,16 @@ class HardwareManager:
         tau_ff: float = 0.0,
         tau_limit: float = _G_TAU_MAX,
     ) -> None:
+        """下发夹爪 MIT 命令，并保证总力矩不超限。
+
+        位置命令先夹到 [_G_OPEN_SOFT_LIMIT, 0]（不允许命令超过张开软限位或越过
+        闭合零点）。力矩处理是"先算位置项，再把总力矩夹到 +/-limit，最后反解出
+        等效前馈"：这样即使 tau_ff 很大，实际输出也不会超过 limit。
+        """
         if self._gripper_mot is None or self._gripper_ctrl is None:
             return
         pos_cmd = float(np.clip(pos, _G_OPEN_SOFT_LIMIT, 0.0))
+        # 本地计算的 PD 位置项，用于后面的饱和反解。
         pos_term = kp * (pos_cmd - self._gripper_pos) + kd * (-self._gripper_vel)
         limit = float(np.clip(abs(tau_limit), 0.05, _G_TAU_MAX))
         tau_safe = float(np.clip(pos_term + tau_ff, -limit, limit)) - pos_term
@@ -2189,6 +2527,7 @@ class HardwareManager:
             raise RuntimeError(f"gripper MIT command failed: {exc}") from exc
 
     def _fail_active_gripper_command_locked(self, reason: str) -> None:
+        """把当前夹爪命令标记为失败并排队一次中性释放（调用方需持锁）。"""
         message = str(reason)
         self._gripper_command_error = message
         self._gripper_position_result = "failed"
@@ -2213,6 +2552,11 @@ class HardwareManager:
         *,
         marks_success: bool,
     ) -> None:
+        """排队一条中性 MIT 命令（零刚度/阻尼/前馈），由硬件循环在下一拍发出。
+
+        只排队不直接发送，保证总线上只有一个写入者。``marks_success`` 决定该
+        中性命令发送成功后是否把本次位置命令标记为成功。
+        """
         self._gripper_neutral_pending = (
             float(self._gripper_pos),
             str(reason),
@@ -2220,6 +2564,7 @@ class HardwareManager:
         )
 
     def _emit_pending_gripper_neutral_locked(self) -> bool:
+        """发送已排队的中性命令；返回是否成功（调用方需持 ``_gripper_lock``）。"""
         pending = self._gripper_neutral_pending
         if pending is None:
             return False
@@ -2246,6 +2591,7 @@ class HardwareManager:
         return True
 
     def cancel_gripper_position_command(self, reason: str = "position command canceled") -> bool:
+        """取消进行中的位置命令；仅在确实处于 position 模式时生效。"""
         with self._gripper_lock:
             if not self._gripper_active or self._gripper_mode != "position":
                 return False
@@ -2258,19 +2604,15 @@ class HardwareManager:
         *,
         require_arrived: bool = True,
     ) -> bool:
-        """End a normal position move and leave the gripper idle.
+        """结束一次常规位置移动，并让夹爪回到空闲。
 
-        Upstream only returns success from ``wait_gripper_target`` and keeps
-        ``_gripper_active``/``_gripper_mode`` unchanged, so the 500 Hz tick goes
-        on sending MIT position commands after the service has already
-        answered.  This atomically switches to idle and queues one neutral MIT
-        command (zero stiffness, damping and feed-forward torque) for the sole
-        hardware-loop writer before success is acknowledged.
+        上游 ``wait_gripper_target`` 只返回成功而不改 ``_gripper_active``/
+        ``_gripper_mode``，于是 500 Hz 循环在服务已经应答之后仍在继续下发 MIT
+        位置命令。这里改为原子地切到空闲，并在确认成功之前为唯一的硬件循环写入者
+        排队一条中性 MIT 命令（零刚度、零阻尼、零前馈）。
 
-        The gripper lock is held for the whole sequence so a newer target
-        cannot be clobbered by a stale completion.  ``grasp_closing`` and
-        ``grasp_holding`` are explicitly requested force operations and are
-        never released here.
+        整个过程持有夹爪锁，避免过期的完成路径覆盖更新的目标。``grasp_closing``
+        与 ``grasp_holding`` 是显式请求的力操作，绝不在此释放。
         """
         with self._gripper_lock:
             return self._release_gripper_position_target_locked(
@@ -2284,10 +2626,10 @@ class HardwareManager:
         *,
         require_arrived: bool = True,
     ) -> bool:
-        """``_release_gripper_position_target`` body; caller must hold the lock.
+        """``_release_gripper_position_target`` 的本体；调用方必须持有锁。
 
-        This split keeps the ownership checks and neutralization in one place
-        for callers that already hold ``_gripper_lock``.
+        拆成两部分是为了让已经持有 ``_gripper_lock`` 的调用方也能复用同一份
+        所有权检查与中性化逻辑。
         """
         if not self._gripper_active or self._gripper_mode != "position":
             return False
@@ -2296,9 +2638,8 @@ class HardwareManager:
         arrived_angle = float(self._gripper_pos)
         if require_arrived and abs(arrived_angle - expected_goal) >= _G_ARRIVE_TOL:
             return False
-        # Clear ownership BEFORE queueing neutral.  The 500 Hz tick tests
-        # _gripper_active first, so once this is false no further position
-        # command can be produced and the queued neutral is the last word.
+        # 在排队中性命令之前先清掉所有权。500 Hz 循环先判断 _gripper_active，
+        # 因此它一旦为假就不会再产生任何位置命令，排队的中性命令即是最后一条。
         self._gripper_target_angle = arrived_angle
         self._gripper_active = False
         self._gripper_mode = "idle"
@@ -2314,18 +2655,17 @@ class HardwareManager:
         return True
 
     def _grasp_hold_expired_locked(self) -> bool:
-        """Whether the bounded grasp hold has run out.  Caller holds the lock."""
+        """有界抓取保持是否已到时。调用方需持锁。"""
         deadline = self._gripper_hold_deadline
         if deadline is None:
             return False
         return time.monotonic() >= deadline
 
     def _release_grasp_hold_locked(self, reason: str) -> None:
-        """Neutralize a grasp close/hold and go idle.  Caller holds the lock.
+        """对抓取闭合/保持做中性化并回到空闲。调用方需持锁。
 
-        Upstream left ``grasp_holding`` loaded until the next command and its
-        close-timeout path switched to idle without ever neutralizing the last
-        torque command.  Both paths end here instead.
+        上游会让 ``grasp_holding`` 一直带电到下一条命令，其闭合超时路径也只是切
+        到 idle 而从不中性化最后一条力矩命令。两条路径现在都汇到这里。
         """
         self._gripper_hold_deadline = None
         self._gripper_hold_release_reason = reason
@@ -2337,7 +2677,7 @@ class HardwareManager:
         )
 
     def release_grasp_hold(self, reason: str = "external release") -> bool:
-        """Release an active grasp hold without commanding a new position."""
+        """释放进行中的抓取保持，且不下发新的位置命令。"""
         with self._gripper_lock:
             if not self._gripper_active:
                 return False
@@ -2352,6 +2692,17 @@ class HardwareManager:
             return self._gripper_hold_release_reason
 
     def _gripper_tick(self) -> None:
+        """夹爪状态机的单周期推进（由统一控制循环调用）。
+
+        优先级：先发已排队的中性命令；无活动命令则直接返回。之后在持锁状态下
+        一次性完成"读状态 -> 判定 -> 生成命令"，保证到位判定与命令下发原子，
+        避免已经通过到位判定的 tick 在等待者释放后又多发一条带力矩的命令
+        （真机上曾观测到服务返回后仍多闭合约 1.2-1.33 mm）。向零位闭合是最敏感
+        方向，因为 abs(target) < 1e-6 时 effort 会变成前馈项。
+
+        位置模式使用按时间步长限速的斜坡（速度上限 = 参数 rad/s），抓取闭合/
+        保持模式使用固定的 kp/kd 与前馈力矩，且保持受时限约束。
+        """
         with self._gripper_lock:
             if self._gripper_neutral_pending is not None:
                 self._emit_pending_gripper_neutral_locked()
@@ -2369,13 +2720,10 @@ class HardwareManager:
                     )
             return
 
-        # The arrival test and the command emission must be atomic.  Sampling
-        # state, releasing the lock, then sending allowed a tick that had
-        # already passed the arrival test to emit one more torque-carrying
-        # command after wait_gripper_target had released -- observed on real
-        # hardware as ~1.2-1.33 mm of extra closing travel after the service
-        # returned.  Closing to zero is the exposed direction because
-        # abs(target) < 1e-6 turns effort into a feed-forward term there.
+        # 到位判定与命令下发必须原子。先取状态、放开锁、再发送，会让已经通过
+        # 到位判定的 tick 在 wait_gripper_target 释放之后再发出一条带力矩的命令
+        # ——真机上表现为服务返回后又多闭合约 1.2-1.33 mm。向零位闭合是最暴露的
+        # 方向，因为 abs(target) < 1e-6 时 effort 会变成前馈项。
         with self._gripper_lock:
             mode = self._gripper_mode
             if not self._gripper_active:
@@ -2408,13 +2756,14 @@ class HardwareManager:
             if command is None and self._gripper_active and mode == "position":
                 goal = self._gripper_goal_angle
                 if abs(self._gripper_pos - goal) < _G_ARRIVE_TOL:
-                    # Reached with no synchronous waiter, or after one returned.
+                    # 无同步等待者时到达，或在等待者返回之后到达。
                     self._release_gripper_position_target_locked(goal)
                     command = None
                 else:
                     now = time.monotonic()
                     previous_tick = self._gripper_last_tick_monotonic
                     elapsed = 0.0 if previous_tick is None else max(now - previous_tick, 0.0)
+                    # 本拍允许的最大角度增量 = 速度上限 * 实际经过时间。
                     max_step = self._gripper_position_max_speed_rad_s * elapsed
                     target = self._gripper_target_angle
                     remaining = goal - target
@@ -2425,12 +2774,12 @@ class HardwareManager:
                     self._gripper_target_angle = target
                     self._gripper_last_tick_monotonic = now
                     effort = self._gripper_target_effort
-                    # ``effort`` caps the whole move, not just the closed
-                    # target; without the explicit tau_limit the command torque
-                    # fell back to _G_TAU_MAX.
+                    # ``effort`` 约束整段移动而不只是闭合终点；若不显式传
+                    # tau_limit，命令力矩会回落到 _G_TAU_MAX。
                     tau_ff = effort if abs(target) < 1e-6 else 0.0
                     command = (target, 0.0, _G_KP_MOVE, _G_KD_MOVE, tau_ff, effort)
             elif command is None and self._gripper_active and mode == "grasp_closing":
+                # 闭合：kp=0，仅靠阻尼 + 前馈力矩推进，撞到物体即自然堵转。
                 command = (
                     0.0,
                     0.0,
@@ -2444,6 +2793,7 @@ class HardwareManager:
                     self._release_grasp_hold_locked("hold timeout")
                     command = None
                 else:
+                    # 保持：位置目标冻结在堵转角，位置项提供主夹持力。
                     command = (
                         self._gripper_hold_angle,
                         0.0,
@@ -2464,10 +2814,12 @@ class HardwareManager:
                 self._fail_active_gripper_command_locked(str(exc))
 
     def _start_gripper_loop(self) -> None:
+        """夹爪命令的入口校验：夹爪没有独立循环，必须依赖统一硬件循环。"""
         if not self.control_loop_active:
             raise RuntimeError(
                 "gripper command requires the unified hardware control loop"
             )
 
     def _stop_gripper_loop(self) -> None:
+        # 仅复位兼容标志位；夹爪命令由统一硬件循环承载，没有独立线程需要 join。
         self._gripper_loop_running = False

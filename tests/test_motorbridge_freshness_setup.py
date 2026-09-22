@@ -68,7 +68,7 @@ def _module_with_contract(
     *,
     method_present: bool,
     feedback_sequence: bool | None,
-    version: str = "0.4.6+rebotarm.2",
+    version: str = "0.4.7+rebotarm.1",
 ) -> SimpleNamespace:
     motor = type("Motor", (), {})
     if method_present:
@@ -120,8 +120,32 @@ def test_runtime_contract_rejects_unexpected_package_version() -> None:
         version="0.4.6",
     )
 
-    with pytest.raises(RuntimeError, match="0.4.6\\+rebotarm.2"):
+    with pytest.raises(RuntimeError, match="0.4.7\\+rebotarm.1"):
         SETUP.validate_runtime_contract(module)
+
+
+def test_upstream_dm_serial_timeout_budget_is_verified(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    dm_serial = source / "motor_core/src/dm_serial.rs"
+    dm_serial.parent.mkdir(parents=True)
+    dm_serial.write_text(
+        ".timeout(Duration::from_millis(10))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(SETUP, "SOURCE_DIR", source)
+
+    assert SETUP._verify_dm_serial_timeout_budget() is None
+
+    dm_serial.write_text(
+        ".timeout(Duration::from_millis(1))\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="10 ms"):
+        SETUP._verify_dm_serial_timeout_budget()
+
 
 
 def test_patch_digest_mismatch_is_rejected(
@@ -287,6 +311,7 @@ def test_build_patched_wheel_runs_all_gates_and_smoke_in_order(
     gateway = tmp_path / "ws_gateway"
     wheel = tmp_path / "motorbridge.whl"
     events = []
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: events.append("timeout"))
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: events.append("verify"))
     monkeypatch.setattr(
         SETUP,
@@ -312,7 +337,7 @@ def test_build_patched_wheel_runs_all_gates_and_smoke_in_order(
     monkeypatch.setattr(SETUP, "_smoke_test_wheel", smoke)
 
     assert SETUP.build_patched_wheel() == wheel
-    assert events == ["verify", "checkout", "rust", "wheel", "smoke"]
+    assert events == ["verify", "checkout", "timeout", "rust", "wheel", "smoke"]
 
 
 def test_build_patched_wheel_propagates_smoke_failure(
@@ -320,6 +345,7 @@ def test_build_patched_wheel_propagates_smoke_failure(
     tmp_path: Path,
 ) -> None:
     wheel = tmp_path / "motorbridge.whl"
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: None)
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
     monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)
     monkeypatch.setattr(
@@ -344,6 +370,7 @@ def test_install_mode_does_not_install_when_real_build_smoke_fails(
     tmp_path: Path,
 ) -> None:
     wheel = tmp_path / "motorbridge.whl"
+    monkeypatch.setattr(SETUP, "_verify_dm_serial_timeout_budget", lambda: None)
     installed = []
     monkeypatch.setattr(SETUP, "_verify_patch_file", lambda: None)
     monkeypatch.setattr(SETUP, "_prepare_source_checkout", lambda: None)

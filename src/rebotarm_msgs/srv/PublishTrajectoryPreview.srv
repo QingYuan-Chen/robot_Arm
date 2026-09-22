@@ -1,0 +1,6 @@
+# 发布一组已经规划完成的关节轨迹，供 RViz 连续预览。
+# 本服务只负责显示，不会向 FollowJointTrajectory 动作服务器发送目标。
+trajectory_msgs/JointTrajectory[] trajectories
+---
+bool success
+string message

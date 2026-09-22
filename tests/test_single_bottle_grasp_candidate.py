@@ -85,7 +85,7 @@ assert not runner._valid_bottle_plan(bottle_plan(0.085001))
     assert result.returncode == 0, result.stderr
 
 
-def test_single_bottle_grasp_rejects_below_50mm_grasp_height() -> None:
+def test_single_bottle_grasp_rejects_below_30mm_grasp_height() -> None:
     script = f"""
 import importlib.util
 from rebotarm_msgs.msg import GraspPlan
@@ -104,8 +104,8 @@ def bottle_plan(height):
     plan.grasp_pose.position.z = height
     return plan
 
-assert not runner._valid_bottle_plan(bottle_plan(0.049999))
-assert runner._valid_bottle_plan(bottle_plan(0.05))
+assert not runner._valid_bottle_plan(bottle_plan(0.029999))
+assert runner._valid_bottle_plan(bottle_plan(0.03))
 """
     result = _run_runner_script(script)
     assert result.returncode == 0, result.stderr

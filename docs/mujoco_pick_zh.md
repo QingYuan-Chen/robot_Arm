@@ -89,7 +89,7 @@ Ubuntu VM 中执行：
 cd ~/robotarm_ros2_mujoco_acceptance
 source /opt/ros/jazzy/setup.bash
 source ~/robotarm_ros2/install/setup.bash
-source ~/robotarm_ros2/.venv-mujoco-ros/bin/activate
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 export PYTHONPATH="$PWD/src/rebotarm_simulation:$PYTHONPATH"
 
 python -m rebotarm_simulation.mujoco_pick_batch \

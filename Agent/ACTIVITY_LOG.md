@@ -584,32 +584,283 @@
 - 2026-09-06T22:16:58+08:00 | actor=Codex | event=complete | note=112个历史材料/闲置副本/旧模型文件退出跟踪，本机保留；有效测试和来源授权保留，准备提交同步main | verification=发布副本仅补SDK/install环境：807 passed, 7 skipped；compileall/diff通过；112文件保留且与HEAD逐字节一致
 - 2026-09-06T22:21:53+08:00 | actor=Codex | event=start | note=同步安装/模型准备/逐进程解释器与README，验证无机器专属模型的源码构建；不修改现有环境和真机 | verification=-
 - 2026-09-06T22:32:22+08:00 | actor=Codex | event=complete | note=安装脚本/模型可选打包/README已同步当前架构，独立构建验证完成，准备提交推送main | verification=无PT/engine副本13包构建通过；新install+SDK全量811 passed/7 skipped；分层20、compileall/bash/diff和3类launch参数解析通过；未重装环境或操作硬件
-- 2026-09-07T00:16:22+08:00 | actor=Codex | event=start | note=整理当前视觉真机抓取启动链路，将可持久化参数写入bringup profile并保留显式串口选择 | verification=-
-- 2026-09-07T00:25:34+08:00 | actor=Codex | event=complete | note=视觉真机抓取启动参数已配置化，新增严格profile封装并保留显式串口选择 | verification=新profile 7 passed；视觉与解释器聚焦118 passed；分层20 passed；全量836 passed, 8 skipped；bringup构建、required compileall、launch解析、MotorBridge契约与diff check通过；未访问串口或启动实机
-- 2026-09-07T00:30:58+08:00 | actor=Codex | event=start | note=将P6单瓶抓取runner已验收参数配置化，保留动态输出路径和显式真机确认 | verification=-
-- 2026-09-07T00:36:10+08:00 | actor=Codex | event=complete | note=P6单瓶抓取runner参数已写入严格YAML profile，逐次确认和动态输出继续由命令行提供 | verification=P6聚焦16 passed, 1 skipped；全量842 passed, 8 skipped；分层20 passed；compileall、runner py_compile、diff check和错误确认fail-closed smoke通过；未启动ROS或操作硬件
-- 2026-09-07T00:50:30+08:00 | actor=Codex | event=start | note=追查并修复视觉抓取失败后未保持及恢复本轮安全基线 | verification=-
-- 2026-09-07T01:11:53+08:00 | actor=Codex | event=complete | note=同步P6失败恢复与视觉链单一动作执行权，修复非有限设备值导致报告丢失 | verification=聚焦27 passed；视觉/P5/P6/Grasp/Candidate 194 passed, 1 skipped；全量848 passed, 8 skipped；分层20 passed；compileall/py_compile、两包标准install重建、Launch静态解析、MotorBridge反馈序号契约和diff check通过；未操作硬件
-- 2026-09-07T01:25:31+08:00 | actor=Codex | event=start | note=诊断两次P6实机假失败并修复事件驱动arm_status被误当周期心跳 | verification=-
-- 2026-09-07T01:26:04+08:00 | actor=Codex | event=complete | note=修复P6回位验收将事件驱动arm_status误判为过期的假失败 | verification=两份实机报告均证明正常return成功且最大baseline误差0.00267/0.00381rad；新增回归测试后聚焦28 passed、视觉相关195 passed/1 skipped、全量849 passed/8 skipped、分层20 passed；compileall/py_compile、rebotarm_motion标准install重建及diff check通过；未发送动作
-- 2026-09-07T01:36:37+08:00 | actor=Codex | event=start | note=修复反馈短暂中断恢复后ArmStatus仍锁存255导致P6预检误报 | verification=-
-- 2026-09-07T01:40:51+08:00 | actor=Codex | event=complete | note=修复反馈恢复后ArmStatus仍锁存255导致P6预检误报 | verification=TDD验证ArmStatus从[255]*6恢复为[1]*6且故障不重复发布；controller聚焦126 passed；全量850 passed/8 skipped；分层20 passed；compileall/py_compile/diff check；标准rebotarmcontroller安装态重建并核验；未操作硬件
-- 2026-09-07T01:42:44+08:00 | actor=Codex | event=verified | note=校正P6启动前健康状态语义并复验ArmStatus恢复发布 | verification=失能启动期回归为[255]*6到[0]*6；使能态健康值仍为[1]*6；controller聚焦126 passed；全量850 passed/8 skipped；diff check通过；未操作硬件
-- 2026-09-07T01:57:16+08:00 | actor=Codex | event=start | note=修复rebotarmcontroller被错误改为symlink-install导致旧终端入口PackageNotFoundError | verification=-
-- 2026-09-07T01:59:20+08:00 | actor=Codex | event=complete | note=恢复rebotarmcontroller普通安装态并消除旧终端PackageNotFoundError | verification=install含实体包和egg-info；无build路径的旧环境可加载distribution与console entrypoint；源码/安装哈希一致；controller聚焦126 passed；全量850 passed/8 skipped；分层20 passed；compileall/diff check；MotorBridge .2反馈序号契约通过；未启动实机
-- 2026-09-07T02:08:49+08:00 | actor=Codex | event=start | note=整理视觉抓取配置、P6恢复与ArmStatus反馈修复并提交本地 | verification=-
-- 2026-09-07T02:09:32+08:00 | actor=Codex | event=complete | note=视觉抓取配置、P6失败恢复与ArmStatus反馈修复已整理，准备本地提交 | verification=用户确认测试无问题；全量850 passed/8 skipped；controller聚焦126 passed；分层20 passed；compileall/diff check；MotorBridge 0.4.6+rebotarm.2 feedback_sequence=true；普通install旧环境入口加载通过；排除evidence/models/build/install/log；不推送
-- 2026-09-07T03:23:04+08:00 | actor=codex | event=start | note=将已验收P6单瓶抓取整理为正式单次瓶体视觉抓取功能，保持实机安全语义不变 | verification=-
-- 2026-09-07T03:31:34+08:00 | actor=codex | event=complete | note=已验收单瓶抓取已迁为正式rebotarm_single_bottle_grasp功能，P6脚本仅保留兼容入口 | verification=聚焦44 passed, 1 skipped；全量856 passed, 8 skipped；分层20 passed；required compileall/py_compile/diff check；motion/vision/bringup普通install重建；/tmp无源码PYTHONPATH验证console entry、模块、profile和哈希一致；未操作硬件
-- 2026-09-07T03:35:33+08:00 | actor=codex | event=start | note=将视觉感知支撑链与单次瓶体抓取执行器组合为统一正式launch，保留显式串口、报告和真机确认 | verification=-
-- 2026-09-07T03:36:45+08:00 | actor=codex | event=complete | note=确认视觉支撑链与单次抓取保持两个独立命令，不新增一键自动串联launch | verification=现有docs/single_bottle_grasp_zh.md已按两阶段命令记录；本轮未改产品代码、未启动ROS或操作硬件
-- 2026-09-07T03:39:11+08:00 | actor=codex | event=start | note=按用户确认整理单次瓶体视觉抓取功能化改动并创建本地提交，不推送 | verification=-
-- 2026-09-07T03:39:43+08:00 | actor=codex | event=complete | note=单次瓶体视觉抓取正式功能与两阶段命令设计已整理，准备本地提交 | verification=全量856 passed, 8 skipped；分层20 passed；最终聚焦59 passed；required compileall/py_compile/diff check；三包普通install及隔离入口验证通过；未操作硬件；不推送
-- 2026-09-07T03:54:11+08:00 | actor=codex | event=verified | note=用户确认机械闭合后完成一次夹爪置零并验证新鲜反馈 | verification=写零前disabled/IDLE、六轴status0；set_zero gripper一次返回success；10个不同反馈批次位置0.000003433m/status0，ArmStatus无错误；未enable或运动；controller停止且ttyUSB0/ttyACM0已释放
-- 2026-09-07T04:27:23+08:00 | actor=codex | event=start | note=修复视觉抓取候选验收：0.05m高度下限、采集时刻TF、bottle类别锁定和多帧稳定确认；仅软件实现与测试 | verification=-
-- 2026-09-07T04:39:23+08:00 | actor=codex | event=complete | note=完成视觉抓取候选安全加固：实机profile固定bottle与0.05m高度下限，采集时刻TF、传感器时间计划新鲜度、独立瓶体点云几何门和3帧稳定确认已实现；仅软件验证，待实机复验 | verification=聚焦128 passed,1 skipped；全量864 passed,8 skipped；分层20 passed；rebotarm_vision/rebotarm_bringup构建、required compileall、launch静态解析及安装profile核验通过；未启动相机/ROS运行时、未访问串口或发送运动
-- 2026-09-07T05:17:45+08:00 | actor=codex | event=start | note=将rebot_refer最新版MuJoCo核心整合进主项目，替换旧实现并保留现有未提交视觉修改 | verification=-
-- 2026-09-07T05:53:36+08:00 | actor=codex | event=complete | note=完成上游a68c3ab MuJoCo整合，替换旧active实现并通过全量、安装态、launch与构建验证 | verification=1201 passed, 2 skipped; layering 20 passed; focused 39 passed; required compileall; rebotarm_moveit_config/rebotarm_simulation/rebotarm_bringup build; three launch show-args; installed MJCF up to date; diff check; no hardware actions
-- 2026-09-07T06:09:02+08:00 | actor=codex | event=verified | note=MuJoCo最新版整合最终验证通过 | verification=1203 passed, 2 skipped; layering 20 passed; documentation/layering focused 28 passed; model/install focused 39 passed; required compileall; three-package build; launch parsing; installed MJCF up to date; source/install scenes identical; diff check; no hardware actions
-- 2026-09-07T06:10:40+08:00 | actor=codex | event=complete | note=MuJoCo最新版已替换旧实现，旧本地baseline归档已按授权移出项目 | verification=upstream main@a68c3ab; 1203 passed, 2 skipped; layering 20 passed; required compileall; three-package build; installed MJCF check; old ignored baseline absent; no hardware actions; no commit or push
-- 2026-09-23T04:38:10+08:00 | actor=codex | event=start | note=在主目录合并上游基线迁移分支，以隔离工作树文件树为准 | verification=-
+- 2026-09-13T13:44:57+08:00 | actor=Codex | event=start | note=One-time local baseline replacement; old local directory and origin/main backed up; software-only environment/build/test/diff, no hardware authorization | verification=-
+- 2026-09-13T13:58:34+08:00 | actor=Codex | event=verified | note=Baseline main pushed with exact lease; 13 packages built; dependencies being rebuilt | verification=git fsck full; zero missing objects; build 13 packages 30.5s; initial no-plugin pytest 784 passed 15 failed 8 skipped (dependencies/state refresh pending)
+- 2026-09-13T14:28:02+08:00 | actor=Codex | event=complete | note=One-time baseline migration complete; personal origin only; old local and remote history preserved; no hardware operations | verification=13-package build; system pytest 811/7; MuJoCo 817/1; vision wrapper 15/0; 818 unique cases covered; layering/resources 26; three venvs and patched MotorBridge verified; colcon package-local tests absent (documented)
+- 2026-09-13T14:55:18+08:00 | actor=Codex | event=start | note=Document missing MoveIt controller plugin and Execute troubleshooting; documentation only, no installation or motion | verification=-
+- 2026-09-13T14:58:27+08:00 | actor=Codex | event=complete | note=Added MoveIt execution plugin installation, diagnosis and simulation-only restart documentation; no runtime changes | verification=28 focused tests passed; git diff --check passed; no package installation, hardware operation, commit or push
+- 2026-09-13T15:52:01+08:00 | actor=Codex | event=start | note=Fix startup feedback verification false pending after SDK confirms all six motors | verification=-
+- 2026-09-13T16:04:33+08:00 | actor=Codex | event=verified | note=Startup staggered-feedback fix verified; independent per-motor sequence retained | verification=hardware manager 124; layering/resources/agent 28; full focused total 152 passed; compileall and diff check passed
+- 2026-09-13T16:39:33+08:00 | actor=Codex | event=verified | note=Suppress intermediate startup pending feedback diagnostics while bounded force refresh collects staggered motor frames | verification=hardware manager 124 passed; controller build passed; layering/agent 22 passed
+- 2026-09-13T17:40:52+08:00 | actor=Codex | event=start | note=Update docs and remove obsolete Windows tools per user request | verification=-
+- 2026-09-13T17:53:39+08:00 | actor=Codex | event=checkpoint | note=Windows-specific tools and docs retired; Ubuntu native vision docs are canonical | verification=-
+- 2026-09-13T18:03:06+08:00 | actor=Codex | event=complete | note=Retired Windows tools and refreshed docs to Ubuntu-native vision route | verification=full pytest 768 passed 7 skipped; visual/network focused 75 passed; docs/tool references checked; no hardware operation
+- 2026-09-13T18:08:31+08:00 | actor=Codex | event=complete | note=Windows-only tools and stale docs removed; Ubuntu-native vision is canonical | verification=full pytest 768 passed 7 skipped; visual/network 81 passed; diff check pending commit
+- 2026-09-13T18:14:31+08:00 | actor=Codex | event=start | note=Remove legacy HTTP/MJPEG/JSON network vision compatibility chain after user confirmation | verification=-
+- 2026-09-13T18:48:42+08:00 | actor=Codex | event=complete | note=Retired HTTP vision compatibility; native ROS camera and GraspNet retained | verification=full suite before added regression 762 passed/7 skipped; final focused 82 passed; vision/bringup build passed; compileall and diff check passed; no hardware use
+- 2026-09-13T19:10:26+08:00 | actor=Codex | event=start | note=Normalize root docs and docs directory for Ubuntu-native-only vision route; remove stale network references | verification=-
+- 2026-09-13T19:17:16+08:00 | actor=Codex | event=start | note=Update root and docs for Ubuntu-native-only scope | verification=-
+- 2026-09-13T20:25:19+08:00 | actor=Codex | event=complete | note=Normalized root documentation and Agent rules for Ubuntu-native-only scope | verification=compileall passed; focused docs/architecture/vision tests 100 passed; git diff check passed; no hardware operation
+- 2026-09-13T20:40:32+08:00 | actor=root | event=start | note=查询当前测试进度、测试顺序和测试指令 | verification=-
+- 2026-09-13T20:43:46+08:00 | actor=codex | event=start | note=查询当前测试进度、测试顺序和测试指令 | verification=-
+- 2026-09-14T12:56:40+08:00 | actor=codex | event=start | note=排查 MuJoCo 无仿真测试 RViz RobotModel 错误 | verification=-
+- 2026-09-14T14:24:57+08:00 | actor=codex | event=start | note=提交并推送当前 MuJoCo 与 MoveIt 联动修复到 GitHub | verification=-
+- 2026-09-14T16:45:40+08:00 | actor=codex | event=start | note=迁移旧备份中的 GraspNet 代码、GraspNetAPI 和 checkpoint 到当前工作区 | verification=-
+- 2026-09-14T19:20:05+08:00 | actor=codex | event=start | note=移除 person 抓取白名单，验证修复并提交推送 GitHub | verification=-
+- 2026-09-15T10:28:20+08:00 | actor=codex | event=start | note=按旧仓库恢复 RViz 真机末端拖动，同时保留显式 Enable 和当前位置保持 | verification=-
+- 2026-09-16T11:23:12+08:00 | actor=codex | event=start | note=移除旧兼容 launch 入口，并评估 bringup/rviz 入口替代方案 | verification=-
+- 2026-09-16T11:34:56+08:00 | actor=codex | event=verified | note=已移除 interactive_basic 旧兼容入口；bringup/rviz 保留并完成替代方案文档 | verification=python3 -m pytest tests/test_rebotarm_app_launch.py tests/test_package_layering.py -q; colcon build --base-paths src --executor sequential --symlink-install --packages-select rebotarm_bringup
+- 2026-09-16T12:55:24+08:00 | actor=codex | event=verified | note=已删除 rviz.launch.py 并同步清理当前文档与映射说明 | verification=python3 -m pytest tests/test_package_layering.py tests/test_rebotarm_app_launch.py -q; colcon build --base-paths src --executor sequential --symlink-install --packages-select rebotarm_bringup
+- 2026-09-17T12:36:58+08:00 | actor=codex | event=start | note=核对 driver_only.launch.py 当前功能与服务 | verification=-
+- 2026-09-17T12:43:26+08:00 | actor=codex | event=start | note=整理 driver_only 真机功能测试指令与安全顺序 | verification=-
+- 2026-09-17T12:55:12+08:00 | actor=codex | event=start | note=诊断 P0 enable hold 后反馈过期及保护失能 | verification=-
+- 2026-09-17T13:01:30+08:00 | actor=codex | event=start | note=同步上游 MotorBridge dm-serial 10ms 超时并重建验证 | verification=-
+- 2026-09-17T13:13:45+08:00 | actor=codex | event=complete | note=MotorBridge 固定基线升级为上游 v0.4.7，安装 0.4.7+rebotarm.1；保留反馈与置零安全补丁，等待失能反馈和 P0 真机复测 | verification=35 focused passed; Rust 40 passed; layering 20 passed; full 763 passed, 7 skipped, 3 existing environment failures; compileall and diff-check passed; no hardware accessed
+- 2026-09-17T14:14:49+08:00 | actor=codex | event=start | note=制定 driver_only 功能 6 7 8 的真机分级测试步骤 | verification=-
+- 2026-09-17T14:44:54+08:00 | actor=codex | event=start | note=核对当前改动和真机验收状态，提交并推送项目，明确下一项测试 | verification=-
+- 2026-09-17T14:46:33+08:00 | actor=codex | event=start | note=解释截图中的 ROS 2 launch 脚本功能 | verification=-
+- 2026-09-17T14:47:08+08:00 | actor=codex | event=verified | note=MotorBridge 0.4.7升级、RViz入口修整和旧入口清理已完成发布前核验；记录operator已测driver_only与sim/real RViz，下一项为rebotarm_app网页遥操作 | verification=MotorBridge 0.4.7+rebotarm.1 contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures; compileall and git diff --check passed
+- 2026-09-17T14:47:34+08:00 | actor=codex | event=complete | note=已提交并推送main；MotorBridge 0.4.7升级、RViz工作流与旧入口清理已发布，下一项测试rebotarm_app网页遥操作 | verification=origin/main=4f9893c; MotorBridge contract OK; layering 20 passed; full 763 passed, 7 skipped, 3 known environment failures
+- 2026-09-17T14:50:29+08:00 | actor=codex | event=start | note=解释图片中列出的 ROS 2 launch 脚本功能；仅读检查，不修改代码 | verification=-
+- 2026-09-17T15:07:03+08:00 | actor=codex | event=start | note=修复网页3D网格方向与初始视角，并核对rebotarm_app Ctrl+C停机行为 | verification=-
+- 2026-09-17T15:10:21+08:00 | actor=codex | event=complete | note=已修复网页3D水平网格和初始相机视角，并确认rebotarm_app Ctrl+C默认不回Safe Home、会失能并断开串口 | verification=focused 113 passed; dashboard runtime resource contains fixed camera and no grid rotation; compileall and git diff --check passed
+- 2026-09-17T15:20:12+08:00 | actor=codex | event=start | note=删除未接线replay_profiles配置并只读审计src中过时或废弃文件 | verification=-
+- 2026-09-17T15:23:56+08:00 | actor=codex | event=complete | note=已删除未接线replay_profiles并完成src过时文件只读审计；其他候选仅输出未删除 | verification=focused 97 passed; full 763 passed, 7 skipped, 3 known environment failures; compileall and git diff --check passed
+- 2026-09-17T15:25:54+08:00 | actor=codex | event=start | note=按用户授权清理三批旧文件：driver_params、MuJoCo legacy CLI、Vision shim、interactive_control兼容包，并同步文档测试 | verification=-
+- 2026-09-17T15:35:13+08:00 | actor=codex | event=complete | note=已按授权清除三批旧文件和兼容包，迁移测试与文档，清理安装残留并完成12包重建 | verification=focused 252 passed; layering 16 passed; full 759 passed, 7 skipped, 3 known environment failures; 12 packages built; retired package absent; duplicate vision console entries absent; compileall and diff check passed
+- 2026-09-17T15:36:38+08:00 | actor=Codex | event=verified | note=已完成三批旧入口清理与文档同步；分层测试 16 passed，compileall 和 git diff --check 通过，安装环境不再发现 rebotarm_interactive_control | verification=python3 -m pytest tests/test_package_layering.py -q; python3 -m compileall src/rebotarm_dashboard/rebotarm_dashboard src/rebotarm_teleop/rebotarm_teleop src/rebotarm_teach/rebotarm_teach src/rebotarm_motion/rebotarm_motion -q; python3 -m compileall src/rebotarm_bringup/launch -q; git diff --check; ros2 pkg prefix rebotarm_interactive_control => Package not found
+- 2026-09-17T16:00:59+08:00 | actor=deepseek-harness | event=start | note=为 src/ 全部 12 个包补充中文注释（文件级说明 + 关键函数/类 + 参数与算法要点），不改变代码语义 | verification=-
+- 2026-09-17T17:07:42+08:00 | actor=deepseek-harness | event=checkpoint | note=完成 src/ 全部 12 个包的中文注释补全（308/309 文件）；修复 3 个 launch 文件自初始提交起的 BOM+编码损坏；回退被误注释的 AUTO-GENERATED robot.xml | verification=PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests -q => 17 failed/745 passed/7 skipped，失败集合与基线逐条一致；AST 注释等价校验 321 文件全部通过
+- 2026-09-17T17:11:52+08:00 | actor=Codex | event=start | note=核对当前示教录制与回放实际生效参数 | verification=-
+- 2026-09-17T17:12:53+08:00 | actor=Codex | event=verified | note=已核对当前示教录制、回放与安全门控参数；仅只读检查，未启动硬件或运动 | verification=read src/rebotarm_bringup/config/teleop_control.yaml; read moveit_hardware.launch.py; read teach recorder/replay defaults
+- 2026-09-17T19:01:45+08:00 | actor=codex | event=start | note=检查 src/rebotarm_bringup/config/interactive_control.yaml 是否仍被使用 | verification=-
+- 2026-09-17T19:03:16+08:00 | actor=codex | event=verified | note=审计 interactive_control.yaml：仍由 interactive_system.launch.py 默认传给 GripperVisualJointStateNode，但 YAML 根键 interactive_control 与节点名不匹配，且节点声明参数不包含文件内字段；除 inline arm_namespace 外内容实际不生效，暂未改文件 | verification=rg interactive_control.yaml; interactive_system.launch.py:172-175,226-232; gripper_visual_joint_state_node.py:49-58
+- 2026-09-17T19:06:29+08:00 | actor=codex | event=start | note=彻底清理 interactive_control.yaml 及其 launch 引用，并同步相关文档/测试检查 | verification=-
+- 2026-09-17T19:12:57+08:00 | actor=codex | event=verified | note=已删除 interactive_control.yaml，interactive_system.launch.py 改为仅显式传 arm_namespace，安装注释/清单/分层回归测试同步；build/install 旧断链已可恢复移至 /tmp | verification=focused 102 passed; layering 17 passed; full 760 passed/7 skipped/3 existing environment failures; compileall passed; active refs and stale generated refs none; scoped git diff --check passed; colcon blocked by missing install package.sh for eigenpy/coal/pinocchio
+- 2026-09-17T19:14:40+08:00 | actor=codex | event=start | note=解释 interactive_system.launch.py 的功能与运行链路 | verification=-
+- 2026-09-17T19:14:46+08:00 | actor=codex | event=verified | note=已解释 interactive_system.launch.py：共享的 RViz/MoveIt 交互底层启动文件，支持预览或真机后端互斥，负责模型/规划参数、控制器、状态发布和 RViz 组合，不含旧自定义交互目标服务 | verification=read launch lines 1-280; direct includers visual_grasp_system and rviz_ee_drag_real/sim
+- 2026-09-17T19:20:26+08:00 | actor=codex | event=verified | note=已说明 interactive_system.launch.py 是视觉抓取可复用的 MoveIt/RViz/执行后端底座，不是感知算法本身；visual_grasp_system.launch.py 显式包含它并另行启动相机、YOLO、GraspNet、候选过滤和执行器 | verification=read interactive_system.launch.py:1-20,168-278; visual_grasp_system.launch.py:239-265,315-344,832-843
+- 2026-09-17T19:21:57+08:00 | actor=codex | event=start | note=确认删除 interactive_control.yaml 是否影响视觉夹取链路 | verification=-
+- 2026-09-17T19:22:09+08:00 | actor=codex | event=verified | note=确认删除 interactive_control.yaml 不影响视觉夹取：visual_grasp_system 传 use_moveit_preview=true，旧文件仅用于被跳过的可视化桥且当前源码无引用；视觉 wiring/layering 回归通过 | verification=tests/test_visual_grasp_wiring.py tests/test_package_layering.py: 89 passed; rg active source refs none
+- 2026-09-17T19:29:32+08:00 | actor=codex | event=start | note=解释 deadman_required 与 deadman_key 参数的实际作用 | verification=-
+- 2026-09-17T19:29:57+08:00 | actor=codex | event=verified | note=已解释 teleop_control.yaml 的 deadman_required/deadman_key：通过键盘节点建立 input_timeout 时长的运动授权窗口；当前实现是周期按字符刷新，不是物理按住检测，也不会主动取消已下发轨迹 | verification=teleop_control.yaml:14-17; teleop_keyboard_node.py:164-198
+- 2026-09-17T19:34:45+08:00 | actor=codex | event=start | note=评估 deadman 键是否只属于终端键盘遥操作，以及是否应与网页遥操作分离 | verification=-
+- 2026-09-17T19:35:35+08:00 | actor=codex | event=verified | note=确认 deadman 参数仅由终端 TeleopKeyboardNode 使用；真机 rebotarm_app 主入口只启动网页 TeleopStatusPanelNode，网页键盘采用 web_keyboard 会话启用/禁用、KEYBOARD_TELEOP 确认与 trajectory_stop，不读取 z deadman。建议终端键盘独立配置/入口 | verification=rebotarm_app.launch.py:161-206; teleop_keyboard.launch.py:158-166; teleop_keyboard_node.py:164-198; teleop_status_panel_node.py:892-1025
+- 2026-09-17T19:38:19+08:00 | actor=codex | event=start | note=审计 teleop_control.yaml 参数分区与消费者，评估是否需要拆分配置 | verification=-
+- 2026-09-17T19:39:42+08:00 | actor=codex | event=start | note=拆分 teleop 配置，按键盘、网页、示教和公共参数同步 launch 与测试 | verification=-
+- 2026-09-17T23:17:31+08:00 | actor=codex | event=start | note=解释 moveit_hardware.launch.py 的用途和引用关系 | verification=-
+- 2026-09-17T23:19:24+08:00 | actor=codex | event=start | note=核对 bringup 启动文件之间是否存在功能重复 | verification=-
+- 2026-09-17T23:34:11+08:00 | actor=codex | event=start | note=统一 bringup 真实硬件底层 launch，重构各入口并生成结构功能文档 | verification=-
+- 2026-09-17T23:36:21+08:00 | actor=codex | event=start | note=先上传当前进度，再统一 launch 硬件底层结构并生成结构功能文档 | verification=-
+- 2026-09-17T23:50:03+08:00 | actor=codex | event=verified | note=统一 bringup 硬件启动片段并生成结构功能文档；无硬件操作 | verification=layering 18 passed; focused 107 passed; full 762 passed, 7 skipped, 3 existing environment failures; compileall and diff check passed
+- 2026-09-17T23:51:41+08:00 | actor=codex | event=checkpoint | note=完成并上传 bringup 硬件启动统一重构与结构功能文档 | verification=commit 9ab45be; focused 107 passed; layering 18 passed; show-args 7 entries passed; full 762 passed 7 skipped 3 existing failures
+- 2026-09-17T23:57:40+08:00 | actor=codex | event=start | note=安装 Pinocchio 依赖并解决用户级 OpenCV 覆盖冲突 | verification=-
+- 2026-09-18T00:05:52+08:00 | actor=codex | event=verified | note=Pinocchio依赖安装与OpenCV覆盖冲突已解决；无硬件操作 | verification=pinocchio/eigenpy/coal imports OK; calibration 6 passed; bringup build passed; full 764 passed 7 skipped 1 existing failure
+- 2026-09-18T00:13:29+08:00 | actor=codex | event=verified | note=启动结构功能文档已迁移到 bringup/launch/README.md 并纳入安装 | verification=package resources and layering 25 passed; bringup build passed; installed README verified
+- 2026-09-18T00:33:59+08:00 | actor=codex | event=start | note=Remove redundant driver_only launch, clarify launch entrypoint ownership, and audit repeated launch arguments | verification=-
+- 2026-09-18T00:39:18+08:00 | actor=codex | event=complete | note=Removed redundant driver_only launch, clarified MoveIt versus keyboard launch families, fixed teleop_system recorder wiring, and updated launch documentation | verification=layering 18 passed; full suite 765 passed, 7 skipped, 1 known MuJoCo interpreter failure; bringup build and five --show-args checks passed; compileall and diff check passed
+- 2026-09-18T11:59:08+08:00 | actor=codex | event=checkpoint | note=Unified teach replay around Dashboard TeachReplayWorkflow; retired TeachReplayNode, teach_replay.launch.py, and its console entry; retained teach_record.launch.py | verification=focused 101 passed; layering 18 passed; full 765 passed, 7 skipped, 1 known MuJoCo interpreter failure; teach and bringup rebuild passed
+- 2026-09-18T12:09:57+08:00 | actor=codex | event=checkpoint | note=Retired standalone teach_record.launch.py; Dashboard remains the only recording and replay entrypoint while TeachRecorderNode stays in app and teleop_system compositions | verification=bringup rebuild pending; diff check pending
+- 2026-09-18T12:53:22+08:00 | actor=codex | event=checkpoint | note=Removed standalone visual_ready_hold launch; retained visual_grasp_perception_preview and inline visual_ready nodes in visual_grasp_system | verification=focused 92 passed; bringup rebuild and visual launch show-args passed; compileall and diff check passed
+- 2026-09-18T14:01:43+08:00 | actor=codex | event=start | note=输出结构调整后的 launch 文件测试顺序 | verification=-
+- 2026-09-18T14:35:21+08:00 | actor=codex-docs | event=start | note=为图片中的 11 个 ROS 2 包补充包级 Markdown 文档，记录脚本结构、入口与功能 | verification=-
+- 2026-09-18T14:50:38+08:00 | actor=codex-docs | event=verified | note=11 个包 README.md 已补齐，完成入口/文件名自检；分层测试与 compileall 通过，全量测试保留既有解释器断言失败 | verification=layering: 18 passed; compileall: passed; full pytest: 764 passed, 7 skipped, 1 failed at tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]
+- 2026-09-18T15:04:31+08:00 | actor=codex-docs | event=verified | note=按用户要求可恢复移除 rebotarm_voice_control 及 25 个专属测试，更新活动 Markdown；历史迁移清单保留删除前快照并已标注 | verification=package absent; voice tests absent; layering 18 passed; compileall passed; full pytest 683 passed, 7 skipped, 1 known failure at tests/test_launch_interpreters.py::test_relocated_launches_select_independent_interpreters[default]
+- 2026-09-18T15:14:22+08:00 | actor=codex | event=start | note=重新编译当前结构调整后的 ROS 2 工作区 | verification=-
+- 2026-09-18T15:31:02+08:00 | actor=codex | event=start | note=诊断无硬件键盘遥操作下 RViz 模型不动 | verification=-
+- 2026-09-18T15:35:43+08:00 | actor=codex | event=verified | note=修正 teleop_keyboard 无硬件模式的注释与 launch 结构说明 | verification=python3 -m py_compile src/rebotarm_bringup/launch/teleop_keyboard.launch.py && git diff --check
+- 2026-09-18T16:20:52+08:00 | actor=codex | event=start | note=检查并修复视觉只读预览退出后的当前启动缺陷 | verification=-
+- 2026-09-18T16:27:51+08:00 | actor=codex | event=verified | note=修复视觉预览默认状态源、GraspNet模型路径和MoveIt预览假关节重复发布 | verification=rebotarm_bringup/rebotarm_vision build; test_package_layering; launch compileall; isolated no-camera preview
+- 2026-09-18T16:40:59+08:00 | actor=codex | event=verified | note=统一视觉环境脚本与GraspNet默认资源路径 | verification=visual wiring/layering tests; launch compileall; rebotarm_bringup build
+- 2026-09-18T17:27:08+08:00 | actor=codex | event=start | note=将视觉workspace与抓取坐标约定恢复为旧仓库数据 | verification=-
+- 2026-09-18T17:32:22+08:00 | actor=codex | event=verified | note=视觉workspace、抓取方向和visual-ready恢复旧仓库+X坐标约定 | verification=89 focused tests; compileall; 3 packages built; both launch show-args
+- 2026-09-18T17:36:43+08:00 | actor=codex | event=start | note=诊断只读视觉预览缺少 YOLO 检测框和 GraspNet 抓取框 | verification=-
+- 2026-09-18T17:43:53+08:00 | actor=codex | event=start | note=增加视觉预览中的YOLO标注图和GraspNet原始候选可视化 | verification=-
+- 2026-09-18T17:49:00+08:00 | actor=codex | event=verified | note=增加YOLO标注图RViz显示与GraspNet原始候选Marker可视化；新增start_raw_candidate_markers开关；编译完成 | verification=-
+- 2026-09-18T17:51:42+08:00 | actor=codex | event=start | note=将只读视觉预览的GraspNet原始候选标记改为默认启用 | verification=-
+- 2026-09-18T17:52:18+08:00 | actor=codex | event=verified | note=start_raw_candidate_markers默认值已改为true；bringup编译、启动参数和检查通过 | verification=-
+- 2026-09-18T18:01:17+08:00 | actor=codex | event=verified | note=修复视觉预览子launch的RViz参数污染、RViz Topic配置及原始候选节点SIGINT退出；两包build、视觉71、layering18通过；无相机短时验证RViz和Marker订阅成功 | verification=-
+- 2026-09-18T18:07:33+08:00 | actor=codex | event=start | note=简化视觉预览RViz布局与抓取目标示意标记 | verification=-
+- 2026-09-18T18:10:08+08:00 | actor=codex | event=verified | note=只读预览隐藏示意瓶子圆柱并缩小标签，移除Views面板保留初始视角；视觉/bringup重编译、聚焦93通过，全量684通过7跳过1项既存MuJoCo解释器失败 | verification=-
+- 2026-09-18T18:13:54+08:00 | actor=codex | event=start | note=只读视觉预览默认弹出Open3D点云与GraspNet夹爪查看器 | verification=-
+- 2026-09-18T18:16:43+08:00 | actor=codex | event=verified | note=只读视觉预览默认启动Open3D订阅查看器；两包编译、93聚焦测试通过，GUI无相机短时启动与Ctrl-C退出通过；全量684通过7跳过1项既存MuJoCo测试失败 | verification=-
+- 2026-09-18T18:21:08+08:00 | actor=codex | event=start | note=从只读视觉预览移除RViz目标绿点和类别置信度文字 | verification=-
+- 2026-09-18T18:22:46+08:00 | actor=codex | event=verified | note=只读预览RViz移除物体示意圆柱、绿点和类别置信度文字；两包编译、93聚焦通过，全量684通过7跳过1项既存MuJoCo失败 | verification=-
+- 2026-09-18T18:26:52+08:00 | actor=codex | event=start | note=给出视觉抓取重构后的下一阶段测试顺序 | verification=-
+- 2026-09-18T18:27:32+08:00 | actor=codex | event=start | note=整理 launch 文件分层测试顺序和验收点 | verification=-
+- 2026-09-18T20:57:29+08:00 | actor=codex | event=start | note=将无硬件键盘入口接入仿真轨迹控制器 | verification=-
+- 2026-09-18T21:02:31+08:00 | actor=codex | event=verified | note=无硬件键盘入口已接入轻量仿真轨迹控制器；动作服务器与小目标运行态验证通过 | verification=25 focused tests passed; rebotarm_bringup build passed; simulated FollowJointTrajectory goal SUCCEEDED
+- 2026-09-18T21:20:50+08:00 | actor=codex | event=start | note=统一终端键盘与Dashboard网页键盘的无硬件仿真执行逻辑 | verification=-
+- 2026-09-18T21:26:15+08:00 | actor=codex | event=verified | note=teleop_system 已向Dashboard转发 execution_mode，网页键盘与终端键盘统一使用仿真FollowJointTrajectory后端 | verification=26 focused tests passed; rebotarm_bringup build passed
+- 2026-09-18T21:37:13+08:00 | actor=codex | event=start | note=按use_hardware和web_execute_enabled简化Dashboard按钮门控 | verification=-
+- 2026-09-18T21:38:20+08:00 | actor=codex | event=verified | note=Dashboard按use_hardware裁剪控制：仿真隐藏并后端阻断Enable/Disable/Safe Home，网页键盘与仿真Execute保留 | verification=98 focused tests passed; dashboard and bringup build passed
+- 2026-09-18T21:54:36+08:00 | actor=codex | event=start | note=删除未采用的mujoco_offline_perception入口并同步文档 | verification=-
+- 2026-09-18T21:57:39+08:00 | actor=codex | event=verified | note=清理删除入口对应的构建缓存后，bringup重新编译成功 | verification=105 focused tests passed; rebotarm_bringup build passed; launch compileall passed
+- 2026-09-18T22:14:56+08:00 | actor=codex | event=start | note=删除 real_perception_sim_execution.launch.py 并同步文档测试后重新编译 | verification=-
+- 2026-09-18T22:24:23+08:00 | actor=codex | event=verified | note=删除混合真实感知+MuJoCo顶层入口，文档测试同步，rebotarm_bringup重编译成功 | verification=colcon build --packages-select rebotarm_bringup --symlink-install; pytest layering 18 passed; visual wiring 71 passed; full 683 passed, 7 skipped, 1 pre-existing failure
+- 2026-09-18T22:52:49+08:00 | actor=codex | event=start | note=修复 visual_grasp_system 无硬件 plan-only 启动时 MoveIt 收不到关节状态的问题 | verification=-
+- 2026-09-18T22:58:21+08:00 | actor=codex | event=verified | note=修复 visual_grasp_system 无硬件 plan-only 关节状态与 visual_ready 启动死锁；完成构建、冒烟和回归验证 | verification=82 focused passed; layering 18 passed; full 684 passed 7 skipped 1 known MuJoCo interpreter failure; rebotarm_bringup build passed; MoveIt smoke reached You can start planning now
+- 2026-09-18T23:02:26+08:00 | actor=codex | event=start | note=诊断 visual_grasp_system RViz 目标位置偏差和 execute 服务无新鲜计划 | verification=-
+- 2026-09-18T23:08:44+08:00 | actor=codex | event=verified | note=修复视觉抓取纯规划计划时效与误导性目标标记，并澄清无硬件眼在手坐标限制 | verification=rebotarm_bringup build passed; focused 83 passed; layering 18 passed; full 685 passed 7 skipped 1 known MuJoCo interpreter failure; compileall and diff check passed; plan_only runtime max_plan_age_sec=3.0; MoveIt smoke ready
+- 2026-09-18T23:16:34+08:00 | actor=codex | event=start | note=诊断视觉抓取 plan_only 成功但 RViz 无规划动画 | verification=-
+- 2026-09-18T23:17:21+08:00 | actor=codex | event=verified | note=确认视觉抓取 plan_only 仅计算并回传轨迹，当前未发布 RViz DisplayTrajectory，且不更新仿真关节状态 | verification=source inspection only; no code change or hardware access
+- 2026-09-18T23:20:51+08:00 | actor=codex | event=start | note=实现视觉抓取真正的纯规划轨迹预览与连续阶段规划 | verification=-
+- 2026-09-18T23:30:27+08:00 | actor=codex | event=verified | note=完成视觉抓取连续纯规划RViz轨迹预览并保持控制器零下发 | verification=4 packages rebuilt; 96 focused passed; layering 18 passed; full 690 passed 7 skipped 1 known MuJoCo interpreter failure; runtime two-stage plan 9+5 points, display messages published, joint state unchanged; RViz plugin smoke passed
+- 2026-09-18T23:53:17+08:00 | actor=codex | event=verified | note=修复纯规划预览因视觉管线耗时超过3秒而拒绝有效计划 | verification=latest executor logs showed age 3.02-4.69s at arrival; plan_only 10s and execute 1s; bringup+vision build; focused 79 passed; layering 18 passed; full 691 passed 7 skipped 1 pre-existing MuJoCo interpreter failure; compileall and diff check passed
+- 2026-09-19T00:36:45+08:00 | actor=codex | event=start | note=诊断视觉纯规划预览动画中途卡顿 | verification=-
+- 2026-09-19T00:50:32+08:00 | actor=codex | event=start | note=将视觉纯规划预览改为完整轨迹连续播放 | verification=-
+- 2026-09-19T00:56:08+08:00 | actor=codex | event=verified | note=视觉纯规划预览改为全阶段成功后单条DisplayTrajectory连续播放；默认阶段停顿0秒，RViz显示间隔0.03秒；未启动或移动真机 | verification=4 packages built; focused 82 passed; layering 18 passed; full 694 passed, 7 skipped, 1 known mujoco interpreter failure; compileall and diff check passed
+- 2026-09-19T01:52:04+08:00 | actor=codex | event=start | note=核对并提供真机测试指令（只读核验，不启动硬件） | verification=-
+- 2026-09-19T02:16:40+08:00 | actor=codex | event=start | note=删除 P0 Gate B/C 专用验收工具及孤立判据、入口和文档，保留历史证据 | verification=-
+- 2026-09-19T02:18:04+08:00 | actor=codex | event=complete | note=已移除 P0 Gate B/C 工具、孤立判据、专属测试、入口与现行文档调用；历史报告保留，未操作硬件 | verification=controller build passed; layering 18 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall and diff check passed; ROS executable removed
+- 2026-09-19T13:58:29+08:00 | actor=codex | event=start | note=收敛真机 MoveIt 启动分支：删除 rviz_ee_drag_real，将示教录制移入 rebotarm_app，并同步文档测试 | verification=-
+- 2026-09-19T14:09:01+08:00 | actor=codex | event=complete | note=完成真机 MoveIt 分支收敛：删除 rviz_ee_drag_real，moveit_hardware 仅负责硬件+MoveIt，rebotarm_app 接管示教录制；文档测试同步 | verification=bringup build passed; focused 100 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall and diff check passed; no hardware runtime
+- 2026-09-19T14:09:14+08:00 | actor=root | event=start | note=分析 rebotarm_calibration 包代码质量、问题与改进方向 | verification=-
+- 2026-09-19T14:12:42+08:00 | actor=root | event=checkpoint | note=rebotarm_calibration 只读审查完成：确认 ArUco 无帧等待无总超时、TF 时间/帧校验缺失、手眼单轴退化可误通过；未修改包代码或进行硬件操作 | verification=标定相关23 passed；分层18 passed；全量686 passed,7 skipped,1 failed（MuJoCo默认解释器）；compileall通过
+- 2026-09-19T14:18:48+08:00 | actor=codex | event=start | note=统一 moveit_hardware 与 interactive_system 的 MoveIt 实现，保留真机薄包装入口 | verification=-
+- 2026-09-19T14:24:42+08:00 | actor=codex | event=complete | note=完成 moveit_hardware 真机薄包装重构，MoveIt/状态源/RViz 共享实现统一归 interactive_system | verification=bringup build and show-args passed; focused 102 passed; full 686 passed/7 skipped/1 existing MuJoCo interpreter failure; compileall/diff check passed; no hardware runtime
+- 2026-09-19T14:30:04+08:00 | actor=root | event=start | note=实现 rebotarm_calibration 的采集超时、时间同步、ArUco质量门、手眼退化检查与测试 | verification=-
+- 2026-09-19T14:34:57+08:00 | actor=root | event=verified | note=完成 calibration 采集与质量防护、单轴退化门及回归测试；未触碰硬件 | verification=标定34 passed；分层18 passed；全量697 passed,7 skipped,1既有MuJoCo解释器失败；compileall/diff/build通过
+- 2026-09-19T14:43:36+08:00 | actor=Codex | event=start | note=Provide next real-robot test sequence after teach workflow passed | verification=-
+- 2026-09-19T14:45:05+08:00 | actor=Codex | event=verified | note=User confirmed Dashboard teach workflow passed; next recommended validation is visual_grasp_system real-camera plan_only with hardware disabled | verification=operator-reported teach workflow pass
+- 2026-09-19T14:46:45+08:00 | actor=Codex | event=start | note=Diagnose missing /rebotarm/arm_status during visual plan-only test | verification=-
+- 2026-09-19T14:48:44+08:00 | actor=root | event=verified | note=复核并修正 TF 按时间查询遗漏 lookup_timeout_sec；现有 calibration 防护测试仍全通过 | verification=标定34 passed；compileall/diff通过
+- 2026-09-19T14:59:13+08:00 | actor=root | event=start | note=规划并启动网页手眼标定：审查dashboard现状、定义校准接口与分阶段实现方案 | verification=-
+- 2026-09-19T15:00:49+08:00 | actor=root | event=checkpoint | note=完成网页标定 Phase 0：技术路线文档与纯会话状态机；未接入ROS/网页/硬件 | verification=calibration session及相关32 passed；calibration build、compileall、diff通过
+- 2026-09-19T15:09:23+08:00 | actor=root | event=start | note=继续网页标定目标：实现独立留出验证、多算法报告与原子持久化离线入口 | verification=-
+- 2026-09-19T15:09:57+08:00 | actor=Codex | event=start | note=Inspect whether ROS_DOMAIN_ID is required and remove unnecessary visual-test domain override | verification=-
+- 2026-09-19T15:11:17+08:00 | actor=Codex | event=complete | note=Removed unnecessary fixed ROS_DOMAIN_ID values from visual-grasp daily commands | verification=layering 18 passed; full 699 passed 7 skipped 1 pre-existing MuJoCo interpreter failure; compileall and diff check passed
+- 2026-09-19T15:11:53+08:00 | actor=root | event=checkpoint | note=网页标定离线求解和原子报告已实现；继续ROS适配器与Dashboard接入，目标未完成 | verification=手眼13 passed；layering18；全量703 passed/7 skipped/1既有失败；build/help/compileall/diff通过
+- 2026-09-19T15:14:37+08:00 | actor=root | event=checkpoint | note=完成持久会话和CalibrationCommand ROS接口定义，继续只读采集节点与Dashboard接入 | verification=SessionStore2通过；全量705 passed/7 skipped/1既有失败；分层18；两包build与接口导入/compileall/diff通过
+- 2026-09-19T15:14:56+08:00 | actor=root | event=start | note=实现手眼标定ROS只读同步采集节点 | verification=-
+- 2026-09-19T15:17:53+08:00 | actor=root | event=checkpoint | note=完成只读手眼采集ROS节点与无相机超时验证；继续正向ROS验证与Dashboard页面 | verification=全量706 passed/7 skipped/1既有失败；分层18；build/ROS节点构造/compileall/diff通过
+- 2026-09-19T15:21:21+08:00 | actor=root | event=checkpoint | note=Dashboard标定页面与ROS客户端基础接线完成，继续端到端验证和重力补偿流程 | verification=dashboard build、分层18、客户端测试通过；旧资源断言已更新；compileall通过
+- 2026-09-19T15:25:02+08:00 | actor=root | event=checkpoint | note=正向ROS标定采集验证通过并加入默认关闭工作台开关，继续网页重力补偿与完整验收 | verification=全量708 passed/7 skipped/1既有失败；分层18；bringup build/show-args通过
+- 2026-09-19T15:27:34+08:00 | actor=root | event=checkpoint | note=完成标定覆盖反馈与bootstrap诊断，继续重力补偿网页控制和完整验收 | verification=相关8通过；全量710 passed/7 skipped/1既有失败；分层18；两包build/compileall/diff通过
+- 2026-09-19T15:30:19+08:00 | actor=root | event=checkpoint | note=显式网页重力补偿入口及初步互斥已实现，继续端到端与浏览器验证 | verification=全量712 passed/7 skipped/1既有失败；layering18；dashboard build/compileall通过
+- 2026-09-19T15:32:20+08:00 | actor=root | event=checkpoint | note=修复标定HTTP成功码与慢请求阻塞停止问题，继续完整浏览器验收 | verification=HTTP/并发4通过；全量715 passed/7 skipped/1既有失败；build/layering18/compileall/diff通过
+- 2026-09-19T15:34:25+08:00 | actor=root | event=checkpoint | note=修复标定页面等待采样时禁用退出重力补偿按钮，脚本并发验证通过 | verification=页面脚本1通过；全量716 passed/7 skipped/1既有失败；分层18/build/compileall/diff通过
+- 2026-09-19T15:37:08+08:00 | actor=root | event=checkpoint | note=实际浏览器合成数据创建采样求解接受恢复通过；继续ROS全链和剩余状态恢复验证 | verification=浏览器可见5训练5验证accepted revision12，deployed=false；无硬件连接
+- 2026-09-19T15:38:34+08:00 | actor=Codex | event=start | note=Recheck ROS domain mismatch after removing fixed documentation values | verification=-
+- 2026-09-19T15:39:14+08:00 | actor=root | event=checkpoint | note=HTTP到真实ROS合成采集链通过；继续重力模式未决请求恢复和完整审计 | verification=HTTP/ROS正向及负向通过；dashboard build与layering18通过
+- 2026-09-19T15:39:50+08:00 | actor=Codex | event=checkpoint | note=Diagnosed repeated arm_status query warning on default ROS domain | verification=Current launch and query are domain 0; publisher exists. Exact echo succeeds but returns latched stale arm feedback and joint_states is not publishing; keep disabled and restart before further plan-only checks.
+- 2026-09-19T15:41:11+08:00 | actor=root | event=checkpoint | note=完成重力补偿超时future跟踪与新鲜反馈恢复门，继续完整需求审计 | verification=全量717 passed/7 skipped/1既有失败；分层18；dashboard build/compileall/diff通过
+- 2026-09-19T15:42:46+08:00 | actor=Codex | event=start | note=Analyze pasted visual_grasp_system launch log after restart | verification=-
+- 2026-09-19T15:43:31+08:00 | actor=root | event=checkpoint | note=实际Dashboard节点HTTP与ROS合成采集联调通过，新增完整验收缺口清单 | verification=test_handeye_capture_runtime 2 passed；实际节点软件模式拒绝gravity；未连接硬件
+- 2026-09-19T15:45:41+08:00 | actor=root | event=checkpoint | note=完成标定算法比较表和采样有效配置/代码指纹追溯 | verification=全量718 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:47:52+08:00 | actor=root | event=checkpoint | note=完成网页ROS相机快照及图像不进入SSE的验证，继续最终流程审计 | verification=全量719 passed/7 skipped/1既有失败；三包build/分层18/compileall/diff通过
+- 2026-09-19T15:50:47+08:00 | actor=root | event=checkpoint | note=实际Dashboard与控制器替身重力补偿完整操作通过，修正历史锁存状态新鲜度 | verification=控制相关4通过；全量720 passed/7 skipped/1既有失败；build/layering18/compileall/diff通过
+- 2026-09-19T15:53:18+08:00 | actor=root | event=checkpoint | note=完成独立机器人TF网页检查和下载数据包内容验证 | verification=相关3通过；全量720 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:56:04+08:00 | actor=root | event=checkpoint | note=TCP枢轴网页分支实现并通过离线持久化及独立验证测试，继续ROS和页面联调 | verification=相关6通过；全量721 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T15:57:32+08:00 | actor=root | event=checkpoint | note=TCP无相机Dashboard到ROS采样通过，修正网页恢复模式参数回显 | verification=相关3通过；Dashboard重建成功；全量检查已运行
+- 2026-09-19T16:01:15+08:00 | actor=root | event=checkpoint | note=完成标定超时未决请求跟踪及多页面SSE会话隔离 | verification=相关8通过；全量722 passed/7 skipped/1既有失败；dashboard build/分层18/compileall/diff通过
+- 2026-09-19T16:05:24+08:00 | actor=root | event=checkpoint | note=canonical MuJoCo模型多姿态与手眼求解验证通过，继续页面及组合验收 | verification=MuJoCo1通过；全量723 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:07:36+08:00 | actor=root | event=checkpoint | note=修复稳定采样窗口跨断流和质量失败累积问题 | verification=相关4通过；全量725 passed/7 skipped/1既有失败；calibration build/分层18/compileall/diff通过
+- 2026-09-19T16:10:25+08:00 | actor=root | event=checkpoint | note=最新浏览器实际ROS快照TF手眼TCP采样恢复通过；下载事件尚未确认 | verification=浏览器看到快照和TF结果、手眼/TCP各revision1；无真机；保留下载验收缺口
+- 2026-09-19T16:12:32+08:00 | actor=root | event=checkpoint | note=新增服务器附件导出并完成实际HTTP到ROS数据一致性验证 | verification=相关4通过；全量725 passed/7 skipped/1既有失败；dashboard build/分层18/compileall/diff通过
+- 2026-09-19T16:14:42+08:00 | actor=root | event=checkpoint | note=TCP多姿态采样到求解接受恢复导出实际HTTP/ROS全链通过 | verification=完整ROS测试2通过；全量725 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:17:26+08:00 | actor=root | event=checkpoint | note=手眼16姿态图像经实际Dashboard和ROS采样求解接受全链通过 | verification=全链2通过；全量725 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:20:38+08:00 | actor=root | event=checkpoint | note=浏览器服务器附件下载成功，SSE多连接断开重连验收通过 | verification=HTTP/SSE2通过；浏览器download事件确认；全量726 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:23:16+08:00 | actor=root | event=checkpoint | note=补齐网页标定使用与恢复文档，核对安装入口及架构职责 | verification=四个已安装标定入口、CLI help、launch参数解析、layering18/diff通过
+- 2026-09-19T16:24:03+08:00 | actor=root | event=start | note=网页标定收口：验证并修复会话采集条件变化混入问题 | verification=-
+- 2026-09-19T16:25:43+08:00 | actor=root | event=checkpoint | note=修复会话混入不同相机内参或采集配置问题，保持原始数据不变 | verification=相关7通过；全量729 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:28:29+08:00 | actor=root | event=checkpoint | note=统一正式标定会话状态所有权，移除未接线早期原型并增强接受门回归 | verification=store7通过；全量729 passed/7 skipped/1既有失败；build/安装核对/分层18/compileall/diff通过
+- 2026-09-19T16:31:35+08:00 | actor=root | event=checkpoint | note=完善手眼与TCP完整证据哈希和求解软件来源 | verification=相关7通过；全量730 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:32:08+08:00 | actor=root | event=start | note=补齐网页手眼报告离群样本诊断，不自动剔除样本 | verification=-
+- 2026-09-19T16:36:28+08:00 | actor=root | event=checkpoint | note=完成最新算法结果表与离群失败报告的实际浏览器复查及回归 | verification=浏览器失败/离群展示通过；全量731 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:41:23+08:00 | actor=root | event=checkpoint | note=MuJoCo末端模型到投影图像/PnP/手眼求解组合验证通过 | verification=MuJoCo2通过；全量732 passed/7 skipped/1既有失败；分层18/compileall/diff通过
+- 2026-09-19T16:45:28+08:00 | actor=root | event=checkpoint | note=补齐网页会话级相机话题选择并验证切换不混缓存 | verification=相关3通过；全量732 passed/7 skipped/1既有失败；两包build/分层18/compileall/diff通过
+- 2026-09-19T16:48:05+08:00 | actor=root | event=checkpoint | note=补齐样本序号与持久化UTC操作审计并验证重试不重复记录 | verification=相关10通过；全量733 passed/7 skipped/1既有失败；build/分层18/compileall/diff通过
+- 2026-09-19T16:51:33+08:00 | actor=root | event=checkpoint | note=统一标定响应会话身份与失败状态回读，完成接口契约验证 | verification=相关8通过；全量734 passed/7 skipped/1既有失败；三包build/分层18/compileall/diff通过
+- 2026-09-19T16:54:22+08:00 | actor=root | event=verified | note=网页手眼标定软件目标完成：实现、真实Dashboard/ROS合成流程、浏览器及MuJoCo数据求解导出恢复均已验收；硬件未操作 | verification=最终MuJoCo浏览器/ROS 16+8 accepted revision26 deployed=false；最近全量734 passed/7 skipped/1既有失败；分层18、构建、compileall、diff通过
+- 2026-09-19T22:23:05+08:00 | actor=Codex | event=start | note=只读确认当前项目是否包含 MuJoCo | verification=-
+- 2026-09-20T10:55:17+08:00 | actor=Codex | event=verified | note=Diagnosed custom ROS message type invalid in operator terminal | verification=Workspace installation and Python imports for ArmStatus and JointMotorState pass; operator symptom is unsourced overlay, while sensor_msgs JointState still works from system ROS. No visual launch/controller currently running.
+- 2026-09-20T11:08:44+08:00 | actor=Codex | event=start | note=Inspect MotionPlanning Plan Execute exposure in visual_grasp_system plan_only RViz | verification=-
+- 2026-09-20T11:12:58+08:00 | actor=Codex | event=verified | note=Separated visual plan-only RViz from MotionPlanning Plan/Execute UI | verification=rebotarm_bringup build passed; layering 18 passed; launch --show-args passed; compileall and git diff --check passed
+- 2026-09-20T11:27:25+08:00 | actor=Codex | event=start | note=Compare visual_grasp_perception_preview and visual_grasp_system launch entrypoints | verification=-
+- 2026-09-20T11:31:46+08:00 | actor=Codex | event=start | note=Assess consolidating perception preview into visual_grasp_system and migrating Open3D viewer | verification=-
+- 2026-09-20T11:34:02+08:00 | actor=Codex | event=start | note=Merge perception preview capabilities into visual_grasp_system and delete duplicate launch | verification=-
+- 2026-09-20T11:42:15+08:00 | actor=Codex | event=complete | note=Merged Open3D and raw candidate preview into visual_grasp_system; deleted duplicate perception preview launch | verification=rebotarm_bringup build passed; focused 97 passed; full 734 passed 7 skipped with 1 pre-existing MuJoCo interpreter failure; compileall, show-args, diff-check passed
+- 2026-09-20T11:45:26+08:00 | actor=Codex | event=start | note=Create consolidated non-visual launch command guide and push current progress to GitHub | verification=-
+- 2026-09-20T11:58:50+08:00 | actor=Codex | event=complete | note=Published consolidated non-visual launch command guide and pushed current workspace progress | verification=commit 01ba70c pushed to origin/main; 11 packages built; 735 passed 7 skipped; launch show-args and diff checks passed
+- 2026-09-20T12:03:22+08:00 | actor=codex | event=start | note=删除用户指定的 docs/rebotarm_launch_commands.md | verification=-
+- 2026-09-20T12:04:30+08:00 | actor=codex | event=checkpoint | note=已删除 docs/rebotarm_launch_commands.md，并移除文档索引中的失效引用 | verification=目标文件不存在；docs 无残留引用；git diff --check 通过
+- 2026-09-20T12:04:59+08:00 | actor=codex | event=complete | note=完成删除用户指定的低质量启动命令总表 | verification=目标文件不存在；相关文档引用已清理；git diff --check 通过
+- 2026-09-20T17:25:37+08:00 | actor=codex | event=start | note=准备视觉夹取真机分阶段执行测试，先完成只读安全门禁 | verification=-
+- 2026-09-20T17:34:54+08:00 | actor=codex | event=start | note=排查 visual_grasp_system plan_only 正常而 execute 模式反馈 stale 的差异 | verification=-
+- 2026-09-20T17:40:17+08:00 | actor=codex | event=verified | note=已完成 plan_only/execute 启动路径静态对比：execution_mode 未传入硬件控制器，控制器参数一致，bringup 单控制器测试通过；未修改代码 | verification=tests/test_package_layering.py -k 'bringup_has_one_real_hardware_controller_owner or visual_grasp_wiring': 1 passed；最近控制器参数 channel=/dev/ttyACM0、feedback_rate=50、stale_timeout=0.15 一致
+- 2026-09-20T18:00:07+08:00 | actor=codex | event=complete | note=定位 arm_status 误报：启动瞬间 stale 被 TRANSIENT_LOCAL 锁存，反馈恢复后的成功路径未重新 publish_status；实际 joint_states/单关节/夹爪反馈均为新鲜 status0。未修改代码 | verification=底层控制器隔离测试：唯一 publisher；六个 joints/*/state status0、joint_states 新鲜、gripper status0；arm_status 时间戳停在启动时刻
+- 2026-09-20T18:04:01+08:00 | actor=codex | event=start | note=修复 arm_status 启动 stale 后未随有效反馈恢复的问题 | verification=-
+- 2026-09-20T18:08:29+08:00 | actor=codex | event=complete | note=修复视觉入口启动时 arm_status 锁存 255/stale 后不恢复的问题 | verification=rebotarmcontroller build通过；定向127 passed；分层18 passed；全量736 passed/7 skipped；compileall/diff通过；失能只读真机 arm_status 六轴0/error_codes空，joint_states约100Hz
+- 2026-09-20T18:20:10+08:00 | actor=codex | event=start | note=优化 arm_status 为变化立即发布加低频心跳 | verification=-
+- 2026-09-20T18:24:12+08:00 | actor=codex | event=complete | note=arm_status 改为状态变化立即发布及 5Hz 心跳 | verification=rebotarmcontroller 重建通过；定向128 passed；分层18 passed；全量737 passed/7 skipped；compileall 和 diff 检查通过；未连接真机
+- 2026-09-20T18:48:59+08:00 | actor=codex | event=start | note=将视觉 execute 默认 max_plan_age_sec 调整为4秒并整理真机夹取指令 | verification=-
+- 2026-09-20T18:52:33+08:00 | actor=codex | event=complete | note=视觉 execute 默认计划有效窗口调整为4秒 | verification=rebotarm_bringup重建；show-args显示execute 4.0；visual wiring73 passed；分层18 passed；全量737 passed/7 skipped；compileall/diff通过
+- 2026-09-20T19:04:39+08:00 | actor=codex | event=start | note=诊断视觉抓取启动期间 USB 串口断线与重新枚举原因，不改代码、不操作真机 | verification=-
+- 2026-09-21T10:22:55+08:00 | actor=codex | event=start | note=按用户要求调整视觉撤退方向与预抓取最低高度 | verification=-
+- 2026-09-21T10:26:13+08:00 | actor=codex | event=complete | note=视觉撤退方向与预抓取Z下限已统一更新 | verification=vision/bringup build通过；show-args确认-1,0,0.5和0.04；分层18通过；全量737 passed/7 skipped；compileall/diff通过；未启动真机
+- 2026-09-21T11:33:31+08:00 | actor=codex | event=start | note=Remove pregrasp base-Z offset and explain fixed post-grasp retreat direction | verification=-
+- 2026-09-21T11:42:15+08:00 | actor=codex | event=complete | note=Removed fixed 5 cm pregrasp base-Z offset across vision policy, nodes, launch, config, tests, and docs; retained 0.04 m minimum-Z clamp and fixed post-lift retreat direction. Full tests 737 passed/7 skipped; rebuilt rebotarm_vision and rebotarm_bringup. | verification=-
+- 2026-09-21T12:36:30+08:00 | actor=codex | event=start | note=Align post-grasp retreat with reverse approach axis and remove independent vertical lift stage | verification=-
+- 2026-09-21T12:47:32+08:00 | actor=codex | event=complete | note=Changed visual grasp post-close motion to retreat 6 cm along the actual grasp-to-pregrasp reverse approach direction; removed independent lift, fixed retreat axis/min-lift, and visual-lift verification interfaces. Full tests 738 passed/7 skipped; rebuilt rebotarm_vision and rebotarm_bringup; no hardware started. | verification=-
+- 2026-09-21T13:01:16+08:00 | actor=codex | event=start | note=Review, commit, and push the currently verified visual grasp improvements | verification=-
+- 2026-09-21T13:01:39+08:00 | actor=codex | event=complete | note=Reviewed the verified visual grasp approach/retreat, arm-status heartbeat, launch/config, tests, and documentation changes for Git publication. Full regression already passed 738 tests with 7 skipped; rebotarm_vision and rebotarm_bringup rebuilt; no hardware action in publication step. | verification=-
+- 2026-09-21T13:08:54+08:00 | actor=codex | event=start | note=核对视觉夹取完成后的默认处理流程 | verification=-
+- 2026-09-21T13:12:44+08:00 | actor=codex | event=start | note=排查视觉夹取运动速度慢及卡顿原因 | verification=-
+- 2026-09-21T13:17:52+08:00 | actor=codex | event=start | note=核对 Seeed 官方视觉抓取是否使用分阶段速度与加速度缩放 | verification=-
+- 2026-09-21T13:26:06+08:00 | actor=codex | event=start | note=核对视觉MoveIt速度加速度控制链与官方配置 | verification=-
+- 2026-09-21T13:30:45+08:00 | actor=codex | event=start | note=核对 Seeed 官方各关节速度加速度加加速度数值及其来源 | verification=-
+- 2026-09-21T13:41:04+08:00 | actor=codex | event=start | note=将视觉夹取运动档位调整到第四级并暴露速度参数 | verification=-
+- 2026-09-21T13:45:10+08:00 | actor=codex | event=verified | note=视觉夹取第四级速度档已接入并完成软件验证，尚未进行第四级真机验收 | verification=rebotarm_vision/rebotarm_bringup symlink build passed; layering 18 passed; full suite 739 passed, 7 skipped; compileall passed; installed launch show-args confirmed 0.15/0.05/0.10/0.10
+- 2026-09-21T13:49:53+08:00 | actor=codex | event=start | note=创建仅由用户维护的未完善事项文档 | verification=-
+- 2026-09-21T13:50:18+08:00 | actor=codex | event=verified | note=已创建用户专属维护的待完善事项文档，默认禁止编码代理修改 | verification=文档内容与三项待办及维护边界已人工核对；仅文档变更，无需重新编译
+- 2026-09-21T16:35:09+08:00 | actor=codex | event=start | note=将视觉夹取运动比例提高到约定的暂定上限 | verification=-
+- 2026-09-21T16:38:04+08:00 | actor=codex | event=verified | note=视觉夹取默认运动档已提高到暂定上限，尚未进行真机验收 | verification=defaults 0.25/0.08/0.15/0.12; focused 74 passed; layering 18 passed; full suite 739 passed, 7 skipped; vision/bringup build and compileall passed; installed show-args confirmed; user-maintained TODO unchanged
+- 2026-09-21T17:11:26+08:00 | actor=codex | event=start | note=分析GraspNet候选持续变化并设计人工选择输出快照方案 | verification=-
+- 2026-09-21T17:12:20+08:00 | actor=codex | event=verified | note=已完成GraspNet候选变化与人工快照选择方案分析，未修改代码 | verification=read-only source inspection of GraspNet, raw Open3D viewer, IK filter, executor freshness gate, and launch wiring
+- 2026-09-22T12:13:13+08:00 | actor=codex | event=start | note=核对手眼标定测试流程与代码分布，供用户 review | verification=-
+- 2026-09-22T12:20:45+08:00 | actor=codex | event=start | note=解释启动文件 use_hardware 与显式使能的区别 | verification=-
+- 2026-09-22T12:24:09+08:00 | actor=codex | event=verified | note=已核对 use_hardware 仅选择并启动真实硬件后端，connect 后固定为 CONNECTED_DISABLED；显式 /rebotarm/enable 才开启 holding torque | verification=source inspection: interactive_system.launch.py, hardware_manager.py, ros_services.py
+- 2026-09-22T12:41:06+08:00 | actor=codex | event=start | note=更新 rebotarm_calibration 与 rebotarm_dashboard README，评估 calibration_web_plan 是否归档或删除 | verification=-
+- 2026-09-22T12:43:40+08:00 | actor=codex | event=checkpoint | note=已同步更新 calibration/dashboard README；calibration_web_plan 标记为软件完成归档并保留；分层测试18通过、compileall与diff检查通过 | verification=-
+- 2026-09-22T12:58:23+08:00 | actor=codex | event=checkpoint | note=重建 rebotarm_msgs/calibration/dashboard/bringup；清理遗留消息生成产物后消息导入正常，标定回归95 passed，launch参数检查通过 | verification=-
+- 2026-09-22T13:04:38+08:00 | actor=codex | event=checkpoint | note=使用最新安装空间重跑标定软件回归：95 passed in 23.70s | verification=-
+- 2026-09-22T13:07:39+08:00 | actor=codex | event=start | note=提供 dashboard 手眼标定测试指令 | verification=-
+- 2026-09-22T13:12:42+08:00 | actor=codex | event=complete | note=已核对 dashboard 手眼标定测试入口与安全边界；未启动硬件 | verification=39 passed (non-ROS focused); 3 passed (ROS runtime after sourcing Jazzy and overlay)
+- 2026-09-22T13:31:46+08:00 | actor=codex | event=complete | note=改进 Dashboard 标定入口与 /calibration 分步骤视觉布局；不改标定后端和硬件安全门 | verification=calibration dashboard focused tests 9 passed; dashboard compileall passed; git diff check passed; rebotarm_dashboard symlink build passed
+- 2026-09-22T13:38:44+08:00 | actor=codex | event=start | note=全面优化 Dashboard 手眼标定前端界面，保留现有接口和安全门 | verification=-
+- 2026-09-22T13:47:38+08:00 | actor=codex | event=complete | note=完成手眼标定页面产品化重构：中文业务标签、流程侧栏、分层操作、预览与报告布局；保持接口和安全门不变 | verification=layering 18 passed; full suite 739 passed 7 skipped; compileall passed; rebotarm_dashboard build passed; git diff check passed; browser visual QA completed
+- 2026-09-22T14:49:29+08:00 | actor=codex | event=start | note=Inspect provided Figma node and implement it in the dashboard code; awaiting node-specific Figma URL | verification=-
+- 2026-09-22T14:57:24+08:00 | actor=codex | event=start | note=核对并上传当前 Dashboard 优化进度到 GitHub | verification=-
+- 2026-09-22T15:00:21+08:00 | actor=codex | event=complete | note=Dashboard 标定入口与手眼标定页面重构已提交并推送 GitHub main | verification=commit b596b12; push origin/main succeeded; prior full regression 739 passed 7 skipped
+- 2026-09-22T15:44:22+08:00 | actor=codex | event=start | note=将手眼标定工作台统一为主 Dashboard 浅色视觉体系 | verification=-
+- 2026-09-22T15:48:12+08:00 | actor=codex | event=complete | note=手眼标定工作台已统一为主 Dashboard 浅色视觉体系，保留流程结构、后端接口与安全门 | verification=browser visual QA top and lower sections passed; focused tests 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall passed; dashboard build passed; git diff check passed
+- 2026-09-22T15:51:05+08:00 | actor=codex | event=start | note=将手眼标定工作台改为紧凑步骤卡片切换布局 | verification=-
+- 2026-09-22T16:08:29+08:00 | actor=codex | event=complete | note=完成标定工作台卡片化与矢量图标优化，修正采样控件和指标卡对齐，优化03空状态，并折叠可选会话恢复 | verification=live 8088 browser visual QA passed for flow cards, capture alignment, and solve empty state; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, build, diff check passed
+- 2026-09-22T16:32:20+08:00 | actor=codex | event=complete | note=根据三张截图完成流程SVG居中、P2按钮分组和P3紧凑布局优化 | verification=live 8088 visual QA passed; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, dashboard build, diff check passed
+- 2026-09-22T16:41:17+08:00 | actor=codex | event=complete | note=TCP模式说明换行并为标定板坐标系、标记边长、标记ID、ArUco字典增加内联解释 | verification=live 8088 visual QA passed; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, build, diff check passed
+- 2026-09-22T16:43:50+08:00 | actor=codex | event=start | note=从准备会话界面删除四个ArUco高级字段，保留后端默认请求值 | verification=-
+- 2026-09-22T16:50:27+08:00 | actor=codex | event=complete | note=准备会话界面移除四个ArUco高级输入字段，创建请求保留默认参数 | verification=focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, dashboard build, diff check passed
+- 2026-09-22T16:51:00+08:00 | actor=codex | event=start | note=解释手眼标定预检与样本用途 | verification=-
+- 2026-09-22T16:51:14+08:00 | actor=codex | event=complete | note=核对只读预检与训练验证样本代码语义并解释，无硬件操作 | verification=read-only source inspection
+- 2026-09-22T16:51:31+08:00 | actor=codex | event=start | note=恢复手眼标定四个ArUco输入项并保留紧凑界面 | verification=-
+- 2026-09-22T16:56:45+08:00 | actor=codex | event=complete | note=恢复四个标记配置输入并验证创建与回填；无硬件操作 | verification=dashboard build; full pytest 739 passed, 7 skipped; layering 18 passed; compileall; diff check
+- 2026-09-22T17:09:01+08:00 | actor=codex | event=start | note=为手眼标定模式控制补充Safe Home与失能按钮及安全确认 | verification=-
+- 2026-09-22T17:13:32+08:00 | actor=codex | event=complete | note=标定模式控制新增Safe Home与确认后失能；仅软件验证，未操作硬件 | verification=focused 88 passed; full pytest 739 passed, 7 skipped; layering 18 passed; dashboard build; compileall; diff check
+- 2026-09-22T17:26:55+08:00 | actor=codex | event=start | note=删除重复页面快照导出并设计可追溯的人工离群样本排除 | verification=-
+- 2026-09-22T17:35:54+08:00 | actor=codex | event=complete | note=移除重复快照导出并实现需理由的可逆离群样本人工排除；未操作硬件 | verification=full pytest 742 passed 7 skipped; layering 18 passed; focused 12 passed; calibration/dashboard build; compileall; diff check
+- 2026-09-22T17:38:38+08:00 | actor=codex | event=start | note=调整手眼标定流程卡片图标与连接布局 | verification=-
+- 2026-09-22T17:43:30+08:00 | actor=codex | event=complete | note=修正标定流程卡片图标与文本对齐、移除贴边连接线并验证响应式布局 | verification=browser screenshot; dashboard build; pytest 742 passed 7 skipped; layering 18 passed; compileall; diff check
+- 2026-09-22T17:46:33+08:00 | actor=codex | event=start | note=修正手眼标定流程卡片矢量图标视觉对齐 | verification=-
+- 2026-09-22T17:51:02+08:00 | actor=codex | event=complete | note=统一标定流程卡片三枚SVG图标的几何与视觉对齐 | verification=browser render checked; page test passed; layering 18 passed; dashboard build; compileall; diff check
+- 2026-09-22T17:53:58+08:00 | actor=codex | event=complete | note=修正rail-step span覆盖图标flex的根因，截图确认SVG在方框中心 | verification=browser screenshot; dashboard rebuild; 742 passed 7 skipped; compileall
+- 2026-09-22T17:59:58+08:00 | actor=codex | event=start | note=完善标定工作台状态、预检、样本审核、独立验证与结果展示 | verification=-
+- 2026-09-22T18:14:01+08:00 | actor=codex | event=complete | note=完善标定工作台状态门、配置、试采反馈、样本与最终验证规则；无硬件动作 | verification=743 passed 7 skipped; layering 18 passed; build calibration/dashboard; compileall; browser static verification
+- 2026-09-22T19:07:58+08:00 | actor=codex | event=start | note=增加预检逐项检查清单 | verification=-
+- 2026-09-22T19:11:51+08:00 | actor=codex | event=complete | note=预检五项清单接入真实检查结果；无硬件操作 | verification=745 passed 7 skipped; focused 3; layering 18; calibration/dashboard build; compileall; diff check
+- 2026-09-22T19:13:34+08:00 | actor=codex | event=start | note=优化采样预览与预检清单布局 | verification=-
+- 2026-09-22T19:16:05+08:00 | actor=codex | event=complete | note=预检清单独立整行，优化采样区域布局 | verification=browser screenshot; 745 passed 7 skipped; layering 18; dashboard build; compileall; diff check
+- 2026-09-23T03:58:43+08:00 | actor=codex | event=start | note=以上游1749e3ab为新基线，选择性迁回本项目独有的MuJoCo、正式单瓶抓取和反馈安全能力 | verification=-
+- 2026-09-23T04:18:34+08:00 | actor=codex | event=checkpoint | note=隔离工作树选择性迁入MuJoCo与正式单瓶抓取，保留上游包结构；回归继续 | verification=motion/vision/simulation独立构建通过；单瓶抓取28 passed；恢复与相关边界89 passed；完整回归未完
+- 2026-09-23T04:29:43+08:00 | actor=codex | event=verified | note=完成上游新基线隔离工作树选择性能力迁移及软件验证；主目录待后续落地 | verification=1145 passed, 14 skipped; layering 18 passed; 11 packages built; compileall, launch show-args, EGL/physics/Pick smoke, diff check passed; no hardware
+- 2026-09-23T04:47:19+08:00 | actor=codex | event=verified | note=上游新基线已按迁移分支文件树合并到主目录独立分支并完成软件验证 | verification=1154 passed, 14 skipped; layering 18 passed; fresh 11-package build; compileall and launch show-args passed; EGL health ok; retired packages absent; no hardware

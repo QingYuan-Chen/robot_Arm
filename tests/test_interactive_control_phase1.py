@@ -1,35 +1,27 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = ROOT / "src" / "rebotarm_interactive_control"
-if str(PACKAGE_ROOT) not in sys.path:
-    sys.path.insert(0, str(PACKAGE_ROOT))
-
-from rebotarm_interactive_control.command_models import (  # type: ignore[import-not-found]
+from rebotarm_motion.command_models import (
     ControlMode,
     ExecutionState,
     PoseTarget,
     PreviewSolveResult,
 )
-from rebotarm_interactive_control.execution_coordinator import (  # type: ignore[import-not-found]
+from rebotarm_motion.execution_coordinator import (
     InteractiveCoordinator,
 )
-from rebotarm_interactive_control.preview_manager import (  # type: ignore[import-not-found]
+from rebotarm_motion.preview_manager import (
     PreviewManager,
 )
-from rebotarm_interactive_control.pose_math import (  # type: ignore[import-not-found]
+from rebotarm_motion.pose_math import (
     quaternion_to_rpy,
     rpy_to_quaternion,
 )
-from rebotarm_interactive_control.parameter_helpers import (  # type: ignore[import-not-found]
+from rebotarm_motion.parameter_helpers import (
     build_joint_limits,
 )
-from rebotarm_interactive_control.parameter_helpers import (  # type: ignore[import-not-found]
+from rebotarm_motion.parameter_helpers import (
     sensor_qos_kwargs,
 )
 

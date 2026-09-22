@@ -112,7 +112,7 @@ def test_network_graspnet_payload_converts_to_candidates():
 
     payload = {
         "frame_id": "camera_depth_frame",
-        "source": "windows_graspnet_baseline",
+        "source": "graspnet_baseline",
         "backend_configured": True,
         "timestamp_ns": 1_700_000_000_123_456_789,
         "candidates": [
@@ -132,7 +132,7 @@ def test_network_graspnet_payload_converts_to_candidates():
     assert candidates.best_index == 0
     assert candidates.header.frame_id == "camera_depth_frame"
     assert len(candidates.candidates) == 1
-    assert candidates.candidates[0].source == "windows_graspnet_baseline"
+    assert candidates.candidates[0].source == "graspnet_baseline"
     assert candidates.candidates[0].confidence == pytest.approx(0.88)
     assert candidates.candidates[0].pose.position.x == pytest.approx(0.12)
     assert candidates.candidates[0].jaw_width == pytest.approx(0.042)
@@ -261,56 +261,6 @@ def test_candidate_filter_tf_failure_publishes_no_ranked_candidates():
     assert warnings == ["candidate IK filter rejected candidate: TF lookup unavailable"]
 
 
-def test_graspnet_node_selects_only_configured_bottle_class():
-    from rebotarm_msgs.msg import Detection2D
-    from rebotarm_vision.graspnet_baseline_node import select_target_detection
-
-    cup = Detection2D()
-    cup.class_name = "cup"
-    cup.confidence = 0.99
-    bottle = Detection2D()
-    bottle.class_name = "bottle"
-    bottle.confidence = 0.61
-
-    selected = select_target_detection([cup, bottle], target_class_name="bottle")
-
-    assert selected is bottle
-    assert select_target_detection([cup], target_class_name="bottle") is None
-
-
-def test_candidate_filter_looks_up_tf_at_sensor_timestamp():
-    from builtin_interfaces.msg import Time
-    from rebotarm_vision.candidate_ik_filter_node import CandidateIkFilterNode
-
-    seen = {}
-
-    class FakeBuffer:
-        def lookup_transform(self, target, source, lookup_time, *, timeout):
-            seen.update(
-                target=target,
-                source=source,
-                lookup_time_ns=lookup_time.nanoseconds,
-                timeout_ns=timeout.nanoseconds,
-            )
-            return "transform"
-
-    node = object.__new__(CandidateIkFilterNode)
-    node._tf_buffer = FakeBuffer()
-    stamp = Time(sec=123, nanosec=456)
-
-    result = CandidateIkFilterNode._lookup_transform(
-        node, "base_link", "camera_depth_frame", stamp
-    )
-
-    assert result == "transform"
-    assert seen == {
-        "target": "base_link",
-        "source": "camera_depth_frame",
-        "lookup_time_ns": 123_000_000_456,
-        "timeout_ns": 200_000_000,
-    }
-
-
 def test_preserve_input_safety_gate_allows_low_grasp_when_width_is_valid():
     from rebotarm_vision.candidate_ik_filter_node import CandidateIkFilterNode
     from rebotarm_vision.visual_grasp_sequence import PoseTarget
@@ -321,8 +271,6 @@ def test_preserve_input_safety_gate_allows_low_grasp_when_width_is_valid():
                 "candidate_min_jaw_width_m": 0.006,
                 "candidate_max_jaw_width_m": 0.082,
                 "candidate_min_grasp_z_m": 0.0,
-                "candidate_safe_lift_min_z_m": 0.120,
-                "lift_z_m": 0.08,
             }
             return type("Param", (), {"value": values[name]})()
 

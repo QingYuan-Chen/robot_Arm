@@ -1,9 +1,19 @@
+# 末端位姿逆解（IK）直控服务：把目标位姿解成关节角后直接交给位置控制器，
+# 不经过运动规划。由硬件包提供，服务名 /<namespace>/move_to_pose_ik。
+# 安全提示：这是绕过规划层的低层通道，调用方必须自行保证目标位姿可达且路径无碰撞。
+
 # Request
+# 目标位姿，位置单位 m，姿态为四元数。frame_id 由控制器内部约定（基坐标系），
+# 该服务不接受任意坐标系——不做 TF 变换。
 geometry_msgs/Pose target_pose
 ---
 # Response
+# IK 是否被接受并下发；解算失败或无解时为 false。
 bool success
+# 说明文本："IK target accepted" 或失败原因（英文）。
 string message
+# 控制器内部的 IK 目标关节角，单位 rad，顺序与硬件 joint_names（joint1..joint6）一致；
+# 失败时为空列表，使用前必须判空。
 float64[] q_solution
 
 # 对应service值，适合一次请求一次响应

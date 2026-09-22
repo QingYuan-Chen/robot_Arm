@@ -1,5 +1,8 @@
 # 视觉抓取七层参数设计
 
+> 当前唯一支持的部署是 Ubuntu 原生 Gemini 2 -> YOLO -> ROS -> 本机 GraspNet。
+> Windows、HTTP、MJPEG、远端 JSON 和独立 GraspNet service 已移除；以下参数只适用于本机 ROS 链。
+
 > 文档状态：参数分层仍有效，但当前工程处于网络过渡链路向单 Ubuntu 链路迁移阶段。下列参数是设计基线，不代表已经完成 Gemini 2、GraspNet、hand-eye、TCP 或真机安全验收。
 
 当前目标是通用抓取，不限制物体只能平躺或竖放。候选来源统一使用 GraspNet candidates，YOLO 仍可用于目标检测、mask、深度质量辅助，但不再生成规则物体候选，也不再合并两路候选。
@@ -10,7 +13,7 @@
 YOLO / depth / point cloud
 GraspNet Baseline 生成候选
 candidate_ik_filter 做 IK / workspace / jaw_width / joint6 / table safety 检查
-visual_grasp_executor 做 trajectory / gripper / lift / retreat 执行
+visual_grasp_executor 做 trajectory / gripper / reverse-approach retreat 执行
 ```
 
 ## 第 1 层：Perception Source
@@ -34,12 +37,11 @@ candidate_ik_input_topic: /grasp/graspnet_candidates
 作用：控制 GraspNet 候选数量和数据来源。
 
 ```yaml
-graspnet_source_mode: in_process
 graspnet_max_input_skew_ms: 100
 candidate_max_candidates_per_frame: 20
 ```
 
-- 现有 Windows bridge 可以继续作为兼容输入，但不再是目标主路线。
+- 旧网络桥接已移除；不再作为兼容输入或部署前置条件。
 - Ubuntu GraspNet仍运行在独立`.venv-graspnet` Python进程中，但RGB-D和detections直接通过ROS订阅进入runner，不再经过localhost HTTP。
 - Ubuntu 侧读取 `/grasp/graspnet_candidates`，最多取 `candidate_max_candidates_per_frame` 个进入 IK filter。
 - Open3D 可视化只用于调试，不作为 Ubuntu 抓取执行链路的一部分。
@@ -51,13 +53,14 @@ candidate_max_candidates_per_frame: 20
 ```yaml
 candidate_pose_policy: preserve_candidate_pose
 base_pregrasp_distance_m: 0.06
-tcp_offset_xyz: [-0.105, 0.0, 0.0]
+tcp_offset_xyz: [-0.04, 0.0, 0.0]
 target_base_offset_xyz: [0.0, 0.0, 0.0]
 ```
 
-- `preserve_candidate_pose`：优先保留 GraspNet 给出的 6D 抓取姿态。
-- `base_pregrasp_distance_m`：pregrasp 离 grasp 的退让距离，当前 6cm。
-- `tcp_offset_xyz`：真实视觉/MoveIt默认使用upstream explicit nominal TCP `[-0.105, 0.0, 0.0]`；active MuJoCo hybrid入口传`[0,0,0]`，因为模型内部`ee_site`已表达该偏移，避免double offset / 重复偏移。
+- `preserve_candidate_pose`：`visual_grasp_system.launch.py` 默认保留 GraspNet 候选的 6D 姿态，并以候选 TCP 的局部 X 轴作为接近轴。
+- `base_pregrasp_distance_m`：pregrasp 沿接近轴反方向离 grasp 的退让距离，当前 6cm。
+- 预抓取点不再额外叠加固定的 base Z 抬升；正常情况下 `pregrasp = grasp - normalize(approach_axis) * distance`，保持在同一条接近轴上。
+- `tcp_offset_xyz`：真实视觉/MoveIt 使用现场配置的 TCP `[-0.04, 0.0, 0.0]`；仿真入口若模型已表达 TCP，应避免重复偏移。
 - `target_base_offset_xyz`：在 base_link 下对目标点做全局补偿，当前不使用。
 
 ## 第 4 层：Pose Variant / Joint6
@@ -82,17 +85,18 @@ candidate_score_joint6_weight: 0.35
 
 ```yaml
 candidate_workspace_gate_enabled: true
-candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]
-candidate_workspace_max_xyz: [0.35, -0.18, 0.45]
+candidate_workspace_min_xyz: [0.18, -0.35, 0.0]
+candidate_workspace_max_xyz: [0.64, 0.35, 0.45]
 candidate_min_grasp_z_m: 0.0
-candidate_safe_lift_min_z_m: 0.120
-safe_retreat_min_lift_z_m: 0.12
+candidate_pregrasp_min_z_m: 0.04
+safe_retreat_distance_m: 0.06
 ```
 
 - 不再使用 `0.12m` 作为抓取点最低硬门槛，低高度物体可以进入候选。
-- `candidate_safe_lift_min_z_m` 和 `safe_retreat_min_lift_z_m` 仍用于抬升/撤退安全检查。
+- 预抓取目标的 Z 下限为 `base_link` 下的 `0.04m`，不是距桌面高度，也不强制所有预抓取点下降至该值。
+- 闭合验证通过后，撤退方向由本次 `grasp -> pregrasp` 动态推导，默认退出 `0.06m`；不再使用固定基座方向，也不先做独立垂直抬升。
 - workspace 最大半径不超过机械臂约 64cm 工作范围。
-- 当前安装相对 upstream 初始方向绕 base Z 轴旋转了 `-90°`；因此 visual-ready joint1 为 `-π/2`，工作区长轴从 `+X` 同步旋转到 `-Y`。hand-eye/TCP 是 `end_link` 局部外参，不随安装方向修改。
+- 当前恢复旧仓库的 `+X` 工作区约定；visual-ready joint1 为 `0`。hand-eye/TCP 仍是相同的 `end_link` 局部外参。
 
 ## 第 6 层：Gripper Policy
 
@@ -129,7 +133,7 @@ safe_home_after_grasp: false
 ```
 
 - IK 可达不等于轨迹可执行，所以实机抓取建议保持 `trajectory_precheck_enabled: true`。
-- 最终执行链路仍是 `pregrasp -> grasp -> close -> lift -> retreat`。
+- 最终执行链路是 `pregrasp -> grasp -> close/verify -> reverse-approach retreat`。
 - `safe_home_after_grasp: false` 表示抓完不自动回 safe_home，便于连续调试。
 
 在 P0 完成前，第 7 层只允许 `use_hardware:=false` 和 `execution_mode:=plan_only`。候选过期、TF 失败、无候选、碰撞检查失败或轨迹预检失败时必须停止，不能自动降级到未经过同等验证的抓取方式。

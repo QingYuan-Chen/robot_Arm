@@ -73,7 +73,7 @@ def _install_ros_stubs_if_needed():
 
 
 def test_sample_estimates_offset_in_end_link_frame_with_identity_rotation():
-    from rebotarm_vision.tcp_calibration import estimate_sample_offset
+    from rebotarm_calibration.tcp_calibration import estimate_sample_offset
 
     offset = estimate_sample_offset(
         end_link_position=(0.40, 0.10, 0.20),
@@ -85,7 +85,7 @@ def test_sample_estimates_offset_in_end_link_frame_with_identity_rotation():
 
 
 def test_sample_estimates_offset_in_rotated_end_link_frame():
-    from rebotarm_vision.tcp_calibration import estimate_sample_offset
+    from rebotarm_calibration.tcp_calibration import estimate_sample_offset
 
     offset = estimate_sample_offset(
         end_link_position=(1.0, 2.0, 3.0),
@@ -97,14 +97,14 @@ def test_sample_estimates_offset_in_rotated_end_link_frame():
 
 
 def test_average_offset_rejects_empty_samples():
-    from rebotarm_vision.tcp_calibration import average_offsets
+    from rebotarm_calibration.tcp_calibration import average_offsets
 
     with pytest.raises(ValueError, match="at least one"):
         average_offsets([])
 
 
 def test_average_offset_formats_camera_yaml_snippet():
-    from rebotarm_vision.tcp_calibration import average_offsets, format_tcp_offset_yaml
+    from rebotarm_calibration.tcp_calibration import average_offsets, format_tcp_offset_yaml
 
     offset = average_offsets(
         [
@@ -120,7 +120,7 @@ def test_average_offset_formats_camera_yaml_snippet():
 def test_estimate_offset_from_transform_stamped_uses_tf_fields():
     _install_ros_stubs_if_needed()
 
-    from rebotarm_vision.tcp_calibration_node import estimate_offset_from_transform
+    from rebotarm_calibration.tcp_calibration_node import estimate_offset_from_transform
 
     offset = estimate_offset_from_transform(
         _TransformStamped(),

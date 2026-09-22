@@ -1,43 +1,30 @@
-# reBotArm 视觉抓取启动手册
+# 视觉抓取启动手册
 
-> 当前安全状态：P0-P6已按用户确认的工程范围关闭，未执行的完整自动抓取、结果分类和剩余实机动作不计为通过。新部署与每轮真机动作仍需独立预检和授权。先使用Ubuntu视觉独立验证、无硬件预览或显式plan-only检查。
+> 当前主路线为单 Ubuntu：Gemini 2、YOLO、GraspNet 和 ROS 2 均在 Ubuntu 本机运行。
+> Windows HTTP/MJPEG/GraspNet 中转工具已从仓库删除，不再提供 Windows 启动命令或验收路径。
+> 任何真机执行仍需单独授权和现场安全预检。
 
-安装、模型准备及分环境解释器以 [Ubuntu视觉说明](ubuntu_vision_setup_zh.md) 为准；
-以下涉及历史本机模型的命令不能代替新部署的资产准备。
+普通单套 ROS 2 系统无需设置 `ROS_DOMAIN_ID`：不设置时使用默认域 0。
+本页启动命令与检查命令应在加载同一工作区环境的终端执行；如果先前终端
+已经设置过 `ROS_DOMAIN_ID`，请在所有相关终端先执行 `unset ROS_DOMAIN_ID`，
+并安全退出旧 launch 后重新启动，已运行的 ROS 进程不会随终端环境变化而切换域。
+仅当多套 ROS 系统需要并行隔离时才显式指定域号，并确保同一套系统的终端使用同一值。
 
-目标主路线是单 Ubuntu：
-
-```text
-Ubuntu Gemini 2 / YOLO / depth
--> Ubuntu in-process GraspNet ROS node
--> /grasp/graspnet_candidates
--> candidate_ik_filter
--> MoveIt validation
--> MuJoCo 或显式门控的真机后端
-```
-
-当前仍可使用的网络过渡路线是：
+## 数据链路
 
 ```text
-Windows 或其他网络主机上的 YOLO / depth / GraspNet
--> Ubuntu /grasp/graspnet_candidates
--> candidate_ik_filter
--> /grasp/filtered_plan
--> RViz 仿真预览或真机执行
+Gemini 2 USB -> Ubuntu native camera / YOLO
+ -> GraspNet ROS process (.venv-graspnet)
+ -> /grasp/graspnet_candidates
+ -> candidate IK / workspace / collision gates
+ -> MoveIt plan -> MuJoCo or explicitly enabled real controller
 ```
 
-完整视觉抓取launch现已支持`vision_profile:=ubuntu_native`，并用同一个launch在独立
-`.venv-graspnet` Python进程中直接运行GraspNet推理，不再经过localhost `/infer` HTTP；
-专用hybrid入口固定接入active `rebotarm_mujoco_node`并关闭RViz-only controller。该运行时
-接线通过不等于自动抓取或真实执行已经通过。修改launch、YAML、相机参数或AI后端后，
-需要同步更新本文件。
-
-## 0. 当前允许的 Ubuntu 原生视觉验证
-
-只启动 Gemini 2 + YOLO，不启动机械臂：
+## Ubuntu 视觉只读验证
 
 ```bash
-cd /home/a/project/rebot_Arm
+cd /home/huangbin/robotarm_ros2
+source tools/source_local_environment.bash
 ./tools/run_ubuntu_vision.sh yolo_model_path:="$PWD/tools/yolo26s-seg.pt" yolo_device:=0
 ```
 
@@ -46,286 +33,114 @@ cd /home/a/project/rebot_Arm
 ```bash
 ros2 topic hz /camera/color/image_raw
 ros2 topic hz /camera/depth/image_raw
+ros2 topic echo /camera/color/camera_info --once
 ros2 topic echo /camera/depth/camera_info --once
 ros2 topic echo /grasp/detections --once
 ```
 
-目前看到 `CameraInfo` 不代表 SDK 内参和深度尺度已验收，具体要求见 `ubuntu_vision_setup_zh.md`。
+该步骤不启动控制器，不连接或移动机械臂。
 
-## 1. 网络兼容链路：Windows 启动 YOLO 相机服务
-
-PowerShell 终端 1：
-
-```powershell
-cd "D:\BaiduNetdiskDownload\reBot-DevArm-main\reBot-DevArm-main\softare\reBotArmController_ROS2-main"
-.\tools\windows_start_yolo_server.ps1
-```
-
-浏览器检查：
-
-```text
-http://127.0.0.1:8081/video.mjpg
-http://127.0.0.1:8081/annotated.mjpg
-http://127.0.0.1:8081/depth.png
-http://127.0.0.1:8081/camera_info.json
-```
-
-## 2. 网络兼容链路：Windows 启动 GraspNet
-
-PowerShell 终端 2：
-
-```powershell
-cd "D:\BaiduNetdiskDownload\reBot-DevArm-main\reBot-DevArm-main\softare\reBotArmController_ROS2-main"
-.\tools\windows_start_graspnet_bridge.ps1
-```
-
-当前 `windows_start_graspnet_bridge.ps1` 已经固定：
-
-```text
-ManualTrigger=true
-Open3DVisualize=true
-VisualizeCropRadiusM=0
-```
-
-默认参数：
-
-```text
-MaxGrasps=50
-VisualizeTopN=10
-VisualizeMaxPoints=8000
-```
-
-运行后按 `y + Enter` 推理一次，写入：
-
-```text
-D:\tmp\graspnet_candidates.json
-```
-
-如果只想临时调整候选数量或显示点云数量：
-
-```powershell
-.\tools\windows_start_graspnet_bridge.ps1 `
-  -MaxGrasps 50 `
-  -VisualizeTopN 10 `
-  -VisualizeMaxPoints 12000
-```
-
-Windows 侧当前策略：
-
-```text
-GraspNet 对整张 scene 点云推理
-YOLO mask / bbox 只用于筛选最终 candidates
-ROS 读取筛选后的 candidates 做 IK 过滤和执行
-```
-
-检查候选：
-
-```powershell
-curl http://127.0.0.1:8081/graspnet_candidates.json
-```
-
-Open3D 只用于 Windows 调试显示，不参与 ROS 真机执行。
-
-## 3. Ubuntu 清理旧进程
-
-确认机械臂安全静止后执行：
+## Ubuntu 原生视觉 plan-only
 
 ```bash
-pkill -f rebotarm_table_collision || true
-pkill -f rebotarm_visual_ready || true
-pkill -f rebotarm_visual_grasp_markers || true
-pkill -f rebotarm_ordinary_grasp_node || true
-pkill -f rebotarm_graspnet_baseline_node || true
-pkill -f rebotarm_grasp_tcp_frame || true
-pkill -f rebotarm_grasp_candidate_ik_filter || true
-pkill -f rebotarm_visual_grasp_executor || true
-pkill -f rebotarm_motion_execution_node || true
-pkill -f rebotarm_sim_trajectory_controller || true
-pkill -f GripperVisualJointStateNode || true
-pkill -f reBotArmController || true
-pkill -f move_group || true
-rm -f /dev/shm/fastrtps_port*
-```
-
-## 4. Ubuntu-native 真实视觉 + active MuJoCo
-
-该入口使用真实Gemini 2、Ubuntu-native YOLO和由launch直接管理的GraspNet ROS进程生成候选，
-不需要单独启动HTTP service。执行backend固定为active upstream `rebotarm_mujoco_node`。
-真实controller不会启动；RViz-only `rebotarm_sim_trajectory_controller`也会显式关闭，
-避免同namespace action/service冲突。
-
-启动hybrid composition：
-
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+source tools/source_local_environment.bash
 export RMW_FASTRTPS_USE_SHM=0
-
-ros2 launch rebotarm_bringup real_perception_sim_execution.launch.py
-```
-
-默认自动使用仓库根目录的`.venv-graspnet/bin/python`、`.local-models/graspnet-baseline`
-和`.local-models/checkpoints/checkpoint-rs.tar`。新机器或自定义路径可分别通过
-`GRASPNET_PYTHON`、`GRASPNET_MODEL_ROOT`和`GRASPNET_CHECKPOINT_PATH`覆盖。
-
-该命令会启动Gemini 2与MuJoCo runtime，使用前应先确认没有真实controller/backend进程。静态launch/test通过不等于该组合已经完成runtime acceptance。
-
-执行1次仿真抓取benchmark：
-
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 run rebotarm_vision rebotarm_hybrid_grasp_sim_benchmark \
-  --attempts 1 \
-  --plan-timeout-sec 10 \
-  --service-timeout-sec 180 \
-  --return-ready-after-each
-```
-
-这条仿真 benchmark 已经默认固定：
-
-```text
-namespace=rebotarm_sim
-min_success_rate=0
-wait_enter=true
-```
-
-连续 20 次仿真 benchmark：
-
-```bash
-ros2 run rebotarm_vision rebotarm_hybrid_grasp_sim_benchmark \
-  --attempts 20 \
-  --plan-timeout-sec 10 \
-  --service-timeout-sec 180 \
-  --return-ready-after-each
-```
-
-仿真链路应保持：
-
-```bash
-gripper_grasp_enabled:=false
-candidate_max_joint6_delta_rad:=1.5708
-candidate_joint6_symmetry_enabled:=true
-```
-
-## 5. 真机实际抓取启动
-
-> 阶段阻断：本节保留原链路参数用于迁移核对，不构成当前可执行操作。完成 P0、P2、P3、P4 和 P5 的对应验收前，不得启动完整真机抓取或调用执行服务。
-
-确认 Windows YOLO 和 GraspNet 都已启动后，Ubuntu 终端 A：
-
-```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-export RMW_FASTRTPS_USE_SHM=0
-
 ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
-  use_hardware:=false \
-  execution_mode:=plan_only \
-  move_to_visual_ready_on_start:=false \
-  shutdown_safe_home:=false
+  use_hardware:=false execution_mode:=plan_only execute_gripper:=false \
+  move_to_visual_ready_on_start:=false
 ```
 
-旧手册曾使用以下真机联调配置；这里只保留用于迁移核对，不能将其视为当前代码事实或推荐值：
+默认 `move_to_visual_ready_on_start=false` 会直接启动视觉链，并由内置的唯一轻量运动学
+状态后端向 MoveIt 提供当前关节状态；不需要额外传 `start_visual_ready:=false`。
+`plan_only` 下 `max_plan_age_sec` 默认是 10 s：GraspNet 推理和逐候选 IK/碰撞过滤
+可能已耗去 3–5 s，再留时间供人工观察后触发纯规划；切换到
+`execution_mode:=execute` 时默认使用 4 s。两种模式都可显式传
+`max_plan_age_sec:=<秒数>` 覆盖默认值。
+10 s 只是无动作的轨迹预览窗口，不能据此验收眼在手相机的实物对齐或真实抓取安全。
+如果服务拒绝请求，响应会区分 `no grasp plan received yet`、
+`invalid grasp plan`、`grasp plan expired on arrival` 与 `cached grasp plan expired`。
+过期响应中的 `age_sec` 是自采集时间戳算起，而不是自 RViz 显示或消息到达时算起。
+调用 `/rebotarm/visual_grasp/execute` 后，执行器依次规划预抓取、抓取和可选的沿接近路径反向撤退；
+后一段从上一段规划终点继续。只有全部阶段成功后，运动层才用一条
+`/display_planned_path` 消息让 RViz 连续播放完整的紫色机器人幻影，阶段失败时不会显示
+不完整序列。该预览不发送控制器 Action，也不会改变 `/rebotarm/joint_states`；默认阶段
+等待为 0 s，RViz 状态显示间隔为 0.03 s。
 
-```text
-use_hardware=true
-use_local_rviz=true
-execution_mode=execute
-start_vision=true
-ordinary_depth_quality_enabled=true
-start_graspnet_baseline=true
-graspnet_source_mode=network
-graspnet_candidates_url=http://192.168.145.1:8081/graspnet_candidates.json
-graspnet_network_poll_hz=0.5
-candidate_ik_input_topic=/grasp/graspnet_candidates
-start_candidate_ik_filter=true
-executor_input_topic=/grasp/filtered_plan
-candidate_pose_policy=preserve_candidate_pose
-candidate_max_candidates_per_frame=20
-candidate_workspace_gate_enabled=true
-candidate_max_joint6_delta_rad=1.5708
-candidate_joint6_symmetry_enabled=true
-tcp_offset_xyz=[-0.04, 0.0, 0.0]
-trajectory_precheck_enabled=true
-open_before_approach=true
-auto_gripper_width=true
-auto_gripper_effort=true
-gripper_grasp_enabled=true
-gripper_grasp_timeout_sec=8.0
-safe_retreat_enabled=true
-safe_retreat_min_lift_z_m=0.12
-lift_z_m=0.04
-moveit_planning_time=8.0
-moveit_num_planning_attempts=5
-base_pregrasp_distance_m=0.06
-safe_home_after_grasp=false
-```
-
-完成全部阶段门后，执行服务仍必须由操作者显式调用；当前禁止调用：
-
-```bash
-ros2 service call /rebotarm/visual_grasp/execute std_srvs/srv/Trigger "{}"
-```
-
-手动松开夹爪：
-
-```bash
-ros2 service call /rebotarm/gripper/set rebotarm_msgs/srv/SetGripper "{position: 0.08, max_effort: 0.25}"
-```
-
-## 6. 连续真机稳定性测试
-
-> 当前禁止执行。只有单关节小角度、单个安全姿态、pre-grasp、approach、夹爪、lift 和 retreat 已逐级验收后，才能恢复连续真机测试。
-
-每一轮会先回到 visual_ready，再等待你按 Enter 执行抓取，用于统计 `failed_stage` 和成功率：
-
-```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 run rebotarm_vision rebotarm_visual_grasp_benchmark \
-  --attempts 20 \
-  --return-ready-before-each \
-  --wait-enter
-```
-
-手动单独回到 visual_ready：
-
-```bash
-ros2 service call /rebotarm/visual_ready/move std_srvs/srv/Trigger "{}"
-```
-
-## 7. 查看候选和最终计划
+检查：
 
 ```bash
 ros2 topic echo /grasp/graspnet_candidates --once
 ros2 topic echo /grasp/filtered_candidates --once
 ros2 topic echo /grasp/filtered_plan --once
-ros2 topic echo /camera/depth/camera_info --once
-ros2 param get /rebotarm_grasp_candidate_ik_filter input_topic
 ```
 
-期望 IK filter 输入：
+`valid=true` 只代表软件计划可用，不代表真机抓取成功。该入口不启动
+MuJoCo 物理后端；已删除独立的“真实感知 + MuJoCo 执行”顶层组合入口。
+此外，相机安装在末端时，无硬件模式只能使用配置的假关节角计算
+`base_link -> camera_depth_frame`；除非实体机械臂恰好处于相同角度，否则 RViz 中的
+基座坐标不会与实物位置重合。要验收实物定位，必须读取真机关节反馈（保持失能）并重新
+核对手眼标定，不能用本模式的假状态作为结论。
 
-```text
-String value is: /grasp/graspnet_candidates
-```
+## 稳定性 benchmark
 
-## 8. 只看感知和 RViz marker
-
-不启动真机控制器，只看真实视觉、GraspNet candidates、IK 过滤结果和 marker：
+软件或 MuJoCo 环境可运行离线 benchmark；它不启动真机控制器：
 
 ```bash
-cd ~/robotarm_ros2
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-export RMW_FASTRTPS_USE_SHM=0
-
-ros2 launch rebotarm_bringup visual_grasp_perception_preview.launch.py
+ros2 run rebotarm_vision rebotarm_visual_grasp_benchmark \
+  --attempts 20 --return-ready-before-each --wait-enter
 ```
+
+benchmark 输出包含 `failed_stage`，用于区分感知、规划、执行和回位阶段的失败。
+
+仓库仍保留 `rebotarm_hybrid_grasp_sim_benchmark` 可执行程序，但已删除为它提供
+“真实感知 + MuJoCo 执行”一键组合的顶层 launch；如需使用，必须由操作者自行组合并确认
+唯一的仿真执行后端。该程序仍支持 `--return-ready-after-each`、
+`candidate_max_joint6_delta_rad:=1.5708`、
+`candidate_joint6_symmetry_enabled:=true` 和 `gripper_grasp_enabled:=false`。
+
+该 `rebotarm_visual_grasp_benchmark` 只统计候选、规划和仿真/软件执行结果；
+不要把 benchmark 通过解释为真实夹取成功。
+
+如需单独回到视觉准备位（仍需对应后端已启动）：
+
+```bash
+ros2 service call /rebotarm/visual_ready/move std_srvs/srv/Trigger "{}"
+```
+
+## MuJoCo 执行验证
+
+```bash
+ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py
+```
+
+确认 `/rebotarm/follow_joint_trajectory` 只有一个 Action server 后，在 RViz 先
+Plan，再 Execute。停止测试：
+
+```bash
+ros2 service call /rebotarm/trajectory_stop std_srvs/srv/Trigger "{}"
+```
+
+## 真机视觉执行边界
+
+真机启动前必须完成 MotorBridge/反馈检查、控制器 `CONNECTED_DISABLED`、视觉
+plan-only、现场净空、急停、支撑和串口唯一占用确认。控制器启动后仍须显式使能：
+
+```bash
+ros2 service call /rebotarm/enable std_srvs/srv/Trigger "{}"
+```
+
+当前不提供自动 Enable、自动抓取、lift/retreat 或结果分类的默认命令。
+真机视觉执行服务为 `/rebotarm/visual_grasp/execute`；当前仅在完成分级验收并取得
+明确授权后调用，不在本手册中提供自动触发命令。
+
+## 配置与排错
+
+- Ubuntu 相机：`src/rebotarm_vision/config/camera_ubuntu.yaml`
+- Ubuntu GraspNet：`src/rebotarm_vision/config/graspnet_ubuntu.yaml`
+- 主视觉 launch：`src/rebotarm_bringup/launch/visual_grasp_system.launch.py`
+- 安装与解释器：`ubuntu_vision_setup_zh.md`、`launch_python_configuration.md`
+- 真机反馈和 MoveIt Execute 排错：`local_setup_zh.md`
+
+若出现 `MoveItSimpleControllerManager` 不存在，先安装对应 ROS 包；若出现
+`verified feedback pending`，先停止其他串口程序并运行 SDK 只读反馈检查。六个
+电机 sequence 不要求相等。

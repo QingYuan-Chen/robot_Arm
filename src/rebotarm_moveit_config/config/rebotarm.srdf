@@ -1,41 +1,65 @@
 <?xml version="1.0" ?>
+<!-- reBotArm 实际使用的 MoveIt 语义模型（SRDF）：MoveIt 规划组、末端执行器、
+     命名姿态与自碰撞禁用矩阵都在这里定义，纯几何描述在 config/rebotarm.urdf 中。
+     两者的 <robot name> 必须保持一致，MoveIt 才会把它们当作同一个模型。
+     本包的定位是「MoveIt 模型与规划配置」，不承载任何可执行业务逻辑。 -->
 <robot name="reBot-DevArm_fixend">
+  <!-- 虚拟关节：把固定基座机械臂挂到世界坐标系上，parent_frame=world、child_link=base_link，
+       type="fixed" 表示二者无相对自由度，同时定义了规划场景中的世界连接点。
+       与之配对的 TF 由启动文件用 static_transform_publisher 发布。 -->
   <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="base_link" />
 
+  <!-- 主规划组 arm：base_link 到 end_link 的串联链，覆盖 joint1~joint6 六个转动关节；
+       IK 求解与 OMPL 规划默认都针对该组。 -->
   <group name="arm">
     <chain base_link="base_link" tip_link="end_link" />
   </group>
 
+  <!-- 夹爪规划组 gripper：两个镜像平移关节（左指 +Y、右指 -Y），
+       用于夹爪碰撞检查与抓取规划；开口量由两指位移合成。 -->
   <group name="gripper">
     <joint name="left_finger_joint" />
     <joint name="right_finger_joint" />
   </group>
 
+  <!-- 复合规划组 arm_with_gripper：合并 arm 与 gripper，
+       供需要同时考虑手臂与夹爪占用空间的规划与碰撞检查使用。 -->
   <group name="arm_with_gripper">
     <group name="arm" />
     <group name="gripper" />
   </group>
 
+  <!-- 末端执行器声明：名称 gripper，安装于 end_link，所属组 gripper，父规划组 arm；
+       MoveIt 据此计算抓取姿态并支持附着物体。 -->
   <end_effector name="gripper" parent_link="end_link" group="gripper" parent_group="arm" />
 
-  <!-- The home state shares its values with the home keyframe in the canonical
-       MuJoCo scene.xml.  safe_home is the guarded MoveIt/hardware recovery pose.
+  <!-- 命名状态与仿真关键帧的约定：以下 group_state 的名称与数值和 MuJoCo 模型配置
+       （mujoco_model_profile.py）中的 keyframe 保持一致，使同一个姿态名在仿真与真机上
+       含义相同。
 
-       There is deliberately no all-zero named state.  joint3's origin is -0.264 m in
-       x while joint4's is +0.2426 m, so with joints 2-5 near zero the forearm folds
-       back onto the upper arm and link2/link5 close to ~1.6 mm.  MoveIt then aborts
-       every planning request from there in CheckStartStateCollision
-       ("1 contact(s) detected : link2 - link5"), so the zero pose is a dead end: it
-       can be commanded into but never planned out of. -->
+       这里刻意不提供全零命名状态：joint3 的原点在 x 方向为 -0.264 m，joint4 的原点为
+       +0.2426 m，当 joint2~joint5 都接近 0 时前臂会折回贴上上臂，link2 与 link5 间距
+       只剩约 1.6 mm。此时 MoveIt 会在 CheckStartStateCollision 阶段拒绝所有规划请求
+       （报 "1 contact(s) detected : link2 - link5"），即全零姿态是被堵死的终点：
+       可以运动过去，却无法从那里规划出来。
+
+       仿真侧另外保留一个本文件没有对应项的 "zero" keyframe，它是仿真复位用的初始状态
+       （该姿态下间距已有 201.8 mm），由 mujoco_adapter_core.reset() 消费，
+       属于复位状态而不是可规划的命名目标。 -->
+  <!-- safe_home：安全停机/复位姿态，单位弧度。仅 joint3 = -0.017453292519943295（即 -1°）
+       非零，其余全为 0；这 1° 偏置把前臂从上臂旁让开，保证自碰撞检查可以通过。
+       驱动侧安全停机默认值、Web 侧安全姿态与仿真 keyframe 都与此一致。 -->
   <group_state name="safe_home" group="arm">
-    <joint name="joint1" value="-1.5707963267948966" />
-    <joint name="joint2" value="-0.1" />
-    <joint name="joint3" value="-0.2" />
-    <joint name="joint4" value="0.2" />
+    <joint name="joint1" value="0.0" />
+    <joint name="joint2" value="0.0" />
+    <joint name="joint3" value="-0.017453292519943295" />
+    <joint name="joint4" value="0.0" />
     <joint name="joint5" value="0.0" />
     <joint name="joint6" value="0.0" />
   </group_state>
 
+  <!-- home：常规作业起始姿态，单位弧度。joint2=-0.8（抬肩）、joint3=-1.2（屈肘）、
+       joint4=0.6（转腕），其余为 0；整体为抬臂前伸、夹爪朝前的准备位。 -->
   <group_state name="home" group="arm">
     <joint name="joint1" value="0.0" />
     <joint name="joint2" value="-0.8" />
@@ -45,16 +69,22 @@
     <joint name="joint6" value="0.0" />
   </group_state>
 
+  <!-- open：夹爪张开命名状态，单位米。左指 +0.045、右指 -0.045，合计开口 0.09 m，
+       即 URDF 中两指行程的上限。 -->
   <group_state name="open" group="gripper">
     <joint name="left_finger_joint" value="0.045" />
     <joint name="right_finger_joint" value="-0.045" />
   </group_state>
 
+  <!-- closed：夹爪闭合命名状态，两指均回到 0（各自关节原点），表示完全夹紧；单位米。 -->
   <group_state name="closed" group="gripper">
     <joint name="left_finger_joint" value="0.0" />
     <joint name="right_finger_joint" value="0.0" />
   </group_state>
 
+  <!-- 自碰撞禁用矩阵：相邻 link 在结构上本就贴在一起（关节处必然接触），
+       若不禁用会产生大量假碰撞导致规划全部失败，因此统一以 reason="Adjacent" 禁用。
+       这里并未禁用 link2-link5 等真正会相撞的组合，所以 safe_home 的 1° 偏置仍然必要。 -->
   <disable_collisions link1="base_link" link2="link1" reason="Adjacent" />
   <disable_collisions link1="link1" link2="link2" reason="Adjacent" />
   <disable_collisions link1="link2" link2="link3" reason="Adjacent" />
@@ -64,5 +94,7 @@
   <disable_collisions link1="link6" link2="end_link" reason="Adjacent" />
   <disable_collisions link1="end_link" link2="left_finger_link" reason="Adjacent" />
   <disable_collisions link1="end_link" link2="right_finger_link" reason="Adjacent" />
+  <!-- 左右手指互碰：两指沿同一轴线相向运动，夹持时必然接近或接触，属结构性接触，
+       因此用 reason="Never"（永不检查）禁用。 -->
   <disable_collisions link1="left_finger_link" link2="right_finger_link" reason="Never" />
 </robot>

@@ -6,7 +6,7 @@ feature_arguments:
   runs: 1
   plan_timeout_sec: 45.0
   max_plan_age_sec: 1.5
-  min_grasp_z_m: 0.05
+  min_grasp_z_m: 0.03
   plan_stability_frames: 3
   plan_stability_xy_tolerance_m: 0.015
   plan_stability_z_tolerance_m: 0.010

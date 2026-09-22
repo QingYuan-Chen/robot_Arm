@@ -424,6 +424,7 @@ def create_node_class():
             super().__init__("rebotarm_mujoco_node")
             self.declare_parameter("backend", "mujoco")
             self.declare_parameter("headless", True)
+            self.declare_parameter("show_viewer", False)
             self.declare_parameter("model_path", "")
             self.declare_parameter("arm_namespace", "rebotarm")
             self.declare_parameter("publish_rate_hz", 30.0)
@@ -641,6 +642,16 @@ def create_node_class():
             return self._sim_access.run(
                 lambda sim: tuple(sim.get_state().joint_positions[:6])
             )
+
+        @property
+        def show_viewer(self) -> bool:
+            return bool(self.get_parameter("show_viewer").value)
+
+        def viewer_handles(self):
+            return self._sim_access.run(lambda sim: sim._unsafe_viewer_handles())
+
+        def sync_viewer(self, viewer) -> None:
+            self._sim_access.run(lambda _sim: viewer.sync())
 
         def _hold_current_position(self) -> None:
             self._sim_access.run(lambda _sim: self._hold_current_position_unlocked())
@@ -1056,6 +1067,7 @@ def create_node_class():
 
 
 def main(args=None) -> None:
+    import importlib
     import rclpy
     from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 
@@ -1063,12 +1075,27 @@ def main(args=None) -> None:
     node = create_node_class()()
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
+    viewer = None
+    executor_thread = None
     try:
+        if node.show_viewer:
+            model, data = node.viewer_handles()
+            viewer = importlib.import_module("mujoco.viewer").launch_passive(model, data)
+            executor_thread = threading.Thread(target=executor.spin, daemon=True)
+            executor_thread.start()
+            while rclpy.ok() and viewer.is_running():
+                node.sync_viewer(viewer)
+                time.sleep(0.01)
+            return
         executor.spin()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        if viewer is not None:
+            viewer.close()
         executor.shutdown()
+        if executor_thread is not None:
+            executor_thread.join(timeout=2.0)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

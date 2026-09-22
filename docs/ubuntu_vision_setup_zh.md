@@ -12,8 +12,8 @@ Gemini2 USB -> pyorbbecsdk -> rebotarm_vision_node
              -> Ultralytics YOLO/CUDA -> ROS 2 topics
 ```
 
-原有 `camera.yaml` 和 Windows 服务仍保留为网络备用链路。Ubuntu 原生链路使用
-`camera_ubuntu.yaml` 和 `vision_ubuntu.launch.py`。
+Windows 服务及远端 HTTP 输入已删除。Ubuntu 原生链路使用 `camera_ubuntu.yaml` 和
+`vision_ubuntu.launch.py`。
 
 ## 1. 安装
 
@@ -79,11 +79,12 @@ lsusb | grep -i -E "orbbec|2bc5"
   yolo_model_path:=/absolute/path/to/reviewed-model.engine yolo_device:=0
 ```
 
-engine不能用于CPU，也不能假定可跨机器/Windows复用。需要重新导出时，必须使用
+engine不能用于CPU，也不能假定可跨机器复用。需要重新导出时，必须使用
 对应的原始权重及目标环境；不能将YOLO26s导出结果改名冒充YOLO26m。
 仓库不提供YOLO26m源权重的自动下载或engine导出流程，未准备好时使用上面的PT路径。
-旧本机默认仍为包内`models/yolo26m-seg-fp16-b1-640-linux.engine`：构建时
-`tools/`中有该文件才会打包。外部模型无需重建；运行时模型缺失将报错，不静默换模型。
+当前本机默认使用包内 `models/yolo26s-seg.pt`，因为仓库实际提供该模型。
+如果以后准备好已审核的 TensorRT engine，可以通过 launch 参数显式覆盖；
+外部模型无需重建，运行时模型缺失将报错，不静默换模型。
 
 ## 4. 验证
 
@@ -130,7 +131,7 @@ sudo apt install ros-jazzy-depth-image-proc
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source /home/a/project/rebot_Arm/install/setup.bash
+source ~/robotarm_ros2/install/setup.bash
 ros2 run depth_image_proc point_cloud_xyz_node --ros-args \
   -r image_rect:=/camera/depth/image_raw \
   -r camera_info:=/camera/depth/camera_info \
@@ -142,38 +143,8 @@ ros2 run depth_image_proc point_cloud_xyz_node --ros-args \
 CameraInfo 使用相同 QoS，避免 `depth_image_proc` 因 reliability 不兼容而收不到
 同步内参。该路径只读取相机，不启动机械臂控制器。
 
-若要在同一个 Open3D 窗口查看 GraspNet 在采样/下采样前内部重建的完整 `XYZ+RGB`
-场景点云和原始抓取位姿，先保持整合后的视觉抓取launch（其中包含
-`rebotarm_graspnet_baseline_node`）运行，再执行：
-
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-PYTHONPATH="$PWD/tools:$PWD/src/rebotarm_vision${PYTHONPATH:+:$PYTHONPATH}" \
-  ./.venv-graspnet/bin/python tools/view_graspnet_scene_cloud.py
-```
-
-该查看器不执行 `sample_cloud()`，并把 `build_scene_cloud()` 产生的 points/colors
-直接交给复用的 Open3D renderer，因此背景显示的是
-`0.05-1.5 m` 采样前完整场景，而不是送入网络的 20,000 点确定性采样子集；抓取框来自
-`/grasp/graspnet_candidates`，保持候选原始相机坐标位姿并按消息顺序显示前 10 个。
-可用 `--top-n N` 调整抓取框数量，或用 `--max-points N` 限制仅用于显示的点数；
-默认 `--max-points 0` 保留完整点云。此工具只做可视化，不启动 MoveIt、控制器或
-机械臂执行。
-
-夹爪优先使用可用的 `graspnetAPI` 官方几何；当前隔离环境缺少其非推理可视化重依赖
-时，会自动使用 Open3D 原生实体平行夹爪（掌部 + 两根手指），而不是退化成难以看清
-的细线框。启动日志会明确显示当前模式，例如：
-
-```text
-gripper_renderer=native_open3d_mesh graspnet_api_unavailable=ModuleNotFoundError: No module named 'trimesh'
-```
-
-这不影响 GraspNet 推理结果；原生实体的 position、rotation、jaw width、height 和
-score 仍来自 `/grasp/graspnet_candidates`，消息未携带的 finger depth 继续使用
-`0.04 m` 可视化缺省值。若运行中 renderer 从官方 geometry 降级到原生 mesh 或
-最后一级 wireframe，日志会立即输出新的 mode 和失败原因，不会继续显示过期状态。
+如需查看候选，请直接订阅 `/grasp/graspnet_candidates` 或使用 RViz 的 ROS
+可视化节点；该路径不属于 Ubuntu 抓取执行链路。
 
 ## 6. P4 Ubuntu 本地 GraspNet 环境
 
@@ -195,7 +166,7 @@ export GRASPNET_MODEL_ROOT=/path/to/reviewed/graspnet
 export GRASPNET_CHECKPOINT_PATH=/path/to/reviewed/checkpoint.pth
 ```
 
-Ubuntu生产路径不再单独启动localhost HTTP service。相机/YOLO topics 已启动后，可在
+Ubuntu生产路径不再单独启动 HTTP service。相机/YOLO topics 已启动后，可在
 ROS 2环境中单独验证整合后的in-process node：
 
 ```bash
@@ -211,13 +182,6 @@ timestamp和`camera_depth_frame`交给同进程GraspNet runner，再把结果发
 `/grasp/graspnet_candidates`。它保留完整场景collision cloud、目标mask/depth分离、
 确定性20,000点采样、projection filter与jaw-width filter。RGB/depth skew超限、模型未配置
 或推理异常时只发布空候选，不复用旧结果。
-
-`tools/run_ubuntu_graspnet_service.sh`和`tools/ubuntu_graspnet_service.py`仅保留为历史回退/
-contract测试工具，不在Ubuntu生产launch中启动；Windows/network candidates兼容模式不受影响。
-
-仅旧HTTP回退服务的响应原样保留 `timestamp_ns` 与 `frame_id`，并包含 `backend_configured`、`stale`
-和 `candidates`。输入单位、图像尺寸、bbox、intrinsics 或 header 不合法时返回
-HTTP 400；backend 未配置时返回 HTTP 503。
 
 新部署的依赖导入或旧service liveness通过不等于真实推理通过；必须核实自己的模型资产，
 并验证当前输入下的候选输出。模型代码、pointnet2扩展、graspnetAPI和checkpoint需
@@ -241,6 +205,6 @@ ros2 launch rebotarm_bringup visual_grasp_system.launch.py \
 
 这会使用真实相机和RViz-only运动学后端，不启动MuJoCo物理仿真或真机控制器；
 真实相机相对模拟机器人TF是否有物理意义需自行核验，候选规划不代表实机可执行。
-真实感知加MuJoCo物理后端使用独立的`real_perception_sim_execution.launch.py`，
-参数以其`--show-args`为准，不能同时启动两个模拟执行后端。
+独立的“真实感知 + MuJoCo 执行”组合入口已删除；当前只保留本节的
+真实感知 plan-only 验证以及独立的 MuJoCo 离线仿真入口。
 真实执行另见功能手册和现场授权边界。

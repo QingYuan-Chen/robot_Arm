@@ -1,9 +1,9 @@
 # reBotArm MuJoCo 仿真底座
 
-当前MuJoCo实现同步自
-[`huangbinai/robotarm_ros2`](https://github.com/huangbinai/robotarm_ros2)
-`main@a68c3ab924080b94f039270b568de464218d7512`。本项目在该版本上保留MoveIt
-权威URDF生成、J2/J3安全余量、J4-J6力矩限制、虚拟RGB-D相机和瓶体视觉场景接线。
+当前项目基线是 [`huangbinai/robotarm_ros2`](https://github.com/huangbinai/robotarm_ros2)
+`main@1749e3ab9db29d4998f860efb91cf2558b1a73e2`。本包在该新基线上选择性整合
+Viewer、Reach/Pick、Sim2Real、Real2Sim、诊断与批量验收能力，同时保留上游的
+包结构、启动组合、MoveIt 权威 URDF、虚拟 RGB-D 相机及安全限制。
 
 实机状态驱动 MuJoCo 的只读 Real2Sim Bridge、mirror/physics 模式和 Viewer 使用方法见
 [`../../docs/real2sim_bridge_zh.md`](../../docs/real2sim_bridge_zh.md)。
@@ -28,28 +28,27 @@ rollout 入口，供后续云端训练/本地推理验证复用。当前环境�
 setuptools，因此限定为 `setuptools>=68,<80`。
 
 ```bash
-cd ~/robotarm_ros2
+cd /home/a/project/rebot_Arm-worktrees/upstream-baseline-migration
 source /opt/ros/jazzy/setup.bash
-python3 -m venv .venv-mujoco-ros --system-site-packages
-.venv-mujoco-ros/bin/python -m pip install --upgrade pip 'setuptools>=68,<80'
-.venv-mujoco-ros/bin/python -m pip install -r src/rebotarm_simulation/requirements-mujoco.txt
+python3 -m venv --system-site-packages third_party/rebotarm_mujoco_venv
+third_party/rebotarm_mujoco_venv/bin/python -m pip install -r requirements-mujoco.txt
 /usr/bin/python3 -m colcon build --symlink-install --packages-select rebotarm_simulation
 source install/setup.bash
-export REBOTARM_MUJOCO_PYTHON="$PWD/.venv-mujoco-ros/bin/python"
+export REBOTARM_MUJOCO_PYTHON="$PWD/third_party/rebotarm_mujoco_venv/bin/python"
 ```
 
 每个新终端都先 `source /opt/ros/jazzy/setup.bash`，再
 `source install/setup.bash`，并显式设置 `REBOTARM_MUJOCO_PYTHON`。
 
-从源码调试时应显式使用 `.venv-mujoco-ros/bin/python -m ...`；colcon 安装后
+从源码调试时应显式使用 `third_party/rebotarm_mujoco_venv/bin/python -m ...`；colcon 安装后
 的 `rebotarm_mujoco_*` console script 会在构建时写入解释器 shebang。因此若
 更换或重建 venv，必须重新 colcon build，不能假定旧脚本会自动改用当前 Python。
 以下是从工作区源码直接运行的完整等价命令，不依赖已安装的 console script：
 
 ```bash
-MUJOCO_GL=egl PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_health --renderer-timeout 30
-PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_cli run --duration 5
-PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_viewer --duration 30
+MUJOCO_GL=egl PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_health --renderer-timeout 30
+PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_cli run --duration 5
+PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_viewer --duration 30
 ```
 
 ## 健康检查与无界面运行
@@ -395,7 +394,7 @@ ROS 2 联调和策略推理。现在只提供可复用物理/API 底座和 Reach
 
 Windows 仓库是受版本控制的主副本，Ubuntu VM 是构建与运行环境。每次同步前
 先备份 VM 上将被覆盖的明确文件；只传输本次文件清单，传后比较 SHA-256 哈希。
-禁止使用带 `--delete` 的目录镜像，也不反向同步 `.venv-mujoco-ros`、
+禁止使用带 `--delete` 的目录镜像，也不反向同步 `third_party/rebotarm_mujoco_venv`、
 `build/`、`install/`、`log/` 或缓存。
 
 ## 排障

@@ -1585,6 +1585,27 @@ def test_forced_refresh_requires_success_after_latest_group_failure() -> None:
     assert manager._arm_feedback_failure_reason() is None
 
 
+def test_forced_refresh_accepts_staggered_motor_feedback() -> None:
+    """Startup must tolerate a serial bridge returning motor frames in batches."""
+    manager = make_manager()
+    motors = list(manager.arm._motor_map.values())
+    polls = 0
+
+    def poll_staggered() -> None:
+        nonlocal polls
+        polls += 1
+        for motor in motors[:2] if polls == 1 else motors:
+            motor.deliver_requested_feedback()
+
+    manager.arm._ctrl_map["fake"].poll_feedback_once = poll_staggered
+
+    manager._refresh_all_feedback()
+
+    assert polls >= 2
+    assert set(manager._verified_feedback_by_label) == set(JOINT_NAMES)
+    assert manager._arm_feedback_error is None
+
+
 def test_forced_initial_getter_failure_records_group_before_any_request() -> None:
     manager = make_manager()
     manager._refresh_all_feedback()
@@ -2494,8 +2515,11 @@ def test_invalid_coordinate_publishes_unknown_without_losing_arm_feedback() -> N
     )
     output = JointStatePublisher.__new__(JointStatePublisher)
     output._publish_lock = threading.Lock()
+    output._status_lock = threading.Lock()
+    output._last_status_identity = None
+    output._last_status_published_at = None
+    output._status_heartbeat_sec = 0.2
     output._last_feedback_identity = None
-    output._status_refresh_pending = False
     output._node = node
     output._hardware = manager
     output._publisher = publisher("joints")

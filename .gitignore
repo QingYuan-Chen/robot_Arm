@@ -49,6 +49,9 @@ htmlcov/
 .venv-vision/
 .venv-graspnet/
 .local-models/
+# Local GraspNet source/API and model assets are third-party runtime inputs.
+/third_party/graspnet-baseline/
+/third_party/graspnetAPI/
 venv/
 .env
 .vscode/

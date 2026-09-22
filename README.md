@@ -40,8 +40,8 @@
 ```bash
 source /opt/ros/jazzy/setup.bash
 /usr/bin/python3 -m colcon build --base-paths src --executor sequential --symlink-install
-source install/setup.bash
-python3 -m pytest tests -q
+source tools/source_local_environment.bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests -q
 ```
 
 在未激活其他虚拟环境的新终端构建。源码构建不要求相机、GPU、TensorRT engine
@@ -50,12 +50,21 @@ python3 -m pytest tests -q
 运行时按节点设置 [解释器参数](docs/launch_python_configuration.md)，不要全局注入视觉依赖。
 完整回归还需要已构建的 ROS 消息及固定厂商 SDK；纯源码构建通过不代表真机验收。
 
+视觉只支持 Ubuntu 原生 Gemini 2 -> YOLO -> ROS RGB-D/CameraInfo/detections -> 本机
+GraspNet。Windows、HTTP、MJPEG、远端 JSON 和独立 GraspNet service 已删除。
+MoveIt Execute 还需要 `ros-jazzy-moveit-simple-controller-manager`；Plan 成功不等于
+Execute 成功。真机启动默认失能，必须在新鲜反馈和现场安全检查后显式 Enable。
+
 ## 真机边界
 
 连接不等于使能；运动必须明确授权并显式使能。串口只允许一个控制器占用。
-主控制器要求 `motorbridge 0.4.6+rebotarm.2` 及逐电机反馈序号能力，启动前运行：
+主控制器要求 `motorbridge 0.4.7+rebotarm.1`、逐电机反馈序号能力及上游
+`dm-serial` 10 ms 读写超时预算，启动前运行：
 
 ```bash
+cd ~/robotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
 python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 ```
 

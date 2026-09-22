@@ -317,6 +317,20 @@ class RebotArmMujoco:
     def reset_home(self, seed: int | None = None) -> SimulationState:
         return self.reset(seed=seed)
 
+    def reset_joint_positions(self, positions: Sequence[float]) -> SimulationState:
+        """Reset the arm exactly while rejecting limits instead of clamping."""
+        values = _finite_vector(positions, 6, "joint positions")
+        self._ensure_open()
+        for name, value, joint_id in zip(ARM_JOINT_NAMES, values, self._joint_ids[:6]):
+            lower, upper = self._model.jnt_range[joint_id]
+            if not lower <= value <= upper:
+                raise ValueError(f"{name} position outside joint limits")
+        self.reset()
+        for value, joint_id in zip(values, self._joint_ids[:6]):
+            self._data.qpos[int(self._model.jnt_qposadr[joint_id])] = value
+        self._data.qvel[:] = 0.0
+        return self._finish_reset()
+
     def _finish_reset(self) -> SimulationState:
         for index, joint_id in enumerate(self._joint_ids):
             qpos_address = int(self._model.jnt_qposadr[joint_id])

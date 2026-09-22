@@ -33,28 +33,118 @@ GraspNet 与 MuJoCo 的 PyYAML 固定版本分别为6.0.1和6.0.3；直接合并
 sudo apt update
 sudo apt install build-essential git python3-venv python3-pip \
   python3-colcon-common-extensions python3-vcstool python3-rosdep python3-pytest \
-  ros-jazzy-moveit ros-jazzy-pinocchio ros-jazzy-cv-bridge
+  ros-jazzy-moveit ros-jazzy-moveit-simple-controller-manager \
+  ros-jazzy-pinocchio ros-jazzy-cv-bridge
 source /opt/ros/jazzy/setup.bash
 # 仅在本机从未初始化rosdep时执行 sudo rosdep init
 rosdep update
 rosdep install --from-paths src --ignore-src --rosdistro jazzy -r -y
 ```
 
-### 控制器依赖（真机或完整软件回归需要）
+### MoveIt 执行插件：能 Plan 但不能 Execute
 
-```bash
-python3 -m pip install --user --break-system-packages -r requirements-runtime.txt
+`src/rebotarm_moveit_config/config/moveit_controllers.yaml` 指定
+`moveit_simple_controller_manager/MoveItSimpleControllerManager`，由它把
+MoveIt 轨迹交给 `/rebotarm/follow_joint_trajectory`。仿真和真机的 MoveIt
+执行链都需要这个插件；它不是机械臂 SDK，也不要求额外启动 ros2_control
+的 controller_manager。只安装部分 MoveIt 组件可能遗漏它。
+当前 `rebotarm_moveit_config/package.xml` 尚未显式声明该插件依赖，
+不能仅依靠现有 manifest 的 rosdep 安装来保证它存在；本次仅补文档。
+
+典型日志组合：
+
+```text
+Exception while loading controller manager 'moveit_simple_controller_manager/MoveItSimpleControllerManager'
+... class ... does not exist. Declared types are
+Failed to reload controllers: `controller_manager_` does not exist.
+Unable to identify any set of controllers that can actuate the specified joints
+CONTROL_FAILED
 ```
 
-`requirements-runtime.txt` 中固定的 `motorbridge==0.4.6` 只用于 bootstrap /
-基础依赖，原始 PyPI 包没有本控制器所需的逐电机反馈 sequence，不能证明读到的是
-新反馈帧。先安装 Rust/Cargo、Git、Python venv 等构建工具，然后从仓库根目录执行：
+先确认启动日志中的插件加载错误，不要只凭最后一行 `CONTROL_FAILED`
+推断原因。`base_link` 根惯量的 KDL 警告不是上述插件缺失的原因，
+不应为解决这类 Execute 错误而先改 URDF。
+
+只读检查（ROS 命令需先加载当前环境）：
+
+```bash
+dpkg-query -W ros-jazzy-moveit-simple-controller-manager
+ros2 pkg prefix moveit_simple_controller_manager
+ros2 param get /move_group moveit_controller_manager
+ros2 action info /rebotarm/follow_joint_trajectory
+```
+
+检查终端与启动终端必须使用相同的 `ROS_DOMAIN_ID`。如果 MuJoCo Action
+server 为 1，但插件类不存在、MoveIt 的 Known controllers 为空，故障在
+MoveIt 插件加载侧，而非仅因模拟器未启动。若包已安装仍报错，继续检查
+当前 ROS 环境、插件发现与启动日志，不通过禁用安全检查来绕过故障。
+
+### 启动时反馈分批到达
+
+控制器启动会为每个电机保存独立的反馈 sequence；六个 sequence 不要求相等。
+串口桥可能在不同轮询中返回不同电机的帧。控制器会跨轮询收集这些帧，只要每个
+电机自己的 sequence 在响应窗口内推进且状态/数值有效，就会进入健康反馈状态。
+不要为了“对齐”而修改电机 ID、sequence 或放宽 `status_code` 检查。
+
+若仍看到 `verified feedback pending: ...`，先用 SDK 只读测试确认每个电机的
+`get_state_with_sequence()` 都推进，再重新启动 ROS 控制器；两者不能同时占用串口。
+只有某个电机 sequence 长时间不变、持续 `NO_FEEDBACK` 或 `status_code != 0` 时，
+才按底层电机反馈链路排查。
+
+缺包时手动安装：
+
+```bash
+sudo apt update
+sudo apt install ros-jazzy-moveit-simple-controller-manager
+```
+
+安装后需重新启动 `move_group`，已运行的进程不会自动恢复插件实例。
+以下重启流程仅用于仿真：在原仿真启动终端 `Ctrl+C` 退出，再从新终端执行：
+
+```bash
+cd /home/huangbin/robotarm_ros2
+source tools/source_local_environment.bash
+export ROS_DOMAIN_ID=173
+ros2 launch rebotarm_simulation mujoco_moveit_sim.launch.py
+```
+
+应不再出现插件加载失败或空控制器列表；确认唯一 Action server 后，
+重新 Plan 并检查小目标轨迹，再手动 Execute，以实际执行结果和关节反馈验收。
+包安装成功、源码 build、pytest 或 `--show-args` 通过都不能替代该运行验证。
+真机不能直接套用上述 Ctrl+C 重启流程：先按本轮已验证基线受控停机，
+确认可安全失能后再退出；健康但回位失败时保持 enabled hold、等待人工处置。
+
+### 控制器依赖（真机或完整软件回归需要）
+
+先在同一个终端加载 ROS 和当前工作区，再检查已经安装的控制器运行时：
+
+```bash
+cd ~/robotarm_ros2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+`requirements-runtime.txt` 中的普通 `motorbridge==0.4.7` 只用于 bootstrap，原始
+PyPI 包没有本控制器所需的逐电机反馈 sequence，不能作为真机运行版本。不要在
+patched 版本已经安装后再次执行该 requirements 文件，否则可能覆盖已审查版本。
+
+如果检查失败，优先使用仓库已有的已构建 wheel：
+
+```bash
+python3 -m pip install --user --break-system-packages --force-reinstall --no-deps \
+  build_motorbridge_fresh_feedback/wheel/motorbridge-0.4.7+rebotarm.1-*.whl
+python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
+```
+
+如果仓库没有 wheel，或需要从源码重建，先安装 Rust/Cargo、Git、Python venv 等
+构建工具，然后执行：
 
 ```bash
 # 只构建并在临时 venv 验证，不改用户 Python
 python3 tools/setup_motorbridge_fresh_feedback.py --build-only
 
-# 显式安装已验证的 0.4.6+rebotarm.2 用户包
+# 构建并显式安装已验证的 0.4.7+rebotarm.1 用户包
 python3 tools/setup_motorbridge_fresh_feedback.py --install-user
 
 # 启动 controller 前的 fail-closed 检查；不联网、不构建、不访问硬件
@@ -62,13 +152,16 @@ python3 tools/setup_motorbridge_fresh_feedback.py --check-installed
 ```
 
 脚本固定上游 commit
-`38b8a5681887514b301dbcab96e01a473cbd7173`，只接受仓库内已审查的 source patch，
+`2b7b350914ace47ba06e85fcad333143de2b057b`（上游 `v0.4.7`），只接受仓库内已审查的 source patch，
 并同时构建 `motor_abi`、`ws_gateway` 和 wheel。`--check-installed` 必须报告
-`version=0.4.6+rebotarm.2 feedback_sequence=true`；否则不要启动真机 controller。
+`version=0.4.7+rebotarm.1 feedback_sequence=true`；否则不要启动真机 controller。
 此版本还校验达妙反馈的 CAN ID、电机 ID 和完整 DLC，并要求置零前主动查询到
 新的 status0 反馈；调用 disable 或新建句柄都不能代替状态确认。置零 API 不会
-自动失能，调用方仍需完成置零后的新帧验收。构建保留旧版本 wheel 以便回退。
-重复安装bootstrap清单后也必须重新安装审查补丁并检查；不要把原始0.4.6用作真机运行版本。
+自动失能，调用方仍需完成置零后的新帧验收。上游 `v0.4.7` 的 `dm-serial`
+单次底层读写超时为 10 ms（旧 `v0.4.6` 为 1 ms），并包含模式切换总预算和寄存器
+写 ACK 校验改进；反馈陈旧和通信失败后的
+保护失能策略不变。构建保留旧版本 wheel 以便回退。
+重复安装 bootstrap 清单后也必须重新安装审查补丁并检查；不要把原始 0.4.7 用作真机运行版本。
 
 厂商 SDK 使用仓库根目录的 `rebotarm_dependencies.repos` 固定版本：
 
@@ -159,19 +252,8 @@ Ubuntu 物理机直连 Gemini2 并在本机运行 CUDA YOLO 时，使用：
 GraspNet独立环境、模型输入和完整视觉launch见 `docs/ubuntu_vision_setup_zh.md`。
 逐进程解释器设置见 `docs/launch_python_configuration.md`。
 
-网络备用链路仍使用 `src/rebotarm_vision/config/camera.yaml`，默认连接本机：
-
-```text
-http://127.0.0.1:8081
-```
-
-如果相机和 AI 服务运行在另一台机器，将该文件中的 URL 改为对应主机地址，
-或者复制配置文件并在启动时覆盖：
-
-```bash
-ros2 launch rebotarm_vision vision.launch.py \
-  camera_config:=/absolute/path/to/my_camera.yaml
-```
+视觉相机配置使用 `src/rebotarm_vision/config/camera_ubuntu.yaml`，通过本机
+Gemini 2 SDK 获取 RGB-D；不再配置远端 HTTP/MJPEG/JSON 服务。
 
 手眼标定文件也可以独立覆盖：
 
@@ -210,52 +292,9 @@ auto_enable:=false
 这些默认值已经落地；实机执行仍必须显式选择硬件后端并调用 `/rebotarm/enable`，
 且针对当前机器完成分级预检。旧阶段的验收结果不自动适用于新设备。
 
-## 6. P0 Gate B/C：显式 enable、hold 与 disable
+## 6. 历史 P0 验收工具
 
-先在终端 A 只启动硬件 driver：
-
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 launch rebotarm_bringup driver_only.launch.py \
-  channel:=/dev/ttyACM0 \
-  joint_state_rate:=20.0
-```
-
-确认启动日志为 `CONNECTED_DISABLED`。终端 B 从仓库根目录运行专用验收工具：
-
-```bash
-cd /home/a/project/rebot_Arm
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 run rebotarmcontroller p0_gate_bc_acceptance \
-  --hold-seconds 10 \
-  --max-position-jump-rad 0.03 \
-  --max-abs-velocity-rad-s 0.05
-```
-
-工具只有在以下 preflight / 预检全部成立时才继续：
-
-- 六轴 joint names、位置和速度有效；
-- `enabled=false`、`control_loop_active=false`、`state_machine=IDLE`；
-- 六个电机状态码全为 `0`，controller 没有 error code；
-- 当前绝对速度没有超过验收阈值。
-
-现场确认工作区清空、机械臂有失能防坠措施且急停可用后，按工具提示输入精确确认词：
-
-```text
-ENABLE_HOLD_TEST
-```
-
-随后工具只执行显式 enable、当前位置 hold 监控和 disable，不发送 trajectory、safe-home 或 gripper 命令。位置跳变或速度超限时会请求 `trajectory_stop` 和 `disable`；物理急停始终是软件失效时的第一停止手段。
-
-无论通过、失败还是操作员中止，工具都会在以下目录写入 JSON 证据：
-
-```text
-Agent/evidence/P0/gate-bc-YYYYMMDD-HHMMSS.json
-```
-
-只有最终状态满足 `enabled=false`、控制循环停止、六个状态码全为 `0`，且 disable 后 joint states 继续刷新，Gate C 才能通过。
+P0 Gate B/C 自动使能、保持与失能验收工具已于 2026-09-19 移除，不再作为日常测试步骤。
+历史报告保留在 `Agent/evidence/P0/`，仅用于追溯，不代表当前硬件通过验收。
+控制器的显式使能、反馈校验、失败回滚和停止保护继续保留。
+真机操作与停机步骤见 [功能开启指令](rebotarm_feature_commands.md#moveit-实机操作与停机)。

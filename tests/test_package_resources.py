@@ -11,6 +11,17 @@ from rebotarm_simulation.motor_control import load_motor_control_parameters
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_bringup_installs_launch_structure_documentation():
+    launch_readme = ROOT / "src/rebotarm_bringup/launch/README.md"
+    setup_source = (ROOT / "src/rebotarm_bringup/setup.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert launch_readme.is_file()
+    assert "hardware_controller.launch.py" in launch_readme.read_text(encoding="utf-8")
+    assert 'glob("launch/*.md")' in setup_source
+
+
 def test_model_meshes_have_one_declared_owner():
     package = ROOT / "src/rebotarm_moveit_config"
     model = ET.parse(package / "config/rebotarm.urdf").getroot()
@@ -40,12 +51,11 @@ def test_internal_manifest_graph_is_acyclic():
         visit(package, [])
 
 
-def test_lower_layers_do_not_resolve_bringup_or_compat_resources():
+def test_lower_layers_do_not_resolve_bringup_resources():
     for package in ("rebotarm_dashboard", "rebotarm_simulation", "rebotarm_moveit_config"):
         for path in (ROOT / "src" / package).rglob("*.py"):
             source = path.read_text()
             assert "rebotarm_bringup" not in source, path
-            assert "rebotarm_interactive_control" not in source, path
 
 
 def test_motor_parameters_load_from_install_without_source_tree(tmp_path, monkeypatch):

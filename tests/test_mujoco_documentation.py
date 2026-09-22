@@ -19,9 +19,9 @@ def test_mujoco_readme_documents_reproducible_install_and_runtime_commands():
         "Ubuntu 24.04",
         "ROS 2 Jazzy",
         "Python 3.12",
-        "python3 -m venv .venv-mujoco-ros --system-site-packages",
+        "python3 -m venv --system-site-packages third_party/rebotarm_mujoco_venv",
         "source /opt/ros/jazzy/setup.bash",
-        "pip install -r src/rebotarm_simulation/requirements-mujoco.txt",
+        "third_party/rebotarm_mujoco_venv/bin/python -m pip install -r requirements-mujoco.txt",
         "setuptools>=68,<80",
         "/usr/bin/python3 -m colcon build --symlink-install --packages-select rebotarm_simulation",
         "MUJOCO_GL=egl",
@@ -36,12 +36,13 @@ def test_mujoco_readme_documents_reproducible_install_and_runtime_commands():
         "rebotarm_mujoco_viewer --duration",
         "joints 0.0 -0.8 -1.0 0.3 0.0 0.0",
         "--no-command-input",
-        "PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_health",
-        "PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_cli",
-        "PYTHONPATH=src/rebotarm_simulation .venv-mujoco-ros/bin/python -m rebotarm_simulation.mujoco_viewer",
+        "PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_health",
+        "PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_cli",
+        "PYTHONPATH=src/rebotarm_simulation third_party/rebotarm_mujoco_venv/bin/python -m rebotarm_simulation.mujoco_viewer",
     )
     for value in required:
         assert value in text
+    assert ".venv-mujoco-ros" not in text
 
 
 def test_mujoco_readme_documents_ros_interfaces_examples_and_moveit_safety():
@@ -130,7 +131,7 @@ def test_feature_commands_links_to_mujoco_readme_and_safe_entry_points():
     assert "../src/rebotarm_simulation/README_mujoco.md" in text
     assert "ros2 launch rebotarm_simulation mujoco_sim.launch.py" in text
     assert "rebotarm_mujoco_cli run --duration" in text
-    assert "use_hardware:=false" in text
+    assert "mujoco_rviz_viewer.launch.py" in text
 
 
 def test_mujoco_readme_documents_local_urdf_to_mjcf_workflow() -> None:

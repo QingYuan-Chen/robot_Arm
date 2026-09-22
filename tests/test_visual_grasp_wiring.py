@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _read(relative: str) -> str:
-    if relative == "src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py":
+    if relative == "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py":
         return "\n".join(
             [
                 _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py"),
@@ -24,17 +24,6 @@ def _read(relative: str) -> str:
 
 
 def _read_file(relative: str) -> str:
-    dashboard_path_map = {
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py": "src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_page.py": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_page.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_http.py": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_http.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_assets/index.html": "src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html",
-        "src/rebotarm_interactive_control/setup.py": "src/rebotarm_dashboard/setup.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teach_recorder_node.py": "src/rebotarm_teach/rebotarm_teach/teach_recorder_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py": "src/rebotarm_teach/rebotarm_teach/teach_replay_node.py",
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/gripper_visual_joint_state_node.py": "src/rebotarm_teleop/rebotarm_teleop/gripper_visual_joint_state_node.py",
-    }
-    relative = dashboard_path_map.get(relative, relative)
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
@@ -55,10 +44,10 @@ def _console_scripts(setup_relative: str) -> set[str]:
 
 
 def test_status_panel_page_is_split_from_ros_node():
-    panel_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    page_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_page.py")
-    html_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_assets/index.html")
-    setup_text = _read_file("src/rebotarm_interactive_control/setup.py")
+    panel_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    page_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_page.py")
+    html_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_assets/index.html")
+    setup_text = _read_file("src/rebotarm_dashboard/setup.py")
 
     assert "from .status_panel_page import HTML_PAGE" in panel_text
     assert "HTML_PAGE = r\"\"\"" not in panel_text
@@ -68,12 +57,12 @@ def test_status_panel_page_is_split_from_ros_node():
     assert "HTML_PAGE = r\"\"\"" not in page_text
     assert 'id="robot-view"' in html_text
     assert 'id="arm-safe-home"' in html_text
-    assert '"rebotarm_dashboard.status_panel_assets": ["index.html"]' in setup_text
+    assert '"rebotarm_dashboard.status_panel_assets": ["index.html", "calibration.html"]' in setup_text
 
 
 def test_status_panel_http_server_is_split_from_ros_node():
-    panel_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    http_text = _read_file("src/rebotarm_interactive_control/rebotarm_interactive_control/status_panel_http.py")
+    panel_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    http_text = _read_file("src/rebotarm_dashboard/rebotarm_dashboard/status_panel_http.py")
 
     assert "from .status_panel_http import create_status_panel_server" in panel_text
     assert "BaseHTTPRequestHandler" not in panel_text
@@ -96,9 +85,10 @@ def test_rebotarm_vision_exposes_grasp_console_entrypoints():
         "rebotarm_visual_grasp_markers",
         "rebotarm_grasp_tcp_frame",
         "rebotarm_grasp_depth_probe",
-        "rebotarm_visual_ready",
         "rebotarm_visual_grasp_benchmark",
     }.issubset(scripts)
+    assert "rebotarm_visual_ready" not in scripts
+    assert "rebotarm_tcp_calibration" not in scripts
 
 
 def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
@@ -126,6 +116,28 @@ def test_visual_grasp_system_launch_defaults_to_safe_plan_only_mode():
     assert '"min_grasp_z_m": min_target_z_m' in launch_text
 
 
+def test_visual_grasp_system_uses_provisional_upper_motion_scaling_defaults():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+    executor_text = _read(
+        "src/rebotarm_vision/rebotarm_vision/visual_grasp_executor_node.py"
+    )
+
+    expected = {
+        "move_velocity_scaling": "0.25",
+        "approach_velocity_scaling": "0.08",
+        "retreat_velocity_scaling": "0.15",
+        "acceleration_scaling": "0.12",
+    }
+    for name, default in expected.items():
+        assert f'{name} = LaunchConfiguration("{name}")' in launch_text
+        assert f'DeclareLaunchArgument("{name}", default_value="{default}")' in launch_text
+        assert f'"{name}": {name}' in launch_text
+        assert f'self.declare_parameter("{name}", {float(default):.2f})' in executor_text
+
+    assert '"default_velocity_scaling": move_velocity_scaling' in launch_text
+    assert '"default_acceleration_scaling": acceleration_scaling' in launch_text
+
+
 def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
@@ -135,7 +147,6 @@ def test_visual_grasp_system_uses_measured_grasp_tcp_offset_by_default():
 def test_real_grasp_profiles_follow_operator_measured_tcp():
     expected = "[-0.04, 0.0, 0.0]"
     for relative in (
-        "src/rebotarm_vision/config/camera.yaml",
         "src/rebotarm_vision/config/camera_ubuntu.yaml",
         "src/rebotarm_vision/config/flat_graspnet.yaml",
     ):
@@ -192,19 +203,6 @@ def test_visual_grasp_system_uses_graspnet_candidates_directly_before_ik():
     assert '"input_topic": candidate_ik_input_topic' in launch_text
 
 
-def test_visual_grasp_vision_publishes_live_depth_camera_info():
-    camera_config = _read("src/rebotarm_vision/config/camera.yaml")
-    vision_text = _read("src/rebotarm_vision/rebotarm_vision/vision_node.py")
-    network_driver_text = _read("src/rebotarm_vision/rebotarm_vision/camera/network_mjpeg_driver.py")
-
-    assert "camera.network_camera_info_url: http://127.0.0.1:8081/camera_info.json" in camera_config
-    assert '"/camera/depth/camera_info"' in vision_text
-    assert "CameraInfo" in vision_text
-    assert "camera_info_to_msg" in vision_text
-    assert "network_camera_info_url" in vision_text
-    assert "camera_info_url" in network_driver_text
-
-
 def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
     node_text = _read("src/rebotarm_motion/rebotarm_motion/visual_ready_node.py")
@@ -212,7 +210,7 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'DeclareLaunchArgument("start_visual_ready", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("move_to_visual_ready_on_start", default_value="false")' in launch_text
     assert (
-        'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"'
+        'default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]"'
         in launch_text
     )
     assert 'DeclareLaunchArgument("visual_ready_startup_delay_sec", default_value="0.0")' in launch_text
@@ -224,6 +222,9 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'name="rebotarm_visual_ready_startup"' in launch_text
     assert '"exit_after_startup_move": True' in launch_text
     assert "post_visual_ready_actions = [" in launch_text
+    assert "run_visual_ready_startup = PythonExpression(" in launch_text
+    assert "condition=IfCondition(run_visual_ready_startup)" in launch_text
+    assert "condition=UnlessCondition(run_visual_ready_startup)" in launch_text
     assert '"auto_move_on_start": move_to_visual_ready_on_start' in launch_text
     assert '"startup_delay_sec": visual_ready_startup_delay_sec' in launch_text
     assert '"joint_positions": visual_ready_joint_positions' in launch_text
@@ -233,7 +234,7 @@ def test_visual_grasp_system_can_move_to_visual_ready_on_start():
     assert 'self.declare_parameter("exit_after_startup_move", False)' in node_text
     assert 'bool(node.get_parameter("exit_after_startup_move").value)' in node_text
     assert 'self.declare_parameter("startup_delay_sec", 0.0)' in node_text
-    assert "[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]" in node_text
+    assert "[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]" in node_text
     assert 'f"/{namespace}/visual_ready/move"' in node_text
     assert "create_service(" in node_text
     assert "Trigger," in node_text
@@ -257,7 +258,21 @@ def test_visual_grasp_system_starts_vision_chain_after_visual_ready():
     assert ready_index < post_ready_index < vision_index < ik_index < executor_index
     assert handler_index > executor_index
     assert "GroupAction(" in launch_text
-    assert "condition=UnlessCondition(start_visual_ready)" in launch_text
+    assert "condition=UnlessCondition(run_visual_ready_startup)" in launch_text
+
+
+def test_visual_grasp_system_starts_sim_state_backend_before_moveit_and_ready_gate():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+
+    sim_definition_index = launch_text.index("sim_trajectory_controller = Node(")
+    post_ready_index = launch_text.index("post_visual_ready_actions = [")
+    launch_sim_index = launch_text.index("            sim_trajectory_controller,")
+    launch_moveit_index = launch_text.index("            interactive_system,", launch_sim_index)
+    launch_ready_index = launch_text.index("            visual_ready_startup,", launch_moveit_index)
+
+    assert sim_definition_index < post_ready_index
+    assert launch_sim_index < launch_moveit_index < launch_ready_index
+    assert launch_text.count('executable="rebotarm_sim_trajectory_controller"') == 1
 
 
 def test_visual_grasp_system_uses_lightweight_rviz_config():
@@ -270,82 +285,50 @@ def test_visual_grasp_system_uses_lightweight_rviz_config():
     assert "rviz_default_plugins/MarkerArray" in rviz_text
     assert "/grasp/visual_markers" in rviz_text
     assert "moveit_rviz_plugin/MotionPlanning" not in rviz_text
+    assert "moveit_rviz_plugin/Trajectory" in rviz_text
+    assert "Trajectory Topic: /display_planned_path" in rviz_text
+    assert "State Display Time: 0.03 s" in rviz_text
+    assert '"publish_plan_only_preview": PythonExpression(' in launch_text
+    assert 'DeclareLaunchArgument("plan_only_stage_pause_sec", default_value="0.0")' in launch_text
     assert "rviz_default_plugins/MoveCamera" not in rviz_text
     assert "rviz_default_plugins/Select" not in rviz_text
 
 
-def test_visual_grasp_perception_preview_launch_avoids_second_controller_stack():
-    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py")
+def test_visual_grasp_system_owns_readonly_rviz_and_open3d_previews():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
 
-    assert 'PathJoinSubstitution([vision_share, "launch", "vision.launch.py"])' in launch_text
+    assert not (
+        ROOT / "src/rebotarm_bringup/launch/visual_grasp_perception_preview.launch.py"
+    ).exists()
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert 'executable="rebotarm_grasp_candidate_ik_filter"' in launch_text
     assert 'executable="rebotarm_visual_grasp_markers"' in launch_text
-    assert 'executable="rviz2"' in launch_text
-    assert 'PathJoinSubstitution([bringup_share, "rviz", "visual_grasp.rviz"])' in launch_text
+    assert 'executable="rebotarm_grasp_candidate_markers"' in launch_text
+    assert 'DeclareLaunchArgument("start_open3d_viewer", default_value="true")' in launch_text
+    assert 'executable="rebotarm_graspnet_open3d_viewer"' in launch_text
+    assert 'condition=IfCondition(start_open3d_viewer)' in launch_text
+    assert '"input_candidates_topic": graspnet_candidates_topic' in launch_text
+    assert 'DeclareLaunchArgument("start_raw_candidate_markers", default_value="true")' in launch_text
+    assert 'condition=IfCondition(start_raw_candidate_markers)' in launch_text
+    assert '"output_topic": "/grasp/raw_candidate_markers"' in launch_text
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_pose_policy", default_value="preserve_candidate_pose")' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_candidates_per_frame", default_value="20")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="0.0")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_max_joint6_delta_rad", default_value="1.5708")' in launch_text
     assert '"max_jaw_width_m": candidate_max_jaw_width_m' in launch_text
-    assert '"input_topic": graspnet_candidates_topic' in launch_text
-    assert "interactive_system.launch.py" not in launch_text
-    assert "rebotarm_visual_ready" not in launch_text
-    assert "rebotarm_sim_trajectory_controller" not in launch_text
-    assert "PoseExecutionNode" not in launch_text
-    assert "reBotArmController" not in launch_text
-    assert "move_group" not in launch_text
+    assert '"input_topic": candidate_ik_input_topic' in launch_text
+    assert "interactive_system.launch.py" in launch_text
+    assert 'DeclareLaunchArgument("use_hardware", default_value="false")' in launch_text
+    assert 'DeclareLaunchArgument("execution_mode", default_value="plan_only")' in launch_text
+    assert 'condition=IfCondition(start_visual_ready)' in launch_text
 
 
-def test_visual_ready_hold_launch_starts_real_controller_without_moveit_stack():
-    launch_text = _read("src/rebotarm_bringup/launch/visual_ready_hold.launch.py")
+def test_retired_real_perception_sim_execution_entrypoint_is_absent():
+    assert not (
+        ROOT
+        / "src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py"
+    ).exists()
 
-    assert 'executable="reBotArmController"' in launch_text
-    assert 'executable="rebotarm_visual_ready"' in launch_text
-    assert 'default_value="[-1.5707963267948966, -0.1, -0.2, 0.2, 0.0, 0.0]"' in launch_text
-    assert 'DeclareLaunchArgument("shutdown_safe_home", default_value="false")' in launch_text
-    assert '"auto_move_on_start": True' in launch_text
-    assert '"exit_after_startup_move": True' in launch_text
-    assert "interactive_system.launch.py" not in launch_text
-    assert "move_group" not in launch_text
-    assert "PoseExecutionNode" not in launch_text
-    assert "rebotarm_sim_trajectory_controller" not in launch_text
-
-
-def test_real_perception_sim_execution_launch_uses_independent_sim_namespace():
-    launch_text = _read("src/rebotarm_bringup/launch/real_perception_sim_execution.launch.py")
-
-    assert '[bringup_share, "launch", "visual_grasp_system.launch.py"]' in launch_text
-    assert 'executable="rebotarm_mujoco_node"' in launch_text
-    assert 'DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim")' in launch_text
-    assert '"arm_namespace": sim_arm_namespace' in launch_text
-    assert '"use_hardware": "false"' in launch_text
-    assert '"start_sim_trajectory_controller": "false"' in launch_text
-    assert '"start_visual_ready": "false"' in launch_text
-    assert '"use_local_rviz": use_local_rviz' in launch_text
-    assert 'SetParameter(name="use_sim_time", value=use_sim_time)' in launch_text
-    assert '"execution_mode": "execute"' in launch_text
-    assert '"start_vision": "true"' in launch_text
-    assert '"vision_profile": "ubuntu_native"' in launch_text
-    assert '"start_graspnet_baseline": "true"' in launch_text
-    assert '"graspnet_source_mode": "in_process"' in launch_text
-    assert '[vision_share, "config", "graspnet_ubuntu.yaml"]' in launch_text
-    assert "graspnet_local_infer_url" not in launch_text
-    assert '"vision_python_executable": LaunchConfiguration("vision_python_executable")' in launch_text
-    assert '"graspnet_python_executable": LaunchConfiguration("graspnet_python_executable")' in launch_text
-    assert "PYTHONPATH" not in launch_text
-    assert '"candidate_ik_input_topic": "/grasp/graspnet_candidates"' in launch_text
-    assert '"candidate_pose_policy": "preserve_candidate_pose"' in launch_text
-    assert '"candidate_max_candidates_per_frame": "20"' in launch_text
-    assert '"candidate_joint_state_topic": [' in launch_text
-    assert '"/visual_joint_states",' in launch_text
-    assert '"candidate_max_joint6_delta_rad": "0.0"' in launch_text
-    assert '"tcp_offset_xyz": "[0.0, 0.0, 0.0]"' in launch_text
-    assert '"gripper_grasp_enabled": "false"' in launch_text
-    assert '"grasp_verification_enabled": "false"' in launch_text
-    assert '"max_plan_age_sec": "3.0"' in launch_text
-    assert '"moveit_planning_time": "8.0"' in launch_text
-    assert "reBotArmController" not in launch_text
 
 
 def test_visual_grasp_system_can_disable_rviz_only_controller_for_external_mujoco():
@@ -412,6 +395,9 @@ def test_visual_grasp_markers_show_tcp_approach_and_open_axis():
     assert '"show_tcp_markers": show_tcp_markers' in launch_text
     assert '"show_approach_arrow": show_approach_arrow' in launch_text
     assert '"show_gripper_open_axis": show_gripper_open_axis' in launch_text
+    assert '"show_object_marker": False' in launch_text
+    assert '"show_object_center_marker": False' in launch_text
+    assert '"show_object_label": False' in launch_text
     assert "visual_object_center" in marker_text
     assert "visual_pregrasp_tcp" in marker_text
     assert "visual_grasp_tcp" in marker_text
@@ -419,6 +405,16 @@ def test_visual_grasp_markers_show_tcp_approach_and_open_axis():
     assert "visual_gripper_open_axis" in marker_text
     assert "Marker.ARROW" in marker_text
     assert "Marker.LINE_LIST" in marker_text
+
+
+def test_visual_grasp_plan_age_default_is_mode_aware():
+    launch_text = _read("src/rebotarm_bringup/launch/visual_grasp_system.launch.py")
+
+    assert '"max_plan_age_sec",\n                default_value=PythonExpression(' in launch_text
+    assert "default: 10.0 for plan_only, 4.0 for execute" in launch_text
+    assert "\"'10.0' if '\"," in launch_text
+    assert "\"'.lower() == 'plan_only' else '4.0'\"," in launch_text
+    assert '"max_plan_age_sec": max_plan_age_sec' in launch_text
 
 
 def test_visual_grasp_benchmark_returns_ready_between_attempts():
@@ -481,14 +477,10 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert "rebotarm_graspnet_baseline_node" in setup_scripts
     assert 'DeclareLaunchArgument("start_graspnet_baseline", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_source_mode", default_value="in_process")' in launch_text
-    assert 'DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json")' in launch_text
-    assert '"GRASPNET_MODEL_ROOT", ".local-models/graspnet-baseline"' in launch_text
+    assert '"GRASPNET_MODEL_ROOT", "third_party/graspnet-baseline"' in launch_text
     assert '"GRASPNET_CHECKPOINT_PATH"' in launch_text
     assert 'executable="rebotarm_graspnet_baseline_node"' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
-    assert '"source_mode": graspnet_source_mode' in launch_text
-    assert '"network_candidates_url": graspnet_candidates_url' in launch_text
     assert '"output_candidates_topic": graspnet_candidates_topic' in launch_text
     assert 'DeclareLaunchArgument("candidate_ik_input_topic", default_value="/grasp/graspnet_candidates")' in launch_text
     assert '"input_topic": candidate_ik_input_topic' in launch_text
@@ -496,7 +488,6 @@ def test_graspnet_baseline_v13_is_wired_as_candidate_source_without_replacing_ex
     assert '"scoring_mode"' not in launch_text
     assert 'DeclareLaunchArgument("executor_input_topic", default_value="/grasp/filtered_plan")' in launch_text
     assert "InProcessGraspNetBackend" in node_text
-    assert "NetworkGraspNetClient" in node_text
     assert "GraspCandidateArray" in node_text
     assert "self.candidates_pub.publish(candidates)" in node_text
     assert "MoveIt" not in node_text
@@ -537,7 +528,7 @@ def test_rebotarm_msgs_exports_grasp_gripper_service():
 def test_ordinary_grasp_node_publishes_candidate_array_topic():
     node_text = _read("src/rebotarm_vision/rebotarm_vision/ordinary_grasp_node.py")
     launch_text = _read("src/rebotarm_vision/launch/vision.launch.py")
-    camera_config = _read("src/rebotarm_vision/config/camera.yaml")
+    camera_config = _read("src/rebotarm_vision/config/camera_ubuntu.yaml")
 
     assert "GraspCandidateArray" in node_text
     assert 'ordinary_grasp.candidates_topic", "/grasp/candidates"' in node_text
@@ -658,7 +649,7 @@ def test_visual_grasp_executor_wires_retry_verification_place_and_recovery():
     assert "attempts: list[tuple[int, GraspPlan]] = [(-1, deepcopy(self._latest_plan))]" in executor_text
     assert "if index == int(candidates.best_index):" in executor_text
     assert "continue" in executor_text
-    assert "def _verify_after_lift" in executor_text
+    assert "def _verify_after_close" in executor_text
     assert 'return True, "gripper disabled: grasp verification skipped"' in executor_text
     assert "def _append_place_stages" in executor_text
     assert "def _precheck_execute_pose" in executor_text
@@ -717,7 +708,7 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'deltas["joint6"] = _symmetric_parallel_jaw_delta' not in node_text
     assert "build_candidate_target_variants(" in node_text
     assert "CandidateTargetPolicyConfig(" in node_text
-    assert 'self.declare_parameter("candidate_pregrasp_min_z_m", 0.120)' in node_text
+    assert 'self.declare_parameter("candidate_pregrasp_min_z_m", 0.04)' in node_text
     assert 'pregrasp_min_z_m=float(self.get_parameter("candidate_pregrasp_min_z_m").value)' in node_text
     assert "build_parallel_jaw_pose_variants(" in target_policy_text
     assert "pregrasp_min_z_m: float = 0.0" in target_policy_text
@@ -745,8 +736,8 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert "CandidateWorkspaceGateConfig" in gate_policy_text
     assert "candidate_workspace_gate(" in gate_policy_text
     assert 'self.declare_parameter("candidate_workspace_gate_enabled", False)' in node_text
-    assert 'self.declare_parameter("candidate_workspace_min_xyz", [-0.35, -0.64, 0.0])' in node_text
-    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.35, -0.18, 0.45])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_min_xyz", [0.18, -0.35, 0.0])' in node_text
+    assert 'self.declare_parameter("candidate_workspace_max_xyz", [0.64, 0.35, 0.45])' in node_text
     assert 'self.declare_parameter("candidate_max_grasp_to_object_center_m", 0.15)' in node_text
     assert "variants = self._candidate_target_variants(msg, candidate.pose)" in node_text
     assert "for pregrasp, grasp, variant_label in variants:" in node_text
@@ -800,13 +791,13 @@ def test_candidate_ik_filter_node_uses_moveit_ik_and_state_validity_without_exec
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_enabled", default_value="true")' in launch_text
     assert 'DeclareLaunchArgument("candidate_joint6_symmetry_angle_rad", default_value="3.141592653589793")' in launch_text
     assert 'DeclareLaunchArgument("candidate_min_grasp_z_m", default_value="0.0")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.120")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_safe_lift_min_z_m", default_value="0.120")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_pregrasp_min_z_m", default_value="0.04")' in launch_text
+    assert "candidate_safe_lift_min_z_m" not in launch_text
     assert 'DeclareLaunchArgument("candidate_workspace_gate_enabled", default_value="true")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[-0.35, -0.64, 0.0]")' in launch_text
-    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.35, -0.18, 0.45]")' in launch_text
-    assert 'DeclareLaunchArgument("base_approach_axis_xyz", default_value="[0.0, -1.0, 0.0]")' in launch_text
-    assert 'default_value="[0.0, 0.0, -0.707106781, 0.707106781]"' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_min_xyz", default_value="[0.18, -0.35, 0.0]")' in launch_text
+    assert 'DeclareLaunchArgument("candidate_workspace_max_xyz", default_value="[0.64, 0.35, 0.45]")' in launch_text
+    assert 'DeclareLaunchArgument("base_approach_axis_xyz", default_value="[1.0, 0.0, 0.0]")' in launch_text
+    assert 'default_value="[0.0, 0.0, 0.0, 1.0]"' in launch_text
     assert 'DeclareLaunchArgument("candidate_max_grasp_to_object_center_m", default_value="0.15")' in launch_text
     assert '"joint_state_topic": candidate_joint_state_topic' in launch_text
     assert '"service_timeout_sec": candidate_filter_service_timeout_sec' in launch_text
@@ -832,17 +823,17 @@ def test_flat_graspnet_profile_preserves_pose_and_uses_end_link_center():
     assert "tcp_offset_xyz: [-0.04, 0.0, 0.0]" in profile_text
     assert "target_base_offset_xyz: [0.0, 0.0, 0.0]" in profile_text
     assert "candidate_workspace_gate_enabled: true" in profile_text
-    assert "candidate_workspace_min_xyz: [-0.35, -0.64, 0.0]" in profile_text
-    assert "candidate_workspace_max_xyz: [0.35, -0.18, 0.45]" in profile_text
+    assert "candidate_workspace_min_xyz: [0.18, -0.35, 0.0]" in profile_text
+    assert "candidate_workspace_max_xyz: [0.64, 0.35, 0.45]" in profile_text
     assert "candidate_max_grasp_to_object_center_m: 0.15" in profile_text
     assert "candidate_max_candidates_per_frame: 20" in profile_text
-    assert "candidate_pregrasp_min_z_m: 0.120" in profile_text
+    assert "candidate_pregrasp_min_z_m: 0.04" in profile_text
     assert "candidate_max_variants_per_candidate" not in profile_text
 
 
 def test_gripper_visual_joint_state_node_rejects_empty_or_incomplete_arm_state():
     node_text = _read(
-        "src/rebotarm_interactive_control/rebotarm_interactive_control/gripper_visual_joint_state_node.py"
+        "src/rebotarm_teleop/rebotarm_teleop/gripper_visual_joint_state_node.py"
     )
 
     assert '"required_arm_joint_names"' in node_text
@@ -957,7 +948,7 @@ def test_follow_joint_trajectory_keeps_running_until_goal_settles():
 
 
 def test_status_panel_stop_replay_falls_back_to_controller_stop():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     client_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_client.py")
 
     assert "self._trajectory_stop_client = self.create_client(" in panel_text
@@ -968,7 +959,7 @@ def test_status_panel_stop_replay_falls_back_to_controller_stop():
 
 
 def test_status_panel_web_stop_always_requests_controller_stop():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     client_text = _read("src/rebotarm_teleop/rebotarm_teleop/web_teleop_client.py")
     stop_body = panel_text.split("def _handle_stop_execute(self) -> dict:", 1)[1].split("\n    def ", 1)[0]
 
@@ -980,7 +971,7 @@ def test_status_panel_web_stop_always_requests_controller_stop():
 
 
 def test_status_panel_web_execute_settings_are_number_inputs_only():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'id="execute-max-delta" type="number"' in panel_text
     assert 'id="execute-duration" type="number"' in panel_text
@@ -992,7 +983,7 @@ def test_status_panel_web_execute_settings_are_number_inputs_only():
 
 
 def test_status_panel_exposes_arm_service_buttons():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'id="arm-safe-home"' in panel_text
     assert 'id="arm-enable"' in panel_text
@@ -1010,7 +1001,7 @@ def test_status_panel_exposes_arm_service_buttons():
 
 
 def test_status_panel_surfaces_gripper_motor_state():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     motor_body = panel_text.split("const updateMotorRows = (joints) => {", 1)[1].split(
         "const previewArmTargets = () => {", 1
     )[0]
@@ -1027,7 +1018,7 @@ def test_status_panel_surfaces_gripper_motor_state():
 
 
 def test_web_execute_returns_to_live_feedback_after_sending_gripper():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     execute_body = panel_text.split("const executePreviewAndGripper = async () => {", 1)[1].split(
         "const runTeachDryRun = async () => {", 1
     )[0]
@@ -1054,7 +1045,7 @@ def test_gripper_action_aborts_when_target_is_not_reached():
 
 
 def test_arm_service_buttons_are_interlocked_during_replay():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     run_body = panel_text.split("const runArmCommand = async (command, label) => {", 1)[1].split(
         "const bindTeachReplaySetting", 1
     )[0]
@@ -1078,7 +1069,7 @@ def test_arm_service_buttons_are_interlocked_during_replay():
 
 
 def test_safety_stop_allows_operator_recovery_controls():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     lock_body = panel_text.split("const isReplayArmCommandLocked =", 1)[1].split("const addReplayEvent", 1)[0]
     dry_run_button_body = panel_text.split("const updateTeachDryRunButton = (info) => {", 1)[1].split(
         "const refreshTeachFileInfo", 1
@@ -1095,7 +1086,7 @@ def test_safety_stop_allows_operator_recovery_controls():
 
 
 def test_status_panel_defaults_cards_collapsed_and_removes_keyboard_sliders():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'class="panel collapsible-card collapsed" id="arm-status-card"' in panel_text
     assert 'class="panel slider-panel collapsible-card collapsed" id="web-teleop-card"' in panel_text
@@ -1108,7 +1099,7 @@ def test_status_panel_defaults_cards_collapsed_and_removes_keyboard_sliders():
 
 
 def test_status_panel_right_card_order_and_simplified_teach_card():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert panel_text.index('id="arm-status-card"') < panel_text.index('id="motor-state-card"')
     assert panel_text.index('id="motor-state-card"') < panel_text.index('id="web-teleop-card"')
@@ -1190,7 +1181,7 @@ def test_status_panel_right_card_order_and_simplified_teach_card():
 
 
 def test_teach_replay_dry_run_token_survives_live_start_error_drift():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     coordinator_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_coordinator.py")
 
     button_body = panel_text.split("const updateTeachDryRunButton = (info) => {", 1)[1].split(
@@ -1210,7 +1201,7 @@ def test_teach_replay_dry_run_token_survives_live_start_error_drift():
 
 
 def test_status_panel_throttles_heavy_browser_rendering():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "FAST_RENDER_INTERVAL_MS" in panel_text
     assert "const shouldRenderFastPanels = nowMs - lastFastRenderMs > FAST_RENDER_INTERVAL_MS;" in panel_text
@@ -1221,7 +1212,7 @@ def test_status_panel_throttles_heavy_browser_rendering():
 
 
 def test_status_panel_unloads_collapsed_details_and_reuses_motor_rows():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "isDetailsOpen(" in panel_text
     assert "attachDetailsUnloaders()" in panel_text
@@ -1233,7 +1224,7 @@ def test_status_panel_unloads_collapsed_details_and_reuses_motor_rows():
 
 
 def test_status_panel_control_cards_can_collapse_to_headers():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "collapsible-card" in panel_text
     assert "card-body" in panel_text
@@ -1245,7 +1236,7 @@ def test_status_panel_control_cards_can_collapse_to_headers():
 
 
 def test_status_panel_teach_info_accepts_record_path_alias_and_skips_collapsed_polling():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     teach_info_body = panel_text.split('if route == "/api/teach_record_info":', 1)[1].split('if route == "/api/teach_records":', 1)[0]
     refresh_body = panel_text.split("const refreshTeachFileInfo = async", 1)[1].split("const refreshTeachRecords", 1)[0]
 
@@ -1255,7 +1246,7 @@ def test_status_panel_teach_info_accepts_record_path_alias_and_skips_collapsed_p
 
 
 def test_status_panel_compacts_large_teach_replay_payloads_for_sse():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "def _compact_quality_payload" in panel_text
     assert "events_total" in panel_text
@@ -1266,7 +1257,7 @@ def test_status_panel_compacts_large_teach_replay_payloads_for_sse():
 
 
 def test_status_panel_check_mode_is_read_only_for_teach_actions():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert 'self.declare_parameter("panel_mode", "control")' in panel_text
     assert '"panel_mode": str(self.get_parameter("panel_mode").value)' in panel_text
@@ -1276,7 +1267,7 @@ def test_status_panel_check_mode_is_read_only_for_teach_actions():
 
 
 def test_status_panel_uses_workbench_cards_for_teleop_ui():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "teleop-workbench" in panel_text
     assert "robot-workspace" in panel_text
@@ -1301,10 +1292,10 @@ def test_status_panel_uses_workbench_cards_for_teleop_ui():
 
 
 def test_teach_recorder_exposes_service_controlled_start_stop():
-    recorder_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_recorder_node.py")
+    recorder_text = _read("src/rebotarm_teach/rebotarm_teach/teach_recorder_node.py")
     controller_text = _read("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
     teleop_launch_text = _read("src/rebotarm_bringup/launch/teleop_system.launch.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     cmake_text = _read("src/rebotarm_msgs/CMakeLists.txt")
 
     assert 'self.declare_parameter("start_on_launch", True)' in recorder_text
@@ -1321,29 +1312,25 @@ def test_teach_recorder_exposes_service_controlled_start_stop():
     assert "def _handle_stop_recording" in recorder_text
     assert "InternalTeachRecorder" not in controller_text
     assert not (ROOT / "src/rebotarmcontroller/rebotarmcontroller/teach_recorder.py").exists()
-    hardware_launch = _read("src/rebotarm_bringup/launch/moveit_hardware.launch.py")
-    assert 'package="rebotarm_teach"' in hardware_launch
-    assert 'executable="TeachRecorderNode"' in hardware_launch
+    app_launch = _read("src/rebotarm_bringup/launch/rebotarm_app.launch.py")
+    assert 'package="rebotarm_teach"' in app_launch
+    assert 'executable="TeachRecorderNode"' in app_launch
     assert '"start_on_launch": False' in teleop_launch_text
-    assert "UnlessCondition(use_hardware)" in teleop_launch_text
+    assert '"require_motor_status": ParameterValue(use_hardware, value_type=bool)' in teleop_launch_text
 
 
 def test_teach_replay_prepared_pipeline_defaults_to_150hz():
-    replay_launch_text = _read("src/rebotarm_bringup/launch/teach_replay.launch.py")
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
-    profiles_text = _read("src/rebotarm_bringup/config/replay_profiles.yaml")
+    workflow_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_workflow.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
+    teach_config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
-    assert 'DeclareLaunchArgument("filter_sample_rate_hz", default_value="150.0")' in replay_launch_text
-    assert 'DeclareLaunchArgument("resample_rate_hz", default_value="150.0")' in replay_launch_text
-    assert 'self.declare_parameter("filter_sample_rate_hz", 150.0)' in replay_node_text
-    assert 'self.declare_parameter("resample_rate_hz", 150.0)' in replay_node_text
+    assert '"filter_sample_rate_hz"' in workflow_text
+    assert '"resample_rate_hz"' in workflow_text
     assert 'self.declare_parameter("filter_sample_rate_hz", 150.0)' in panel_text
     assert 'self.declare_parameter("resample_rate_hz", 150.0)' in panel_text
-    assert "filter_sample_rate_hz: 150.0" in profiles_text
-    assert "resample_rate_hz: 150.0" in profiles_text
-    assert "time_parameterization_method: auto" in profiles_text
-    assert 'self.declare_parameter("time_parameterization_method", "auto")' in replay_node_text
+    assert "filter_sample_rate_hz: 150.0" in teach_config_text
+    assert "resample_rate_hz: 150.0" in teach_config_text
+    assert "time_parameterization_method: auto" in teach_config_text
     assert 'self.declare_parameter("time_parameterization_method", "auto")' in panel_text
 
 
@@ -1360,30 +1347,26 @@ def test_moveit_ompl_uses_ruckig_response_adapter_with_jerk_limits():
 
 
 def test_teach_replay_executes_prepared_retimed_points_directly():
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
+    builder_text = _read("src/rebotarm_teach/rebotarm_teach/teach_replay_trajectory_builder.py")
 
-    assert "def _append_prepared_replay_points(" in replay_node_text
-    assert "for retimed in self._prepared_replay.retimed_points:" in replay_node_text
-    assert "self._append_prepared_replay_points(trajectory, elapsed=elapsed)" in replay_node_text
+    assert "retimed_points" in builder_text
+    assert "trajectory.points.append(point)" in builder_text
 
 
-def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
-    replay_node_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teach_replay_node.py")
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+def test_teach_replay_has_runtime_tracking_guard_for_web():
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     monitor_text = _read("src/rebotarm_motion/rebotarm_motion/replay_runtime_monitor.py")
-    config_text = _read("src/rebotarm_bringup/config/teleop_control.yaml")
+    config_text = _read("src/rebotarm_bringup/config/teach_control.yaml")
 
-    assert "evaluate_replay_tracking" in replay_node_text
     assert "evaluate_replay_tracking" in monitor_text
     assert "ReplayRuntimeMonitor" in panel_text
     assert "_replay_runtime_monitor.check(" in panel_text
-    for text in (replay_node_text, panel_text):
-        assert 'self.declare_parameter("replay_monitor_enabled", True)' in text
-        assert 'self.declare_parameter("max_tracking_error_rad", 0.25)' in text
-        assert 'self.declare_parameter("max_live_velocity_rad_s", 3.0)' in text
-        assert "def _check_active_replay_tracking" in text or "def check_tracking" in text
-        assert "self._request_controller_trajectory_stop" in text
-    for text in (replay_node_text, monitor_text):
+    assert 'self.declare_parameter("replay_monitor_enabled", True)' in panel_text
+    assert 'self.declare_parameter("max_tracking_error_rad", 0.25)' in panel_text
+    assert 'self.declare_parameter("max_live_velocity_rad_s", 3.0)' in panel_text
+    assert "def check_tracking" in panel_text
+    assert "self._request_controller_trajectory_stop" in panel_text
+    for text in (panel_text, monitor_text):
         assert "tracking_error" in text
         assert "live_velocity" in text
 
@@ -1393,7 +1376,7 @@ def test_teach_replay_has_runtime_tracking_guard_for_cli_and_web():
 
 
 def test_status_panel_preserves_runtime_safety_stop_result_reason():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     result_body = panel_text.split("def _on_teach_replay_result", 1)[1].split(
         "\n    def check_tracking", 1
     )[0]
@@ -1405,7 +1388,7 @@ def test_status_panel_preserves_runtime_safety_stop_result_reason():
 
 
 def test_status_panel_surfaces_time_parameterization_summary():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
 
     assert "time_parameterization" in panel_text
     assert "time_parameterization?.used_method" in panel_text
@@ -1413,7 +1396,7 @@ def test_status_panel_surfaces_time_parameterization_summary():
 
 
 def test_teach_trajectory_curve_card_shows_prepared_curve_without_duplicate_check_metrics():
-    panel_text = _read("src/rebotarm_interactive_control/rebotarm_interactive_control/teleop_status_panel_node.py")
+    panel_text = _read("src/rebotarm_dashboard/rebotarm_dashboard/teleop_status_panel_node.py")
     details_body = panel_text.split("const renderTeachTrajectoryDetails = (payload) => {", 1)[1].split(
         "const drawTeachTrajectoryChart = (payload) => {", 1
     )[0]
@@ -1438,7 +1421,11 @@ def test_moveit_demo_standalone_publishes_fake_visual_joint_state_source():
     assert 'executable="joint_state_publisher"' in demo_text
     assert 'condition=IfCondition(use_fake_joint_states)' in demo_text
     assert '"/joint_states", ["/", arm_namespace, "/joint_states"]' in demo_text
-    assert '"use_fake_joint_states": "false"' in hardware_text
+    assert 'executable="GripperVisualJointStateNode"' in demo_text
+    assert '"/joint_states", ["/", arm_namespace, "/visual_joint_states"]' in demo_text
+    assert '"use_moveit_fake_joint_states": "false"' in hardware_text
+    assert '"use_hardware": "true"' in hardware_text
+    assert '"use_moveit_preview": "true"' in hardware_text
     assert '"use_fake_joint_states": PythonExpression' in interactive_text
     assert 'use_moveit_fake_joint_states' in interactive_text
 

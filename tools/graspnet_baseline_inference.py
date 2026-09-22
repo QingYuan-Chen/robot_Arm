@@ -71,20 +71,6 @@ def load_grasp_group(model_root: str):
     return GraspGroup
 
 
-def add_windows_dll_directories() -> None:
-    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
-        return
-    candidates = [
-        Path(sys.prefix) / "Lib" / "site-packages" / "torch" / "lib",
-        Path(os.environ.get("CUDA_PATH", "")) / "bin",
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin"),
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1\bin"),
-    ]
-    for path in candidates:
-        if path.is_dir():
-            os.add_dll_directory(str(path))
-
-
 def _build_cloud(
     *,
     color_bgr: np.ndarray,
@@ -349,10 +335,7 @@ def graspnet_array_to_candidates(
     if stage_counts is not None:
         stage_counts["after_projection"] = int(len(array))
     if object_points is not None:
-        array = filter_grasp_array_by_object_cloud_geometry(
-            array,
-            object_points=object_points,
-        )
+        array = filter_grasp_array_by_object_cloud_geometry(array, object_points=object_points)
     if stage_counts is not None:
         stage_counts["after_object_geometry"] = int(len(array))
     if max_jaw_width_m is not None:
@@ -378,7 +361,7 @@ def graspnet_array_to_candidates(
         translation = row[13:16]
         candidates.append(
             {
-                "source": "windows_graspnet_baseline",
+                "source": "graspnet_baseline",
                 "class_name": str(class_name),
                 "score": float(row[0]),
                 "width_m": float(row[1]),
@@ -413,12 +396,9 @@ def filter_grasp_array_by_detection_projection(
 
 
 def filter_grasp_array_by_object_cloud_geometry(
-    grasp_array,
-    *,
-    object_points: np.ndarray,
-    margin_m: float = 0.015,
+    grasp_array, *, object_points: np.ndarray, margin_m: float = 0.015,
 ) -> np.ndarray:
-    """Keep grasp centers inside the independently segmented object cloud."""
+    """Reject grasp centers outside the segmented object's robust 3D bounds."""
     array = np.asarray(grasp_array, dtype=np.float32)
     if array.ndim == 1:
         array = array.reshape(1, -1)
@@ -432,11 +412,9 @@ def filter_grasp_array_by_object_cloud_geometry(
     lower = np.quantile(finite_points, 0.02, axis=0) - margin
     upper = np.quantile(finite_points, 0.98, axis=0) + margin
     translations = array[:, 13:16]
-    keep = (
-        np.isfinite(translations).all(axis=1)
-        & (translations >= lower).all(axis=1)
-        & (translations <= upper).all(axis=1)
-    )
+    keep = (np.isfinite(translations).all(axis=1)
+            & (translations >= lower).all(axis=1)
+            & (translations <= upper).all(axis=1))
     return array[keep]
 
 
@@ -565,7 +543,6 @@ class GraspNetBaselineInference:
         return ""
 
     def _load_network(self):
-        add_windows_dll_directories()
         root = Path(self.model_root)
         for child in ("models", "dataset", "utils"):
             path = str(root / child)

@@ -11,8 +11,8 @@ import pytest
 
 motorbridge = pytest.importorskip("motorbridge")
 pytestmark = pytest.mark.skipif(
-    os.name != "posix" or motorbridge.__version__ != "0.4.6+rebotarm.2",
-    reason="requires the verified rebotarm.2 wheel and POSIX virtual serial ports",
+    os.name != "posix" or motorbridge.__version__ != "0.4.7+rebotarm.1",
+    reason="requires the verified v0.4.7 rebotarm.1 wheel and POSIX virtual serial ports",
 )
 
 

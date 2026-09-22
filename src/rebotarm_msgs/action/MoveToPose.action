@@ -4,13 +4,27 @@
 # 第三段：Feedback
 
 
+# ── Goal：期望达到的末端位姿与运动时长 ────────────────────────────
+# 目标位姿，位置单位 m，姿态为四元数；坐标系由服务端约定（控制器内部为基坐标系，
+# 不经 TF 变换）。该动作走"直接位姿轨迹"通道，不做碰撞规划。
 geometry_msgs/Pose target_pose
+# 期望运动时长，单位 s（>0 时用于时间缩放与进度估算）。传 0 或负值表示不指定时长，
+# 此时进度按已发送轨迹点占比估算；具体语义由底层轨迹生成器决定。
 float64 duration
 ---
+# ── Result：本次目标的终局结果 ────────────────────────────────────
+# 是否成功完成。规划失败、异常、被取消或被抢占均为 false。
 bool success
+# 结果说明（英文短句），例如 "move_to_pose complete"、"canceled"、"preempted"。
 string message
+# 停机时的实测末端位姿（位置 m + 四元数姿态），成功与失败都会回填。
 geometry_msgs/Pose final_pose
 ---
+# ── Feedback：执行过程中的周期性反馈（约 20 Hz 节流） ─────────────
+# 当前实测末端位姿，用于界面实时显示末端轨迹。
 geometry_msgs/Pose current_pose
+# 进度，无量纲，[0, 1]：给定 duration 时按 已用时间/期望时长 计算；
+# 否则按已发送轨迹点占比；两者都不可用时上报 1.0。
 float64 progress
+# 自目标开始执行以来经过的时间，单位 s。
 float64 time_elapsed

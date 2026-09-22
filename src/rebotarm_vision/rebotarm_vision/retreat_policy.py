@@ -1,3 +1,9 @@
+"""抓取后沿接近路径反向撤退的纯几何策略。
+
+撤退方向由本次抓取的 ``grasp -> pregrasp`` 位移动态推导。闭合夹爪后沿进入
+物体的路径反向退出，不额外插入基座 Z 方向的独立抬升动作。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,44 +15,29 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RetreatPolicyConfig:
+    """沿接近路径反向撤退的参数。"""
+
     enabled: bool = False
-    min_lift_z_m: float = 0.22
+    # 从抓取点沿 grasp->pregrasp 方向退出的距离，单位米。
     retreat_distance_m: float = 0.06
-    retreat_axis_xyz: tuple[float, float, float] = (-1.0, 0.0, 0.5)
 
 
-def _normalize_vector(vector: tuple[float, float, float]) -> tuple[float, float, float]:
-    x, y, z = (float(vector[0]), float(vector[1]), float(vector[2]))
-    norm = (x * x + y * y + z * z) ** 0.5
+def build_retreat_pose(
+    grasp: PoseTarget,
+    pregrasp: PoseTarget,
+    config: RetreatPolicyConfig,
+) -> PoseTarget:
+    """从抓取点沿接近轴反方向生成撤退位姿，姿态保持抓取姿态。"""
+
+    from .visual_grasp_sequence import PoseTarget
+
+    direction = tuple(float(pregrasp.position[i]) - float(grasp.position[i]) for i in range(3))
+    norm = sum(component * component for component in direction) ** 0.5
     if norm <= 1e-9:
-        raise ValueError("retreat_axis_xyz must be non-zero")
-    return (x / norm, y / norm, z / norm)
-
-
-def build_lift_pose(grasp: PoseTarget, *, lift_z_m: float, min_lift_z_m: float = 0.0) -> PoseTarget:
-    from .visual_grasp_sequence import PoseTarget
-
-    lift_z = max(float(grasp.position[2]) + float(lift_z_m), float(min_lift_z_m))
-    return PoseTarget(
-        position=(
-            float(grasp.position[0]),
-            float(grasp.position[1]),
-            lift_z,
-        ),
-        orientation=grasp.orientation,
-    )
-
-
-def build_retreat_pose(lift: PoseTarget, config: RetreatPolicyConfig) -> PoseTarget:
-    from .visual_grasp_sequence import PoseTarget
-
-    axis = _normalize_vector(config.retreat_axis_xyz)
+        raise ValueError("pregrasp and grasp must differ to derive retreat direction")
+    axis = tuple(component / norm for component in direction)
     distance = max(float(config.retreat_distance_m), 0.0)
     return PoseTarget(
-        position=(
-            float(lift.position[0]) + axis[0] * distance,
-            float(lift.position[1]) + axis[1] * distance,
-            float(lift.position[2]) + axis[2] * distance,
-        ),
-        orientation=lift.orientation,
+        position=tuple(float(grasp.position[i]) + axis[i] * distance for i in range(3)),
+        orientation=grasp.orientation,
     )

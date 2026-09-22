@@ -1,1 +1,1 @@
-"""Teach recording, prepared trajectory, and replay workflow utilities for reBotArm."""
+"""reBotArm 示教包：示教录制、预处理轨迹与回放工作流的工具集合。"""

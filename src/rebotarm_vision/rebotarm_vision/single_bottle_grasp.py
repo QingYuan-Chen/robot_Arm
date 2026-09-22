@@ -145,7 +145,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--plan-timeout-sec", type=float, default=45.0)
     parser.add_argument("--max-plan-age-sec", type=float, default=1.5)
-    parser.add_argument("--min-grasp-z-m", type=float, default=0.05)
+    parser.add_argument("--min-grasp-z-m", type=float, default=0.03)
     parser.add_argument("--plan-stability-frames", type=int, default=3)
     parser.add_argument("--plan-stability-xy-tolerance-m", type=float, default=0.015)
     parser.add_argument("--plan-stability-z-tolerance-m", type=float, default=0.010)
@@ -265,7 +265,7 @@ def _pose_payload(pose) -> dict[str, object]:
     }
 
 
-def _valid_bottle_plan(message: GraspPlan, *, min_grasp_z_m: float = 0.05) -> bool:
+def _valid_bottle_plan(message: GraspPlan, *, min_grasp_z_m: float = 0.03) -> bool:
     candidate = message.candidate
     return bool(
         message.valid

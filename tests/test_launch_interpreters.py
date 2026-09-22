@@ -46,7 +46,14 @@ env_names = {"mujoco": "REBOTARM_MUJOCO_PYTHON", "vision": "REBOTARM_VISION_PYTH
 expected = {}
 for kind, name in env_names.items():
     os.environ.pop(name, None)
-    expected[kind] = "python3"
+    # MuJoCo is intentionally isolated in the workspace venv by default;
+    # vision and GraspNet fall back to the system interpreter unless their
+    # dedicated environment variables are supplied.
+    expected[kind] = (
+        str(root / "third_party" / "rebotarm_mujoco_venv" / "bin" / "python")
+        if kind == "mujoco"
+        else "python3"
+    )
     if mode != "default":
         os.environ[name] = f"/opt/custom-{kind}/bin/python"
         expected[kind] = os.environ[name]
@@ -60,7 +67,7 @@ for relative in (".venv-graspnet/bin/python", ".venv-vision/lib/python3.12/site-
 
 files = {
     "rebotarm_simulation": ["mujoco_sim.launch.py", "mujoco_moveit_sim.launch.py"],
-    "rebotarm_bringup": ["visual_grasp_system.launch.py", "visual_grasp_perception_preview.launch.py", "mujoco_offline_perception.launch.py", "real_perception_sim_execution.launch.py"],
+    "rebotarm_bringup": ["visual_grasp_system.launch.py"],
     "rebotarm_vision": ["vision.launch.py", "vision_ubuntu.launch.py"],
 }
 seen = set()

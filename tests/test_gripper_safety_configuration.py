@@ -51,8 +51,15 @@ def _dict_string_keys(tree: ast.AST) -> set[str]:
 
 
 def test_real_hardware_launches_expose_and_forward_gripper_safety_defaults() -> None:
+    hardware_path = "src/rebotarm_bringup/launch/hardware_controller.launch.py"
+    hardware_tree = _tree(hardware_path)
+    hardware_defaults = _declared_launch_defaults(hardware_tree)
+    hardware_parameter_keys = _dict_string_keys(hardware_tree)
+    for name, expected in LAUNCH_SAFETY_DEFAULTS.items():
+        assert float(hardware_defaults[name]) == expected, hardware_path
+        assert name in hardware_parameter_keys, hardware_path
+
     for relative_path in (
-        "src/rebotarm_bringup/launch/driver_only.launch.py",
         "src/rebotarm_bringup/launch/interactive_system.launch.py",
         "src/rebotarm_bringup/launch/moveit_hardware.launch.py",
         "src/rebotarm_bringup/launch/rebotarm_app.launch.py",
@@ -65,7 +72,6 @@ def test_real_hardware_launches_expose_and_forward_gripper_safety_defaults() -> 
         for name, expected in LAUNCH_SAFETY_DEFAULTS.items():
             assert float(defaults[name]) == expected, relative_path
             assert name in parameter_keys, relative_path
-
 
 def test_controller_declares_gripper_safety_defaults() -> None:
     tree = _tree("src/rebotarmcontroller/rebotarmcontroller/rebotarm_controller.py")
