@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-- 2026-09-23：已将 `codex/upstream-baseline-migration@3a25206` 以双父合并方式落到主目录分支 `codex/upstream-baseline-integrated`，最终源码文件树以上游迁移分支为准；合并前主目录完整状态保存在远端 `codex/main-before-upstream-20260923@dfb9494`。主目录旧 `build/install/log` 已分别改名为 `*_before_upstream_baseline_20260923`，并按当前 11 包结构全新 symlink-install 构建；退役的 interactive-control/voice 残留缓存移至仓库外可恢复备份。主目录完整回归 1154 passed/14 skipped（隔离 ROS 域 119），分层 18 passed，compileall、两个 launch `--show-args`、EGL health 和退役包安装缺失检查通过。未连接串口或实机；自动测试不构成新基线实机验收。
+- 2026-09-23：已将 `codex/upstream-baseline-migration@3a25206` 以双父合并方式落到主目录分支 `codex/upstream-baseline-integrated`，最终源码文件树以上游迁移分支为准；合并前主目录完整状态保存在远端 `codex/main-before-upstream-20260923@dfb9494`。主目录旧 `build/install/log` 已分别改名为 `*_before_upstream_baseline_20260923`，并按当前 11 包结构全新 symlink-install 构建；退役的 interactive-control/voice 残留缓存及两个被忽略的旧测试移至仓库外可恢复备份。与迁移工作树一致的 125 个测试文件完成标准回归 1145 passed/14 skipped（隔离 ROS 域 119），分层 18 passed，compileall、两个 launch `--show-args`、EGL health 和退役包安装缺失检查通过。未连接串口或实机；自动测试不构成新基线实机验收。
 
 - 2026-09-23：隔离工作树选择性迁移的软件验证完成：保留上游 11 包、唯一实机控制器组合与原有 MuJoCo 启动入口；迁入本地独有 Viewer/Reach/Pick/Sim2Real/Real2Sim、正式单瓶抓取及受保护失败恢复。上游反馈序号和 5 Hz ArmStatus 心跳已具备，不搬回旧控制器。单瓶抓取最低抓取点为用户此前指定的 0.03 m，未经新基线真机复验。完整回归 1145 passed/14 skipped（隔离 ROS 域 119）；分层 18 passed；11 包 symlink-install、compileall、两个 launch `--show-args`、MuJoCo EGL/物理与 Pick 安全批次、diff check 通过。MuJoCo README 与文档测试采用 `third_party/rebotarm_mujoco_venv` 新布局；Viewer launch 归属 `rebotarm_simulation`。主目录及已有未提交改动不动；未提交、未推送，无串口或实机操作。下一步由用户决定何时把经审阅的隔离结果并入主目录，并在新基线单独进行实机验收。
 
