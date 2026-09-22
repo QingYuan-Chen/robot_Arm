@@ -661,6 +661,11 @@
       align-items: center;
     }
     .empty { color: var(--muted); padding: 14px; }
+    .calibration-entry { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:0 auto 18px; padding:16px 18px; max-width:1180px; border:1px solid #b7e9df; border-radius:12px; background:linear-gradient(110deg,#e8fffb,#f1f7ff); color:#16323a; box-shadow:0 8px 24px #0d243018; }
+    .calibration-entry:hover { text-decoration:none; transform:translateY(-1px); box-shadow:0 12px 28px #0d243028; }
+    .calibration-entry strong { display:block; font-size:16px; }
+    .calibration-entry span { display:block; margin-top:3px; color:#4f6874; font-size:13px; }
+    .calibration-entry em { font-style:normal; font-weight:750; white-space:nowrap; }
     /* 响应式断点一（980px）：工作台由两栏改单栏，卡片列表取消内部滚动与高度上限，
        3D 视图高度改 340px，避免在小屏上把控制区推到视口之外。 */
     @media (max-width: 980px) {
@@ -690,7 +695,7 @@
   </style>
 </head>
 <body>
-<a href="/calibration" style="display:block;padding:12px">手眼标定中心 →</a>
+<a class="calibration-entry" href="/calibration"><div><strong>手眼标定中心</strong><span>进入分步骤标定向导，查看相机快照、预检、采样和求解报告</span></div><em>开始标定 →</em></a>
   <main class="shell">
     <div class="topbar">
       <h1>reBot 遥操作面板</h1>
