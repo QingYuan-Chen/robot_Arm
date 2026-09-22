@@ -870,3 +870,4 @@
 - 2026-09-23T05:00:41+08:00 | actor=codex | event=verified | note=实时核对上游默认 main 与主工作区已合并基线，确认无新增上游提交 | verification=ls-remote upstream HEAD/main=1749e3a; merged parent=3a25206; 117 intentional file differences vs upstream; no hardware
 - 2026-09-23T05:13:31+08:00 | actor=codex | event=start | note=清理主目录同级衍生目录并从当前主目录重建 rebot_refer | verification=-
 - 2026-09-23T05:15:02+08:00 | actor=codex | event=complete | note=清理主目录同级衍生目录并保留远端分支，准备重建唯一 rebot_refer | verification=old sibling directories moved to system trash; gripper branch 6fc58e8 pushed; only main worktree registered; no hardware
+- 2026-09-23T05:16:05+08:00 | actor=codex | event=verified | note=完成唯一 rebot_refer 的干净克隆并核对主目录与参考副本提交一致 | verification=main and refer cloned from origin codex/upstream-baseline-integrated; sibling directories only rebot_Arm and rebot_refer; no hardware

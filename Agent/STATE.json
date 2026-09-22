@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-23T05:15:02+08:00",
+  "generated_at": "2026-09-23T05:16:05+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "codex/upstream-baseline-integrated",
-    "head": "c11c236",
+    "head": "8a5c0ec",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-23T05:15:02+08:00 | actor=codex | event=complete | note=清理主目录同级衍生目录并保留远端分支，准备重建唯一 rebot_refer | verification=old sibling directories moved to system trash; gripper branch 6fc58e8 pushed; only main worktree registered; no hardware"
+  "last_event": "- 2026-09-23T05:16:05+08:00 | actor=codex | event=verified | note=完成唯一 rebot_refer 的干净克隆并核对主目录与参考副本提交一致 | verification=main and refer cloned from origin codex/upstream-baseline-integrated; sibling directories only rebot_Arm and rebot_refer; no hardware"
 }

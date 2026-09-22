@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-- 2026-09-23：按用户要求清理主目录同级衍生目录，仅保留 `/home/a/project/rebot_Arm`，并准备从当前整合分支重新克隆 `/home/a/project/rebot_refer`。已移入系统回收站的旧目录包括 `rebot_Arm-retired-src-before-upstream-baseline-20260923`、`rebot_Arm-worktrees`、旧 `rebot_refer` 和 `rebot_refer-backup-20260813-0130`；不是永久删除。移除 worktree 前已将 `codex/gripper-unified-bus-fix@6fc58e8` 推送远端，其他迁移/快照分支也保留在主仓库与远端；Git worktree 注册已收敛为主目录一个。本轮未操作实机。
+- 2026-09-23：按用户要求完成主目录同级衍生目录清理，现在仅保留 `/home/a/project/rebot_Arm` 与从当前整合分支全新克隆的干净参考副本 `/home/a/project/rebot_refer`。已移入系统回收站的旧目录包括 `rebot_Arm-retired-src-before-upstream-baseline-20260923`、`rebot_Arm-worktrees`、旧 `rebot_refer` 和 `rebot_refer-backup-20260813-0130`；不是永久删除。移除 worktree 前已将 `codex/gripper-unified-bus-fix@6fc58e8` 推送远端，其他迁移/快照分支也保留在主仓库与远端；Git worktree 注册已收敛为主目录一个。新 refer 的 origin 为 `QingYuan-Chen/robot_Arm`，检出 `codex/upstream-baseline-integrated`，不包含 build/install/venv/模型缓存。本轮未操作实机。
 
 - 2026-09-23：已将 `codex/upstream-baseline-migration@3a25206` 以双父合并方式落到主目录分支 `codex/upstream-baseline-integrated`，最终源码文件树以上游迁移分支为准；合并前主目录完整状态保存在远端 `codex/main-before-upstream-20260923@dfb9494`。主目录旧 `build/install/log` 已分别改名为 `*_before_upstream_baseline_20260923`，并按当前 11 包结构全新 symlink-install 构建；退役的 interactive-control/voice 残留缓存及两个被忽略的旧测试移至仓库外可恢复备份。与迁移工作树一致的 125 个测试文件完成标准回归 1145 passed/14 skipped（隔离 ROS 域 119），分层 18 passed，compileall、两个 launch `--show-args`、EGL health 和退役包安装缺失检查通过。未连接串口或实机；自动测试不构成新基线实机验收。
 
