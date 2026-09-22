@@ -26,22 +26,17 @@
 
 ## P1: MuJoCo 基线巩固与差距整合 [weight=20]
 
-- [x] 已有 MuJoCo 模型生成、model profile 和 headless smoke 基础设施。
-- [x] 已有独立 MuJoCo ROS adapter 和 `FollowJointTrajectory` 接口。
-- [x] 已有 trajectory metrics、summary 和 step-response suite。
-- [x] 已有 path/goal tolerance 失败记录和返回逻辑。
-- [x] 已有 URDF position limit 与 MuJoCo ctrlrange 第一层测试。
-- [x] 已有 launch 可选 viewer，并保留 RViz fake sim。
-- [x] 固定并分类上游 repository URL、branch/tag、commit SHA 和 license；证据：`docs/mujoco_upstream_sources.md`。无许可证文件的 HJX 来源标记 `NOASSERTION` 并从默认模型依赖移除。
-- [x] 完成 current/upstream gap matrix，确认只选择性整合缺失能力；证据：`docs/mujoco_gap_matrix.md`、`tests/test_mujoco_gap_matrix.py`。
-- [x] 修正 grasp scene keyframe 的不合理起始姿态；scene home `qpos` 与 `ctrl` 已同步，证据：`Agent/evidence/P1/2026-08-06-grasp-keyframe.md`、`tests/test_mujoco_model_profile.py`。
-- [x] 固定 `huangbinai/robotarm_ros2` MuJoCo 快照并完成目标文件与 license evidence 审计；证据：`Agent/evidence/P1/2026-08-06-robotarm-ros2-preflight.md`、`Agent/evidence/P1/2026-08-07-upstream-snapshot-localization.md`，固定 `main@fb28dcdd358b45de79eb47adfb333e2e94e9d5b4`，license 结果为 `PROVISIONAL`。
-- [x] 独立运行上游 health/headless/model/ROS/motor/collision 测试并形成双基线差异报告；证据：`Agent/evidence/P1/2026-08-07-baseline-comparison.md` 与 JSON。上游为 `219 passed, 1 skipped, 1 failed`，唯一失败已分类为嵌套 `mapping -> tuple` 的测试断言缺陷，未宣称上游全绿。
-- [x] 将固定上游 MuJoCo runtime、模型、ROS adapter 和 launch 直接本地化到 `src/rebotarm_simulation`；切换前的 current source 已归档到 `third_party/rebotarm_simulation_current_baseline`。最终 active runtime 收口为 upstream-only，安全边界与单 Action server 约束通过测试和 ROS preflight 验证。证据：`Agent/evidence/P1/2026-08-07-upstream-src-swap.md`、`third_party/rebotarm_simulation_current_baseline/ARCHIVE_MANIFEST.json`。
-- [x] 将 timeout 接入执行循环；使用 monotonic wall-clock deadline，超时返回非成功结果并 hold 当前位置，证据：`tests/test_mujoco_adapter_core.py`、`tests/test_mujoco_ros_adapter_launch.py`。
-- [x] execute-loop 集成测试覆盖成功、取消、停止、path/goal 容差失败和超时；ROS 2 + MuJoCo 环境 `6 passed`，证据：`Agent/evidence/P1/2026-08-07-execute-loop-integration.md`。
-- [x] 补齐 effort、velocity、acceleration 和 jerk 限制一致性；URDF effort / MuJoCo forcerange 一致，MoveIt planner limits 保守且由 `rebotarm_motion` runtime guard 执行，证据：`Agent/evidence/P1/2026-08-07-runtime-limit-consistency.md`。
-- [x] 按用户最终决策将 current fallback 退出 active runtime 和 P1 验收范围；未把其 joint4-6 tracking/contact 标定误记为成功。旧实现仅保存在 `third_party/rebotarm_simulation_current_baseline` 归档，active setup/launch 不再暴露 current adapter、legacy CLI 或 backend selector；证据：`Agent/evidence/P1/2026-08-07-p1-upstream-only-closeout.md`。
+- [x] MuJoCo模型由MoveIt权威URDF和显式碰撞配置确定性生成，源码态与安装态均可校验；证据：`tests/test_urdf_to_mjcf.py`、`tests/test_mujoco_model_contract.py`。
+- [x] 独立MuJoCo ROS节点提供`FollowJointTrajectory`、诊断、模式服务、接触异常检查和轨迹稳定验收；证据：`tests/test_mujoco_ros_adapter.py`、`tests/test_mujoco_ros_acceptance.py`。
+- [x] Viewer支持关节与笛卡尔控制、速度档位、状态和接触显示；证据：`tests/test_mujoco_viewer.py`、`tests/test_mujoco_cartesian.py`。
+- [x] Reach与Pick环境、抓取判定及批量验收已纳入正式仿真包；证据：`tests/test_mujoco_env.py`、`tests/test_mujoco_pick_env.py`、`docs/mujoco_pick_zh.md`。
+- [x] Sim2Real支持确定性随机化、JSONL轨迹记录、回放、误差比较和命令行工作流；证据：`tests/test_sim2real_randomization.py`、`tests/test_sim2real_replay_compare.py`、`docs/sim2real_workflow_zh.md`。
+- [x] Real2Sim Bridge以只读方式接收真实关节状态，提供mirror/physics模式、Viewer与验收工具；证据：`tests/test_real2sim_ros_bridge.py`、`tests/test_real2sim_acceptance.py`、`docs/real2sim_bridge_zh.md`。
+- [x] 当前实现同步自`huangbinai/robotarm_ros2 main@a68c3ab924080b94f039270b568de464218d7512`，固定来源记录见`src/rebotarm_simulation/README_mujoco.md`。
+- [x] 主项目保留J2/J3 `[-3.14,0.02] rad`、J4-J6 `7 N.m`、`ee_site=-0.04 m`、虚拟RGB-D相机和瓶体场景；通用`scene.xml`继续保留上游测试立方体，视觉离线链显式使用`scene_bottle.xml`。
+- [x] 已删除旧active MuJoCo adapter/runner/model-profile/metrics/legacy实现及其专属测试，正式入口只指向新版实现。
+- [x] 仿真资源加载遵守包分层：固件参考参数冻结在`rebotarm_simulation/config`，MoveIt URDF与mesh由`rebotarm_moveit_config`拥有，源码态和安装态均通过package resource解析。
+- [x] 新MuJoCo整合通过全量`1203 passed, 2 skipped`、分层`20 passed`、三包构建、required compileall、三个launch参数解析、MJCF安装态校验和`git diff --check`；全部为软件证据，不构成实机验收。
 
 ## P2: Gemini 2 SDK 与真实 RGB-D 验收 [weight=15]
 
@@ -287,3 +282,5 @@ P6-D final cleanup随后将仓库内`.pytest_cache`及20个project `__pycache__`
 2026-09-03 GraspNet in-process integration / 进程内直连整合完成。Ubuntu active launch不再包含`local_service`、`local_infer_url`或`graspnet_local_infer_url`，同一visual-grasp launch通过`.venv-graspnet/bin/python`管理GraspNet ROS进程，完整RGB-D/CameraInfo/detection直接进入既有full-scene runner。真实Gemini 2 + TensorRT YOLO只读runtime确认`backend_available=True`并发布`source=ubuntu_inprocess_graspnet`、同stamp/frame的bottle candidate；同轮8081无listener且串口无人占用。preview launch同时补齐默认TensorRT模型参数透传。两包build、focused、layering、full suite与compile/diff通过；未启动MoveIt/controller/action或发送trajectory，不改变P6硬件checkbox。Windows/network兼容模式和旧HTTP工具作为回退保留。证据：`Agent/evidence/P6/2026-09-03-graspnet-inprocess-integration.md`。
 
 2026-09-07 阶段后功能化：已实测的单瓶抓取与本轮baseline恢复链从P6任务脚本迁为`rebotarm_vision`正式入口`rebotarm_single_bottle_grasp`，已验收参数随包安装；公共反馈监视和受保护轨迹客户端归`rebotarm_motion`。旧P6脚本仅作兼容转发，持续visual grasp executor仍禁用以维持单一动作发起者。全量`856 passed, 8 skipped`、分层`20 passed`及标准三包安装态验证通过；本轮没有实机动作，不改变上述P6范围收口与硬件验收结论。
+
+2026-09-07 visual grasp candidate safety hardening / 视觉抓取候选安全加固：软件实现已完成。实机profile固定`bottle`并设置抓取点`base_link z >= 0.05 m`；TF与计划新鲜度改用图像传感器时间；GraspNet候选中心必须位于独立瓶体分割点云三维包络内；单瓶执行器要求3帧位置/高度/宽度稳定。聚焦`128 passed,1 skipped`、全量`864 passed,8 skipped`、分层`20 passed`、两包构建、compileall与launch静态解析通过。未启动视觉或实机，本项只记软件验证，实机候选质量和抓取结果仍待单独验收。

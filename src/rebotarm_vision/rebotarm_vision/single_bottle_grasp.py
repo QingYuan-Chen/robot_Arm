@@ -12,6 +12,7 @@ The feature calls ROS services/actions only; it never imports the motor SDK.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import json
 import math
 from pathlib import Path
@@ -34,6 +35,7 @@ from rebotarm_motion.real_failure_recovery import (
     recover_real_failure,
     verify_recovery_baseline,
 )
+from rebotarm_vision.message_freshness import message_age_sec
 
 
 REAL_CONFIRMATION = "REAL_SINGLE_BOTTLE_GRASP"
@@ -45,6 +47,11 @@ _PROFILE_ARGUMENT_TYPES = {
     "runs": int,
     "plan_timeout_sec": float,
     "max_plan_age_sec": float,
+    "min_grasp_z_m": float,
+    "plan_stability_frames": int,
+    "plan_stability_xy_tolerance_m": float,
+    "plan_stability_z_tolerance_m": float,
+    "plan_stability_jaw_width_tolerance_m": float,
     "pregrasp_sec": float,
     "approach_sec": float,
     "hold_sec": float,
@@ -138,6 +145,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--plan-timeout-sec", type=float, default=45.0)
     parser.add_argument("--max-plan-age-sec", type=float, default=1.5)
+    parser.add_argument("--min-grasp-z-m", type=float, default=0.05)
+    parser.add_argument("--plan-stability-frames", type=int, default=3)
+    parser.add_argument("--plan-stability-xy-tolerance-m", type=float, default=0.015)
+    parser.add_argument("--plan-stability-z-tolerance-m", type=float, default=0.010)
+    parser.add_argument(
+        "--plan-stability-jaw-width-tolerance-m", type=float, default=0.010
+    )
     parser.add_argument("--pregrasp-sec", type=float, default=45.0)
     parser.add_argument("--approach-sec", type=float, default=45.0)
     parser.add_argument("--hold-sec", type=float, default=20.0)
@@ -251,7 +265,7 @@ def _pose_payload(pose) -> dict[str, object]:
     }
 
 
-def _valid_bottle_plan(message: GraspPlan) -> bool:
+def _valid_bottle_plan(message: GraspPlan, *, min_grasp_z_m: float = 0.05) -> bool:
     candidate = message.candidate
     return bool(
         message.valid
@@ -259,7 +273,85 @@ def _valid_bottle_plan(message: GraspPlan) -> bool:
         and str(message.header.frame_id) == "base_link"
         and float(candidate.confidence) >= MIN_CANDIDATE_CONFIDENCE
         and 0.0 < float(message.jaw_width) <= 0.085
+        and float(message.grasp_pose.position.z) >= float(min_grasp_z_m)
     )
+
+
+def _stamp_to_ns(stamp) -> int:
+    return int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+
+
+def _plan_sensor_age_sec(message: GraspPlan, *, now_ns: int) -> float:
+    age_sec = message_age_sec(message.header.stamp, now_ns=int(now_ns))
+    return math.inf if age_sec is None else float(age_sec)
+
+
+class PlanStabilityTracker:
+    def __init__(
+        self,
+        *,
+        required_frames: int,
+        xy_tolerance_m: float,
+        z_tolerance_m: float,
+        jaw_width_tolerance_m: float,
+        min_grasp_z_m: float,
+    ) -> None:
+        self.required_frames = max(1, int(required_frames))
+        self.xy_tolerance_m = float(xy_tolerance_m)
+        self.z_tolerance_m = float(z_tolerance_m)
+        self.jaw_width_tolerance_m = float(jaw_width_tolerance_m)
+        self.min_grasp_z_m = float(min_grasp_z_m)
+        self._samples = deque(maxlen=self.required_frames)
+        self.accepted_plan: GraspPlan | None = None
+
+    @property
+    def sample_count(self) -> int:
+        return len(self._samples)
+
+    def reset(self) -> None:
+        self._samples.clear()
+        self.accepted_plan = None
+
+    def update(self, message: GraspPlan) -> bool:
+        if not _valid_bottle_plan(message, min_grasp_z_m=self.min_grasp_z_m):
+            self.reset()
+            return False
+        stamp_ns = _stamp_to_ns(message.header.stamp)
+        if stamp_ns <= 0:
+            self.reset()
+            return False
+        if self._samples:
+            last_stamp_ns = _stamp_to_ns(self._samples[-1].header.stamp)
+            if stamp_ns == last_stamp_ns:
+                return False
+            if stamp_ns < last_stamp_ns:
+                self.reset()
+        self._samples.append(message)
+        if not self._window_is_stable():
+            if len(self._samples) == self.required_frames:
+                self._samples.clear()
+                self._samples.append(message)
+            self.accepted_plan = None
+            return False
+        self.accepted_plan = message
+        return True
+
+    def _window_is_stable(self) -> bool:
+        if len(self._samples) < self.required_frames:
+            return False
+        positions = [sample.grasp_pose.position for sample in self._samples]
+        max_xy_delta = max(
+            math.hypot(float(a.x) - float(b.x), float(a.y) - float(b.y))
+            for a in positions
+            for b in positions
+        )
+        z_values = [float(position.z) for position in positions]
+        widths = [float(sample.jaw_width) for sample in self._samples]
+        return bool(
+            max_xy_delta <= self.xy_tolerance_m
+            and max(z_values) - min(z_values) <= self.z_tolerance_m
+            and max(widths) - min(widths) <= self.jaw_width_tolerance_m
+        )
 
 
 def _request_plan(
@@ -379,22 +471,24 @@ def _call_grasp(
 
 def _wait_for_fresh_bottle_plan(
     node: GuardedTrajectoryNode,
-    latest: dict[str, object],
+    tracker: PlanStabilityTracker,
     *,
     timeout_sec: float,
     max_age_sec: float,
 ) -> GraspPlan:
-    latest["message"] = None
-    latest["received_monotonic"] = None
+    tracker.reset()
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
         rclpy.spin_once(node, timeout_sec=0.05)
-        message = latest.get("message")
-        received = latest.get("received_monotonic")
-        if isinstance(message, GraspPlan) and isinstance(received, float):
-            age = time.monotonic() - received
-            if age <= max_age_sec:
+        message = tracker.accepted_plan
+        if isinstance(message, GraspPlan):
+            age = _plan_sensor_age_sec(
+                message,
+                now_ns=int(node.get_clock().now().nanoseconds),
+            )
+            if 0.0 <= age <= max_age_sec:
                 return message
+            tracker.reset()
     raise RuntimeError("fresh valid bottle plan unavailable")
 
 
@@ -413,7 +507,7 @@ def _healthy_enabled(node: GuardedTrajectoryNode) -> bool:
 
 def _run_one(
     node: GuardedTrajectoryNode,
-    latest_plan: dict[str, object],
+    plan_tracker: PlanStabilityTracker,
     pose_client,
     gripper_client,
     grasp_client,
@@ -431,13 +525,22 @@ def _run_one(
         trial["preflight_status"] = node._status_payload()
         plan = _wait_for_fresh_bottle_plan(
             node,
-            latest_plan,
+            plan_tracker,
             timeout_sec=args.plan_timeout_sec,
             max_age_sec=args.max_plan_age_sec,
         )
-        received = float(latest_plan["received_monotonic"])
+        sensor_age_sec = _plan_sensor_age_sec(
+            plan,
+            now_ns=int(node.get_clock().now().nanoseconds),
+        )
         trial["plan"] = {
-            "age_sec": time.monotonic() - received,
+            "sensor_age_sec": sensor_age_sec,
+            "max_sensor_age_sec": args.max_plan_age_sec,
+            "min_grasp_z_m": args.min_grasp_z_m,
+            "stability_frames": plan_tracker.required_frames,
+            "stability_xy_tolerance_m": plan_tracker.xy_tolerance_m,
+            "stability_z_tolerance_m": plan_tracker.z_tolerance_m,
+            "stability_jaw_width_tolerance_m": plan_tracker.jaw_width_tolerance_m,
             "class_name": str(plan.candidate.class_name),
             "confidence": float(plan.candidate.confidence),
             "min_candidate_confidence": MIN_CANDIDATE_CONFIDENCE,
@@ -649,6 +752,18 @@ def main() -> None:
         raise SystemExit(f"real run requires --confirm {REAL_CONFIRMATION}")
     if args.runs < 1:
         raise SystemExit("--runs must be at least 1")
+    if args.max_plan_age_sec <= 0.0:
+        raise SystemExit("--max-plan-age-sec must be positive")
+    if args.min_grasp_z_m < 0.0:
+        raise SystemExit("--min-grasp-z-m must be non-negative")
+    if args.plan_stability_frames < 2:
+        raise SystemExit("--plan-stability-frames must be at least 2")
+    if min(
+        args.plan_stability_xy_tolerance_m,
+        args.plan_stability_z_tolerance_m,
+        args.plan_stability_jaw_width_tolerance_m,
+    ) <= 0.0:
+        raise SystemExit("plan stability tolerances must be positive")
     if min(args.pregrasp_sec, args.approach_sec, args.hold_sec, args.return_sec) <= 0.0:
         raise SystemExit("all durations must be positive")
     if not 0.0 < args.gripper_open_m <= 0.085:
@@ -688,12 +803,16 @@ def main() -> None:
             namespace=args.namespace,
             backend="real",
         )
-        latest_plan: dict[str, object] = {}
+        plan_tracker = PlanStabilityTracker(
+            required_frames=args.plan_stability_frames,
+            xy_tolerance_m=args.plan_stability_xy_tolerance_m,
+            z_tolerance_m=args.plan_stability_z_tolerance_m,
+            jaw_width_tolerance_m=args.plan_stability_jaw_width_tolerance_m,
+            min_grasp_z_m=args.min_grasp_z_m,
+        )
 
         def plan_callback(message: GraspPlan) -> None:
-            if _valid_bottle_plan(message):
-                latest_plan["message"] = message
-                latest_plan["received_monotonic"] = time.monotonic()
+            plan_tracker.update(message)
 
         node.create_subscription(GraspPlan, "/grasp/filtered_plan", plan_callback, 10)
         pose_client = node.create_client(ExecutePose, f"/{node.namespace}/motion_execution/execute_pose")
@@ -703,7 +822,7 @@ def main() -> None:
         )
         for index in range(1, args.runs + 1):
             trial = _run_one(
-                node, latest_plan, pose_client, gripper_client, grasp_client, args, index
+                node, plan_tracker, pose_client, gripper_client, grasp_client, args, index
             )
             report["trials"].append(trial)
             if not trial["success"]:

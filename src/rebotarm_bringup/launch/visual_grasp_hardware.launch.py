@@ -27,6 +27,7 @@ _ARGUMENT_TYPES = {
     "execution_mode": str,
     "vision_profile": str,
     "graspnet_source_mode": str,
+    "graspnet_target_class_name": str,
     "start_visual_ready": bool,
     "move_to_visual_ready_on_start": bool,
     "start_motion_execution": bool,
@@ -38,6 +39,7 @@ _ARGUMENT_TYPES = {
     "fixed_grasp_orientation_xyzw": list,
     "tcp_offset_xyz": list,
     "candidate_min_confidence": float,
+    "candidate_min_grasp_z_m": float,
     "candidate_max_jaw_width_m": float,
     "max_allowed_grasp_width_m": float,
     "max_plan_age_sec": float,
@@ -131,6 +133,10 @@ def _load_hardware_profile(path: Path, *, anchor: Path) -> dict[str, str]:
         raise RuntimeError(
             "start_motion_execution 必须为 true；单次瓶体抓取功能需要规划和轨迹执行服务"
         )
+    if str(arguments["graspnet_target_class_name"]).strip().casefold() != "bottle":
+        raise RuntimeError("graspnet_target_class_name 必须为 bottle")
+    if float(arguments["candidate_min_grasp_z_m"]) != 0.05:
+        raise RuntimeError("candidate_min_grasp_z_m 必须为 0.05 m")
 
     resolved = {}
     for name, value in assets.items():

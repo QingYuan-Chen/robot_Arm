@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T03:39:43+08:00",
+  "generated_at": "2026-09-07T06:10:40+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -18,8 +18,8 @@
       "id": "P1",
       "name": "MuJoCo 基线巩固与差距整合",
       "weight": 20,
-      "completed_items": 16,
-      "total_items": 16,
+      "completed_items": 11,
+      "total_items": 11,
       "completion_percent": 100.0
     },
     {
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "cc362bb",
+    "head": "35c3b33",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-07T03:39:43+08:00 | actor=codex | event=complete | note=单次瓶体视觉抓取正式功能与两阶段命令设计已整理，准备本地提交 | verification=全量856 passed, 8 skipped；分层20 passed；最终聚焦59 passed；required compileall/py_compile/diff check；三包普通install及隔离入口验证通过；未操作硬件；不推送"
+  "last_event": "- 2026-09-07T06:10:40+08:00 | actor=codex | event=complete | note=MuJoCo最新版已替换旧实现，旧本地baseline归档已按授权移出项目 | verification=upstream main@a68c3ab; 1203 passed, 2 skipped; layering 20 passed; required compileall; three-package build; installed MJCF check; old ignored baseline absent; no hardware actions; no commit or push"
 }

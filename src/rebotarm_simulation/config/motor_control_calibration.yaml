@@ -1,7 +1,5 @@
 # MuJoCo-only conversion from Damiao firmware PI output to physical torque.
 # These values are simulation calibration values, not firmware parameters.
-# Frozen reference from the driver profile at migration (2026-09-06).
-# Hardware tuning must not silently change an existing simulation calibration.
 firmware_reference:
   rate_hz: 100
   arm:

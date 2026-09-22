@@ -55,6 +55,32 @@ def test_graspnet_wrapper_converts_graspnet_array_rows_to_json_candidates():
     assert np.asarray(candidates[0]["rotation_matrix"]) == pytest.approx(np.eye(3))
 
 
+def test_grasp_candidates_must_lie_inside_independent_object_cloud_geometry():
+    module = _load_wrapper()
+    rows = np.zeros((2, 17), dtype=np.float32)
+    rows[:, 4:13] = np.eye(3, dtype=np.float32).reshape(-1)
+    rows[0, 13:16] = [0.01, -0.01, 0.40]
+    rows[1, 13:16] = [0.01, -0.01, 0.20]
+    object_points = np.asarray(
+        [
+            [-0.02, -0.03, 0.37],
+            [0.03, -0.03, 0.37],
+            [-0.02, 0.02, 0.43],
+            [0.03, 0.02, 0.43],
+        ],
+        dtype=np.float32,
+    )
+
+    filtered = module.filter_grasp_array_by_object_cloud_geometry(
+        rows,
+        object_points=object_points,
+        margin_m=0.01,
+    )
+
+    assert filtered.shape == (1, 17)
+    assert filtered[0, 13:16] == pytest.approx([0.01, -0.01, 0.40])
+
+
 def test_graspnet_wrapper_builds_scene_cloud_from_full_depth_image():
     module = _load_wrapper()
     depth_mm = np.array(
@@ -341,6 +367,7 @@ def test_graspnet_inference_uses_detection_cloud_and_full_scene_for_collision(mo
         "after_nms": 1,
         "after_score_sort": 1,
         "after_projection": 1,
+        "after_object_geometry": 1,
         "after_jaw_width": 1,
         "published": 1,
         "empty_reason": "",
@@ -485,6 +512,7 @@ def test_graspnet_candidates_apply_jaw_width_filter_before_top_n_limit():
     assert candidates[0]["width_m"] == pytest.approx(0.079)
     assert stage_counts == {
         "after_projection": 3,
+        "after_object_geometry": 3,
         "after_jaw_width": 1,
         "published": 1,
     }

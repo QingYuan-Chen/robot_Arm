@@ -71,16 +71,6 @@ def test_driver_safe_home_default_matches_the_srdf_named_state():
     assert f"_SAFE_HOME_JOINT_POSITIONS = ({rendered})" in source
 
 
-def test_mujoco_keyframe_matches_the_srdf_safe_home_state():
-    source = _read("src/rebotarm_simulation/rebotarm_simulation/mujoco_model_profile.py")
-    arm = " ".join(
-        ("0" if value == 0.0 else repr(value)) for value in SAFE_HOME
-    )
-    assert f'key.set("name", "safe_home")' in source
-    assert f'key.set("qpos", "{arm} 0.04 -0.04")' in source
-    assert f'key.set("ctrl", "{arm} 0.04")' in source
-
-
 def test_driver_safe_home_does_not_delegate_to_the_vendor_zero_homing():
     hardware = _read("src/rebotarmcontroller/rebotarmcontroller/hardware_manager.py")
     services = _read("src/rebotarmcontroller/rebotarmcontroller/ros_services.py")

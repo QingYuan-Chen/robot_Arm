@@ -28,7 +28,7 @@ def test_candidate_tf_adapter_returns_same_pose_when_frames_match():
 
     called = False
 
-    def lookup(_target_frame: str, _source_frame: str):
+    def lookup(_target_frame: str, _source_frame: str, _stamp):
         nonlocal called
         called = True
         raise AssertionError("lookup should not be called when frames already match")
@@ -37,6 +37,7 @@ def test_candidate_tf_adapter_returns_same_pose_when_frames_match():
         _pose(0.1, 0.2, 0.3),
         source_frame="base_link",
         target_frame="base_link",
+        stamp=object(),
         lookup_transform=lookup,
     )
 
@@ -51,9 +52,12 @@ def test_candidate_tf_adapter_uses_lookup_when_frames_differ():
 
     from rebotarm_vision.candidate_tf_adapter import transform_candidate_pose_to_target_frame
 
-    def lookup(target_frame: str, source_frame: str):
+    stamp = object()
+
+    def lookup(target_frame: str, source_frame: str, lookup_stamp):
         assert target_frame == "base_link"
         assert source_frame == "camera_depth_frame"
+        assert lookup_stamp is stamp
         transform = TransformStamped()
         transform.transform.translation.x = 0.3
         transform.transform.translation.y = -0.1
@@ -65,6 +69,7 @@ def test_candidate_tf_adapter_uses_lookup_when_frames_differ():
         _pose(0.1, 0.2, 0.3),
         source_frame="camera_depth_frame",
         target_frame="base_link",
+        stamp=stamp,
         lookup_transform=lookup,
     )
 

@@ -8,7 +8,8 @@ import math
 from pathlib import Path
 import sys
 
-from .mujoco_sim import ARM_JOINT_NAMES, RebotArmMujoco
+from .mujoco_commands import dispatch_sim_command
+from .mujoco_sim import RebotArmMujoco
 
 
 def _nonnegative_finite(value: str) -> float:
@@ -28,12 +29,33 @@ def _positive_int(value: str) -> int:
     return number
 
 
+def _positive_finite(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive finite number")
+    return number
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run or manually control reBotArm MuJoCo")
-    parser.add_argument("--model", help="path to an MJCF scene (defaults to packaged scene.xml)")
-    parser.add_argument("--headless", action="store_true", help="run without an interactive prompt")
-    parser.add_argument("--duration", type=_nonnegative_finite, help="simulation seconds to run")
-    parser.add_argument("--steps", type=_positive_int, help="number of physics steps to run")
+    parser = argparse.ArgumentParser(description="Run or diagnose the reBotArm MuJoCo backend")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    run = subparsers.add_parser("run", help="run a headless simulation")
+    run.add_argument("--model", help="path to an MJCF scene (defaults to packaged scene.xml)")
+    run.add_argument("--duration", type=_nonnegative_finite, help="simulation seconds to run")
+    run.add_argument("--steps", type=_positive_int, help="number of physics steps to run")
+
+    shell = subparsers.add_parser("shell", help="read simulation commands from standard input")
+    shell.add_argument("--model", help="path to an MJCF scene (defaults to packaged scene.xml)")
+
+    torque = subparsers.add_parser("torque", help="apply a watchdog-limited diagnostic torque")
+    torque.add_argument("--model", help="path to an MJCF scene (defaults to packaged scene.xml)")
+    torque.add_argument("--values", nargs=6, type=float, required=True, metavar="NM")
+    torque.add_argument("--timeout", type=_positive_finite, default=0.1)
+    torque.add_argument(
+        "--observe", type=_nonnegative_finite, default=0.2,
+        help="simulation seconds to observe, including watchdog fallback",
+    )
     return parser
 
 
@@ -58,62 +80,8 @@ def _emit(value, stdout) -> None:
 
 
 def dispatch_command(sim, line: str, *, paused: bool = False):
-    parts = line.split()
-    if not parts:
-        return paused, None, False
-    command, arguments = parts[0].lower(), parts[1:]
-    if command == "quit":
-        if arguments:
-            raise ValueError("usage: quit")
-        return paused, "bye", True
-    if command == "state":
-        if arguments:
-            raise ValueError("usage: state")
-        return paused, sim.get_state(), False
-    if command == "joint":
-        if len(arguments) != 2 or arguments[0] not in ARM_JOINT_NAMES:
-            raise ValueError("usage: joint NAME VALUE")
-        return paused, sim.set_joint_position_targets({arguments[0]: float(arguments[1])}), False
-    if command == "joints":
-        if len(arguments) != 6:
-            raise ValueError("usage: joints J1 J2 J3 J4 J5 J6")
-        values = [float(value) for value in arguments]
-        return paused, sim.set_joint_position_targets(values), False
-    if command == "jog":
-        if len(arguments) != 2 or arguments[0] not in ARM_JOINT_NAMES:
-            raise ValueError("usage: jog NAME DELTA")
-        state = sim.get_state()
-        index = ARM_JOINT_NAMES.index(arguments[0])
-        target = float(state.joint_positions[index]) + float(arguments[1])
-        return paused, sim.set_joint_position_targets({arguments[0]: target}), False
-    if command == "gripper":
-        if len(arguments) != 1:
-            raise ValueError("usage: gripper WIDTH")
-        return paused, sim.set_gripper_width(float(arguments[0])), False
-    if command == "step":
-        if len(arguments) > 1:
-            raise ValueError("usage: step [N]")
-        count = 1 if not arguments else _positive_int(arguments[0])
-        if paused:
-            return paused, "paused; step ignored", False
-        return paused, sim.step(count), False
-    if command == "reset":
-        if arguments:
-            raise ValueError("usage: reset")
-        return paused, sim.reset(), False
-    if command == "contacts":
-        if arguments:
-            raise ValueError("usage: contacts")
-        return paused, sim.get_contacts(), False
-    if command == "pause":
-        if arguments:
-            raise ValueError("usage: pause")
-        return True, "paused", False
-    if command == "resume":
-        if arguments:
-            raise ValueError("usage: resume")
-        return False, "running", False
-    raise ValueError(f"unknown command: {command}")
+    result = dispatch_sim_command(sim, line, paused=paused)
+    return result.paused, result.value, result.should_quit
 
 
 def _run_headless(sim, duration: float | None, steps: int | None):
@@ -135,6 +103,24 @@ def _run_headless(sim, duration: float | None, steps: int | None):
     return state
 
 
+def _prepare_simulation(sim) -> None:
+    sim.reset_home()
+    sim.set_mode("hold")
+
+
+def _run_torque(sim, values, *, timeout: float, observe: float):
+    sim.command_joint_torques(values, timeout_s=timeout)
+    start = float(sim.get_state().simulation_time)
+    while float(sim.get_state().simulation_time) - start + 1e-15 < observe:
+        sim.step()
+    return {
+        "state": sim.get_state(),
+        "control": sim.get_control_status(),
+        "requested_timeout_s": timeout,
+        "observed_duration_s": float(sim.get_state().simulation_time) - start,
+    }
+
+
 def _interactive(sim, stdin, stdout) -> int:
     paused = False
     for line in stdin:
@@ -144,7 +130,7 @@ def _interactive(sim, stdin, stdout) -> int:
                 _emit(result, stdout)
             if should_quit:
                 return 0
-        except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
+        except (argparse.ArgumentTypeError, RuntimeError, TypeError, ValueError) as exc:
             print(f"error: {exc}", file=stdout)
     return 0
 
@@ -153,13 +139,21 @@ def main(argv=None, *, sim_factory=RebotArmMujoco, stdin=None, stdout=None, stde
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
-    effective_argv = list(sys.argv[1:] if argv is None else argv)
-    args = build_parser().parse_args(effective_argv)
+    args = build_parser().parse_args(argv)
     sim = None
     try:
         sim = sim_factory(args.model)
-        if args.headless:
+        _prepare_simulation(sim)
+        if args.command == "run":
             _emit(_run_headless(sim, args.duration, args.steps), stdout)
+            return 0
+        if args.command == "torque":
+            _emit(
+                _run_torque(
+                    sim, args.values, timeout=args.timeout, observe=args.observe
+                ),
+                stdout,
+            )
             return 0
         return _interactive(sim, stdin, stdout)
     except Exception as exc:

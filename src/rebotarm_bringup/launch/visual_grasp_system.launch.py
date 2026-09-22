@@ -62,6 +62,7 @@ def generate_launch_description():
     graspnet_candidates_topic = LaunchConfiguration("graspnet_candidates_topic")
     graspnet_output_frame_id = LaunchConfiguration("graspnet_output_frame_id")
     graspnet_source_mode = LaunchConfiguration("graspnet_source_mode")
+    graspnet_target_class_name = LaunchConfiguration("graspnet_target_class_name")
     graspnet_config = LaunchConfiguration("graspnet_config")
     graspnet_candidates_url = LaunchConfiguration("graspnet_candidates_url")
     graspnet_network_timeout_ms = LaunchConfiguration("graspnet_network_timeout_ms")
@@ -350,6 +351,7 @@ def generate_launch_description():
                     "output_candidates_topic": graspnet_candidates_topic,
                     "output_frame_id": graspnet_output_frame_id,
                     "source_mode": graspnet_source_mode,
+                    "target_class_name": graspnet_target_class_name,
                     "network_candidates_url": graspnet_candidates_url,
                     "network_timeout_ms": graspnet_network_timeout_ms,
                     "network_poll_hz": graspnet_network_poll_hz,
@@ -589,6 +591,7 @@ def generate_launch_description():
             DeclareLaunchArgument("graspnet_candidates_topic", default_value="/grasp/graspnet_candidates"),
             DeclareLaunchArgument("graspnet_output_frame_id", default_value="camera_depth_frame"),
             DeclareLaunchArgument("graspnet_source_mode", default_value="in_process"),
+            DeclareLaunchArgument("graspnet_target_class_name", default_value=""),
             DeclareLaunchArgument("graspnet_config", default_value=graspnet_ubuntu_params),
             DeclareLaunchArgument("graspnet_candidates_url", default_value="http://127.0.0.1:8081/graspnet_candidates.json"),
             DeclareLaunchArgument("graspnet_network_timeout_ms", default_value="1000"),

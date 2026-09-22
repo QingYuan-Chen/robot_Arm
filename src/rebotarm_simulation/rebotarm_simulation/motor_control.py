@@ -87,15 +87,24 @@ class GripperCommand:
 
 
 def load_motor_control_parameters(
-    *, calibration_path: Path | None = None, urdf_path: Path | None = None,
+    repo_root: str | Path | None = None,
 ) -> MotorControlParameters:
-    calibration = _read_yaml(calibration_path or package_resource(
-        "rebotarm_simulation", "config/motor_control_calibration.yaml",
-    ))
-    reference = calibration["firmware_reference"]
-    urdf_efforts = _load_urdf_efforts(urdf_path or package_resource(
-        "rebotarm_moveit_config", "config/rebotarm.urdf",
-    ))
+    if repo_root is None:
+        calibration_path = package_resource(
+            "rebotarm_simulation", "config/motor_control_calibration.yaml"
+        )
+        urdf_path = package_resource(
+            "rebotarm_moveit_config", "config/rebotarm.urdf"
+        )
+    else:
+        root = Path(repo_root)
+        calibration_path = (
+            root / "src/rebotarm_simulation/config/motor_control_calibration.yaml"
+        )
+        urdf_path = root / "src/rebotarm_moveit_config/config/rebotarm.urdf"
+    calibration = _read_yaml(calibration_path)
+    firmware_reference = calibration["firmware_reference"]
+    urdf_efforts = _load_urdf_efforts(urdf_path)
 
     motor_specs = {
         name: MotorSpec(
@@ -120,10 +129,11 @@ def load_motor_control_parameters(
     firmware_to_torque_scale: list[float] = []
     torque_rate_limit_nm_s: list[float] = []
     torque_lowpass_alpha: list[float] = []
-    for name, pos_vel in reference["arm"].items():
+    for name in (f"joint{index}" for index in range(1, 7)):
         calibration_entry = arm_calibration[name]
         motor_model = str(calibration_entry["motor_model"])
         motor_spec = motor_specs[motor_model]
+        pos_vel = firmware_reference["arm"][name]
         joint_names.append(str(name))
         motor_models.append(motor_model)
         pos_kp.append(float(pos_vel["pos_kp"]))
@@ -140,12 +150,12 @@ def load_motor_control_parameters(
             raise ValueError(f"torque_lowpass_alpha for {name} must be in (0, 1]")
         torque_lowpass_alpha.append(alpha)
 
-    source_gripper = reference["gripper"]
+    source_gripper = firmware_reference["gripper"]
     gripper_calibration = calibration["gripper"]
     modes = gripper_calibration["modes"]
     displacement_range = gripper_calibration["displacement_range_m"]
     return MotorControlParameters(
-        control_rate_hz=float(reference["rate_hz"]),
+        control_rate_hz=float(firmware_reference["rate_hz"]),
         motor_specs=motor_specs,
         arm=ArmControlParameters(
             joint_names=tuple(joint_names),

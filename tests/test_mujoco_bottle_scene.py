@@ -5,7 +5,8 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCENE = ROOT / "src/rebotarm_simulation/models/rebotarm/scene.xml"
+SCENE = ROOT / "src/rebotarm_simulation/models/rebotarm/scene_bottle.xml"
+DEFAULT_SCENE = ROOT / "src/rebotarm_simulation/models/rebotarm/scene.xml"
 
 
 def test_canonical_mujoco_scene_uses_bottle_target_proxy():
@@ -18,6 +19,12 @@ def test_canonical_mujoco_scene_uses_bottle_target_proxy():
     assert bottle.find("geom[@name='bottle_neck']") is not None
     assert bottle.find("geom[@name='bottle_cap']") is not None
     assert root.find(".//body[@name='test_cube']") is None
+
+
+def test_upstream_default_scene_keeps_the_pick_environment_cube():
+    root = ET.parse(DEFAULT_SCENE).getroot()
+    assert root.find(".//body[@name='test_cube']") is not None
+    assert root.find(".//body[@name='bottle']") is None
 
 
 def test_canonical_bottle_proxy_sits_on_table_and_has_stable_home_pose():

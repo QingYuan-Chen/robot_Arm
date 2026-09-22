@@ -13,6 +13,9 @@ def test_offline_perception_launch_uses_only_active_mujoco_and_virtual_sensor():
 
     assert 'executable="rebotarm_mujoco_node"' in text
     assert '"virtual_camera.enabled": True' in text
+    assert '"model_path": mujoco_model_path' in text
+    assert '"scene_bottle.xml"' in text
+    assert '"virtual_camera.annotation_bodies": ["bottle"]' in text
     assert '"virtual_camera.parent_frame_id": "base_link"' in text
     assert '"virtual_camera.annotation_topic": virtual_camera_annotation_topic' in text
     assert 'DeclareLaunchArgument(' in text and 'virtual_camera_annotation_topic' in text

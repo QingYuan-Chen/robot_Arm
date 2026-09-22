@@ -12,7 +12,14 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from .motor_control import GripperMitController, PosVelController, load_motor_control_parameters
-from .mujoco_types import ContactInfo, SavedSimulationState, SimulationState
+from .mujoco_types import (
+    ContactInfo,
+    ControlStatus,
+    RandomizedScene,
+    SavedSimulationState,
+    SimulationState,
+)
+from .sim2real.randomization import RandomizationSample
 from .sim_gripper import gripper_joint_positions_for_width
 from .urdf_to_mjcf import actuator_name_for_joint
 
@@ -20,7 +27,8 @@ from .urdf_to_mjcf import actuator_name_for_joint
 ARM_JOINT_NAMES = tuple(f"joint{index}" for index in range(1, 7))
 FINGER_JOINT_NAMES = ("left_finger_joint", "right_finger_joint")
 JOINT_NAMES = ARM_JOINT_NAMES + FINGER_JOINT_NAMES
-CONTROL_MODES = ("gravity_comp", "hold", "pos_vel")
+CONTROL_MODES = ("position", "hold", "gravity_comp", "raw_torque")
+_CONTROL_MODE_ALIASES = {"pos_vel": "position"}
 
 
 def _default_scene_path() -> Path:
@@ -51,6 +59,33 @@ def _finite_vector(values: Sequence[float], length: int, label: str) -> tuple[fl
     return result
 
 
+def _ordered_bounds(values: Sequence[float], label: str) -> tuple[float, float]:
+    lower, upper = float(values[0]), float(values[1])
+    if lower > upper:
+        raise ValueError(f"{label} lower bound must be <= upper bound")
+    return lower, upper
+
+
+def _bounds2(values: Sequence[Sequence[float]], label: str) -> tuple[tuple[float, float], tuple[float, float]]:
+    bounds = tuple(_finite_vector(item, 2, label) for item in values)
+    if len(bounds) != 2:
+        raise ValueError(f"{label} must contain exactly 2 bounds")
+    return (_ordered_bounds(bounds[0], label), _ordered_bounds(bounds[1], label))
+
+
+def _bounds3(
+    values: Sequence[Sequence[float]], label: str
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    bounds = tuple(_finite_vector(item, 2, label) for item in values)
+    if len(bounds) != 3:
+        raise ValueError(f"{label} must contain exactly 3 bounds")
+    return (
+        _ordered_bounds(bounds[0], label),
+        _ordered_bounds(bounds[1], label),
+        _ordered_bounds(bounds[2], label),
+    )
+
+
 class RebotArmMujoco:
     joint_names = JOINT_NAMES
 
@@ -66,6 +101,13 @@ class RebotArmMujoco:
         self._model = self._mj.MjModel.from_xml_path(self.model_path)
         self._data = self._mj.MjData(self._model)
         self._closed = False
+        self._randomization_baseline = {
+            "body_mass": np.asarray(self._model.body_mass).copy(),
+            "dof_damping": np.asarray(self._model.dof_damping).copy(),
+            "geom_friction": np.asarray(self._model.geom_friction).copy(),
+        }
+        self._randomization_sample: RandomizationSample | None = None
+        self._randomization_torque_scale = 1.0
         self._rng = np.random.default_rng()
         motor_parameters = load_motor_control_parameters()
         self._motor_parameters = motor_parameters
@@ -76,7 +118,15 @@ class RebotArmMujoco:
         )
         self._control_phase = 0
         self._position_targets = np.zeros(len(JOINT_NAMES), dtype=float)
-        self._control_mode = "pos_vel"
+        self._control_mode = "hold"
+        self._raw_torque_command = np.zeros(len(ARM_JOINT_NAMES), dtype=float)
+        self._raw_torque_requested = np.zeros(len(ARM_JOINT_NAMES), dtype=float)
+        self._raw_torque_deadline: float | None = None
+        self._requested_arm_torque = np.zeros(len(ARM_JOINT_NAMES), dtype=float)
+        self._applied_arm_torque = np.zeros(len(ARM_JOINT_NAMES), dtype=float)
+        self._arm_torque_saturated = np.zeros(len(ARM_JOINT_NAMES), dtype=bool)
+        self._gripper_max_force_n: float | None = None
+        self._gripper_control_force = np.zeros(2, dtype=float)
 
         self._joint_ids = tuple(self._name_id(self._mj.mjtObj.mjOBJ_JOINT, name) for name in JOINT_NAMES)
         self._actuator_ids = tuple(
@@ -127,18 +177,94 @@ class RebotArmMujoco:
         self._ensure_open()
         return self._control_mode
 
-    def set_control_mode(self, mode: str) -> str:
+    @property
+    def randomization_sample(self) -> RandomizationSample | None:
         self._ensure_open()
-        mode = str(mode)
+        return self._randomization_sample
+
+    @property
+    def arm_joint_limits(self) -> tuple[tuple[float, float], ...]:
+        """Return the six arm joint ranges declared by the loaded MJCF."""
+        self._ensure_open()
+        return tuple(
+            tuple(float(value) for value in self._model.jnt_range[joint_id])
+            for joint_id in self._joint_ids[:6]
+        )
+
+    @property
+    def arm_actuator_force_limits(self) -> tuple[float, ...]:
+        """Return symmetric arm actuator limits used for safety validation."""
+        self._ensure_open()
+        limits = []
+        for actuator_id in self._actuator_ids[:6]:
+            if int(self._model.actuator_ctrllimited[actuator_id]):
+                lower, upper = self._model.actuator_ctrlrange[actuator_id]
+                limits.append(max(abs(float(lower)), abs(float(upper))))
+            else:
+                limits.append(math.inf)
+        return tuple(limits)
+
+    def randomization_session(self, sample: RandomizationSample):
+        from .sim2real.randomization import RandomizationSession
+
+        return RandomizationSession(self, sample)
+
+    def apply_randomization(self, sample: RandomizationSample) -> None:
+        self._ensure_open()
+        if not isinstance(sample, RandomizationSample):
+            raise TypeError("sample must be a RandomizationSample")
+        self.restore_randomization()
+        self._model.body_mass[:] = self._randomization_baseline["body_mass"] * sample.mass_scale
+        self._model.dof_damping[:] = self._randomization_baseline["dof_damping"] * sample.damping_scale
+        self._model.geom_friction[:] = self._randomization_baseline["geom_friction"] * sample.friction_scale
+        self._randomization_torque_scale = float(sample.torque_scale)
+        self._randomization_sample = sample
+        self._mj.mj_forward(self._model, self._data)
+
+    def restore_randomization(self) -> None:
+        self._ensure_open()
+        self._model.body_mass[:] = self._randomization_baseline["body_mass"]
+        self._model.dof_damping[:] = self._randomization_baseline["dof_damping"]
+        self._model.geom_friction[:] = self._randomization_baseline["geom_friction"]
+        self._randomization_torque_scale = 1.0
+        self._randomization_sample = None
+        self._mj.mj_forward(self._model, self._data)
+
+    def set_mode(self, mode: str) -> str:
+        self._ensure_open()
+        mode = _CONTROL_MODE_ALIASES.get(str(mode), str(mode))
         if mode not in CONTROL_MODES:
             raise ValueError(f"control mode must be one of {CONTROL_MODES}")
+        # Re-entering Hold must be a true no-op. Re-capturing the measured
+        # position and resetting the simulated firmware controller on every
+        # keyboard-repeat event creates a small target/torque discontinuity
+        # that is visible as a shake even though the requested mode did not
+        # change.
+        if mode == "hold" and self._control_mode == "hold":
+            return self._control_mode
         if mode == "hold":
             self._sync_arm_targets_to_current_position()
+        if mode != "raw_torque":
+            self._raw_torque_command.fill(0.0)
+            self._raw_torque_requested.fill(0.0)
+            self._raw_torque_deadline = None
+        elif self._raw_torque_deadline is None:
+            self._raw_torque_command.fill(0.0)
+            self._raw_torque_requested.fill(0.0)
+            self._raw_torque_deadline = float(self._data.time) + 0.1
         if mode in ("gravity_comp", "hold"):
             self._arm_controller.reset()
         self._control_mode = mode
         self._apply_motor_control()
         return self._control_mode
+
+    def set_control_mode(self, mode: str) -> str:
+        """Compatibility alias for :meth:`set_mode`.
+
+        ``pos_vel`` is accepted as a legacy spelling and normalized to
+        ``position``.
+        """
+        return self.set_mode(mode)
 
     def _name_id(self, object_type, name: str) -> int:
         identifier = int(self._mj.mj_name2id(self._model, object_type, name))
@@ -181,46 +307,15 @@ class RebotArmMujoco:
     def reset(self, seed: int | None = None) -> SimulationState:
         self._ensure_open()
         self._rng = np.random.default_rng(seed)
-        self._mj.mj_resetData(self._model, self._data)
-        return self._finish_reset()
-
-    def reset_home(self, seed: int | None = None) -> SimulationState:
-        self._ensure_open()
-        self._rng = np.random.default_rng(seed)
-        home_key = self._mj.mj_name2id(
-            self._model, self._mj.mjtObj.mjOBJ_KEY, "home"
-        )
+        home_key = self._mj.mj_name2id(self._model, self._mj.mjtObj.mjOBJ_KEY, "home")
         if home_key >= 0:
             self._mj.mj_resetDataKeyframe(self._model, self._data, home_key)
         else:
             self._mj.mj_resetData(self._model, self._data)
         return self._finish_reset()
 
-    def reset_joint_positions(self, positions: Sequence[float]) -> SimulationState:
-        """Reset the six arm joints to an exact measured start state.
-
-        This is intended for deterministic sim-to-real replay. It changes the
-        simulated state only; it does not command a physical controller.
-        """
-        self._ensure_open()
-        values = _finite_vector(positions, len(ARM_JOINT_NAMES), "joint positions")
-        for index, (joint_id, value) in enumerate(zip(self._joint_ids[:6], values)):
-            lower, upper = (float(bound) for bound in self._model.jnt_range[joint_id])
-            if value < lower or value > upper:
-                raise ValueError(
-                    f"{ARM_JOINT_NAMES[index]} position {value} outside [{lower}, {upper}]"
-                )
-            self._data.qpos[int(self._model.jnt_qposadr[joint_id])] = value
-            self._data.qvel[int(self._model.jnt_dofadr[joint_id])] = 0.0
-            self._position_targets[index] = value
-        self._data.ctrl[:] = 0.0
-        self._arm_controller.reset()
-        self._control_phase = 0
-        self._mj.mj_forward(self._model, self._data)
-        self._seed_arm_torque_from_gravity()
-        self._apply_motor_control()
-        self._mj.mj_forward(self._model, self._data)
-        return self.get_state()
+    def reset_home(self, seed: int | None = None) -> SimulationState:
+        return self.reset(seed=seed)
 
     def _finish_reset(self) -> SimulationState:
         for index, joint_id in enumerate(self._joint_ids):
@@ -228,6 +323,15 @@ class RebotArmMujoco:
             self._position_targets[index] = self._data.qpos[qpos_address]
         self._data.ctrl[:] = 0.0
         self._arm_controller.reset()
+        self._control_mode = "hold"
+        self._raw_torque_command.fill(0.0)
+        self._raw_torque_requested.fill(0.0)
+        self._raw_torque_deadline = None
+        self._requested_arm_torque.fill(0.0)
+        self._applied_arm_torque.fill(0.0)
+        self._arm_torque_saturated.fill(False)
+        self._gripper_max_force_n = None
+        self._gripper_control_force.fill(0.0)
         self._control_phase = 0
         self._mj.mj_forward(self._model, self._data)
         self._seed_arm_torque_from_gravity()
@@ -235,7 +339,7 @@ class RebotArmMujoco:
         self._mj.mj_forward(self._model, self._data)
         return self.get_state()
 
-    def set_joint_position_targets(
+    def command_joint_positions(
         self, targets: Mapping[str, float] | Sequence[float]
     ) -> tuple[float, ...]:
         self._ensure_open()
@@ -258,18 +362,94 @@ class RebotArmMujoco:
             value = min(max(current[index], lower), upper)
             self._position_targets[index] = value
             reached.append(value)
-        self._control_mode = "pos_vel"
+        self.set_mode("position")
         return tuple(reached)
 
-    def set_gripper_width(self, width: float) -> float:
+    def set_joint_position_targets(
+        self, targets: Mapping[str, float] | Sequence[float]
+    ) -> tuple[float, ...]:
+        return self.command_joint_positions(targets)
+
+    def command_joint_torques(
+        self, torques: Sequence[float], timeout_s: float = 0.1
+    ) -> tuple[float, ...]:
         self._ensure_open()
-        value = float(width)
+        requested = np.asarray(
+            _finite_vector(torques, len(ARM_JOINT_NAMES), "joint torques"), dtype=float
+        )
+        timeout = float(timeout_s)
+        if not math.isfinite(timeout) or timeout <= 0.0:
+            raise ValueError("timeout_s must be finite and positive")
+        effort = np.asarray(self._motor_parameters.arm.effort_limit, dtype=float)
+        self._raw_torque_requested[:] = requested
+        self._raw_torque_command[:] = np.clip(requested, -effort, effort)
+        self._raw_torque_deadline = float(self._data.time) + timeout
+        self._arm_controller.reset()
+        self._control_mode = "raw_torque"
+        self._apply_motor_control()
+        return tuple(float(value) for value in self._raw_torque_command)
+
+    def command_gripper_width(self, width_m: float, max_force_n: float | None = None) -> float:
+        self._ensure_open()
+        value = float(width_m)
         if not math.isfinite(value):
             raise ValueError("Gripper width must be finite")
+        if max_force_n is not None:
+            max_force_n = float(max_force_n)
+            if not math.isfinite(max_force_n) or max_force_n <= 0.0:
+                raise ValueError("max_force_n must be finite and positive")
+            max_force_n = min(max_force_n, self._motor_parameters.gripper.finger_force_limit_n)
+        self._gripper_max_force_n = max_force_n
         left, right, reached = gripper_joint_positions_for_width(value)
         self._position_targets[-2] = left
         self._position_targets[-1] = right
         return reached
+
+    def set_gripper_width(self, width: float) -> float:
+        return self.command_gripper_width(width)
+
+    def mirror_joint_state(
+        self,
+        positions: Sequence[float],
+        velocities: Sequence[float] | None = None,
+        *,
+        gripper_width: float | None = None,
+    ) -> SimulationState:
+        """Kinematically synchronize arm state while preserving free objects."""
+        self._ensure_open()
+        position_values = _finite_vector(positions, len(ARM_JOINT_NAMES), "joint positions")
+        velocity_values = (
+            (0.0,) * len(ARM_JOINT_NAMES)
+            if velocities is None
+            else _finite_vector(velocities, len(ARM_JOINT_NAMES), "joint velocities")
+        )
+        for index, (joint_id, position, velocity) in enumerate(
+            zip(self._joint_ids[:6], position_values, velocity_values)
+        ):
+            lower, upper = (float(value) for value in self._model.jnt_range[joint_id])
+            if position < lower - 1e-6 or position > upper + 1e-6:
+                raise ValueError(
+                    f"joint position {ARM_JOINT_NAMES[index]}={position} is outside [{lower}, {upper}]"
+                )
+            qpos_address = int(self._model.jnt_qposadr[joint_id])
+            qvel_address = int(self._model.jnt_dofadr[joint_id])
+            self._data.qpos[qpos_address] = min(max(position, lower), upper)
+            self._data.qvel[qvel_address] = velocity
+            self._position_targets[index] = self._data.qpos[qpos_address]
+        if gripper_width is not None:
+            left, right, _reached = gripper_joint_positions_for_width(gripper_width)
+            for index, value in zip((-2, -1), (left, right)):
+                joint_id = self._joint_ids[index]
+                self._data.qpos[int(self._model.jnt_qposadr[joint_id])] = value
+                self._data.qvel[int(self._model.jnt_dofadr[joint_id])] = 0.0
+                self._position_targets[index] = value
+        self._arm_controller.reset()
+        self._control_phase = 0
+        self._mj.mj_forward(self._model, self._data)
+        self._seed_arm_torque_from_gravity()
+        self._apply_motor_control()
+        self._mj.mj_forward(self._model, self._data)
+        return self.get_state()
 
     def step(self, n_steps: int = 1) -> SimulationState:
         self._ensure_open()
@@ -278,10 +458,19 @@ class RebotArmMujoco:
         if n_steps <= 0:
             raise ValueError("n_steps must be a positive integer")
         for _ in range(n_steps):
+            if self._raw_torque_watchdog_expired():
+                self._expire_raw_torque()
+                self._control_phase = 0
             if self._control_phase == 0:
                 self._apply_motor_control()
             self._mj.mj_step(self._model, self._data)
             self._control_phase = (self._control_phase + 1) % self._control_steps_per_update
+            if self._raw_torque_watchdog_expired():
+                # Make the safe Hold command observable immediately when a
+                # multi-step call lands exactly on the deadline.
+                self._expire_raw_torque()
+                self._control_phase = 0
+                self._apply_motor_control()
         # mj_step integrates qpos after its position stage; refresh derived
         # kinematics so the returned pose describes the new qpos, not the
         # beginning of the final step.
@@ -294,19 +483,26 @@ class RebotArmMujoco:
         position = np.asarray([self._data.qpos[address] for address in qpos_addresses], dtype=float)
         velocity = np.asarray([self._data.qvel[address] for address in qvel_addresses], dtype=float)
         gravity = self._gravity_compensation_torque(qvel_addresses)
-        if self._control_mode == "gravity_comp":
-            arm_torque = gravity
+        if self._control_mode == "raw_torque":
+            requested_torque = self._raw_torque_requested.copy()
+            arm_torque = self._raw_torque_command.copy()
+            self._arm_controller.applied_torque[:] = arm_torque
+        elif self._control_mode == "gravity_comp":
+            requested_torque = gravity
+            arm_torque = requested_torque.copy()
             self._arm_controller.applied_torque[:] = arm_torque
         elif self._control_mode == "hold":
-            kp = np.asarray((12.0, 12.0, 12.0, 8.0, 8.0, 4.0), dtype=float)
-            kd = np.asarray((1.2, 1.2, 1.2, 0.8, 0.8, 0.4), dtype=float)
-            effort = np.asarray(self._motor_parameters.arm.effort_limit, dtype=float)
-            arm_torque = np.clip(
-                gravity + kp * (self._position_targets[:6] - position) - kd * velocity,
-                -effort,
-                effort,
+            # Hold is position regulation around the pose captured on entry.
+            # It deliberately shares the simulated firmware loop with
+            # position mode; the semantic difference is who owns the target.
+            arm_torque = self._arm_controller.compute(
+                target=self._position_targets[:6],
+                position=position,
+                velocity=velocity,
+                dt=1.0 / self._motor_parameters.control_rate_hz,
+                feedforward=gravity,
             )
-            self._arm_controller.applied_torque[:] = arm_torque
+            requested_torque = arm_torque.copy()
         else:
             arm_torque = self._arm_controller.compute(
                 target=self._position_targets[:6],
@@ -315,7 +511,20 @@ class RebotArmMujoco:
                 dt=1.0 / self._motor_parameters.control_rate_hz,
                 feedforward=gravity,
             )
-        for actuator_id, torque in zip(self._actuator_ids[:6], arm_torque):
+            requested_torque = arm_torque.copy()
+        requested_torque = np.asarray(requested_torque, dtype=float)
+        scaled_torque = np.asarray(arm_torque, dtype=float) * self._randomization_torque_scale
+        applied_torque = np.asarray(
+            [
+                self._clamp_actuator_control(actuator_id, torque)
+                for actuator_id, torque in zip(self._actuator_ids[:6], scaled_torque)
+            ],
+            dtype=float,
+        )
+        self._requested_arm_torque[:] = requested_torque
+        self._applied_arm_torque[:] = applied_torque
+        self._arm_torque_saturated[:] = ~np.isclose(requested_torque, applied_torque, atol=1e-12, rtol=0.0)
+        for actuator_id, torque in zip(self._actuator_ids[:6], applied_torque):
             self._data.ctrl[actuator_id] = torque
 
         left_qpos = float(self._data.qpos[int(self._model.jnt_qposadr[self._joint_ids[-2]])])
@@ -333,10 +542,30 @@ class RebotArmMujoco:
             current_width=left_qpos - right_qpos,
             current_velocity=left_qvel - right_qvel,
         )
+        if self._gripper_max_force_n is not None:
+            finger_force = float(np.clip(
+                finger_force, -self._gripper_max_force_n, self._gripper_max_force_n
+            ))
         left_force = self._clamp_actuator_control(self._actuator_ids[-2], finger_force)
         right_force = self._clamp_actuator_control(self._actuator_ids[-1], -finger_force)
+        self._gripper_control_force[:] = (left_force, right_force)
         self._data.ctrl[self._actuator_ids[-2]] = left_force
         self._data.ctrl[self._actuator_ids[-1]] = right_force
+
+    def _expire_raw_torque(self) -> None:
+        self._raw_torque_command.fill(0.0)
+        self._raw_torque_requested.fill(0.0)
+        self._raw_torque_deadline = None
+        self._sync_arm_targets_to_current_position()
+        self._arm_controller.reset()
+        self._control_mode = "hold"
+
+    def _raw_torque_watchdog_expired(self) -> bool:
+        return (
+            self._control_mode == "raw_torque"
+            and self._raw_torque_deadline is not None
+            and float(self._data.time) >= self._raw_torque_deadline
+        )
 
     def _stable_gripper_force(
         self,
@@ -415,6 +644,27 @@ class RebotArmMujoco:
             simulation_time=float(self._data.time),
         )
 
+    def get_control_status(self) -> ControlStatus:
+        """Return an immutable diagnostic snapshot without changing control state."""
+        self._ensure_open()
+        state = self.get_state()
+        remaining = None
+        if self._control_mode == "raw_torque" and self._raw_torque_deadline is not None:
+            remaining = max(0.0, self._raw_torque_deadline - state.simulation_time)
+        return ControlStatus(
+            mode=self._control_mode,
+            joint_targets=tuple(float(value) for value in self._position_targets[:6]),
+            joint_positions=state.joint_positions[:6],
+            joint_velocities=state.joint_velocities[:6],
+            requested_torques=tuple(float(value) for value in self._requested_arm_torque),
+            applied_torques=tuple(float(value) for value in self._applied_arm_torque),
+            saturated=tuple(bool(value) for value in self._arm_torque_saturated),
+            watchdog_remaining_s=remaining,
+            gripper_target_width_m=float(self._position_targets[-2] - self._position_targets[-1]),
+            gripper_width_m=state.gripper_width,
+            gripper_control_force_n=tuple(float(value) for value in self._gripper_control_force),
+        )
+
     def get_contacts(self) -> tuple[ContactInfo, ...]:
         self._ensure_open()
         contacts = []
@@ -432,6 +682,8 @@ class RebotArmMujoco:
                 geom2=str(self._mj.mj_id2name(self._model, self._mj.mjtObj.mjOBJ_GEOM, geom2) or f"geom{geom2}"),
                 position=tuple(float(value) for value in contact.pos),
                 force=float(np.linalg.norm(force[:3])),
+                penetration_depth=max(0.0, -float(contact.dist)),
+                normal=tuple(float(value) for value in contact.frame[:3]),
             ))
         return tuple(contacts)
 
@@ -451,6 +703,10 @@ class RebotArmMujoco:
             applied_torque=tuple(float(value) for value in self._arm_controller.applied_torque),
             control_phase=self._control_phase,
             control_mode=self._control_mode,
+            raw_torque_command=tuple(float(value) for value in self._raw_torque_command),
+            raw_torque_requested=tuple(float(value) for value in self._raw_torque_requested),
+            raw_torque_deadline=self._raw_torque_deadline,
+            gripper_max_force_n=self._gripper_max_force_n,
         )
 
     def restore_state(self, state: SavedSimulationState) -> SimulationState:
@@ -468,6 +724,8 @@ class RebotArmMujoco:
             and len(state.velocity_integral) == len(ARM_JOINT_NAMES)
             and len(state.applied_torque) == len(ARM_JOINT_NAMES)
             and state.control_mode in CONTROL_MODES
+            and len(state.raw_torque_command) == len(ARM_JOINT_NAMES)
+            and len(state.raw_torque_requested) == len(ARM_JOINT_NAMES)
         )
         if not compatible:
             raise ValueError("saved state must belong to the same MuJoCo model instance")
@@ -480,6 +738,28 @@ class RebotArmMujoco:
         self._arm_controller.applied_torque[:] = np.asarray(state.applied_torque, dtype=float)
         self._control_phase = int(state.control_phase) % self._control_steps_per_update
         self._control_mode = state.control_mode
+        self._raw_torque_command[:] = np.asarray(state.raw_torque_command, dtype=float)
+        self._raw_torque_requested[:] = np.asarray(state.raw_torque_requested, dtype=float)
+        self._raw_torque_deadline = state.raw_torque_deadline
+        self._gripper_max_force_n = state.gripper_max_force_n
+        self._applied_arm_torque[:] = np.asarray(
+            [self._data.ctrl[actuator_id] for actuator_id in self._actuator_ids[:6]],
+            dtype=float,
+        )
+        if self._control_mode == "raw_torque":
+            self._requested_arm_torque[:] = self._raw_torque_requested
+            self._arm_torque_saturated[:] = ~np.isclose(
+                self._requested_arm_torque,
+                self._applied_arm_torque,
+                atol=1e-12,
+                rtol=0.0,
+            )
+        else:
+            self._requested_arm_torque[:] = self._applied_arm_torque
+            self._arm_torque_saturated.fill(False)
+        self._gripper_control_force[:] = tuple(
+            float(self._data.ctrl[actuator_id]) for actuator_id in self._actuator_ids[-2:]
+        )
         self._mj.mj_forward(self._model, self._data)
         return self.get_state()
 
@@ -514,6 +794,45 @@ class RebotArmMujoco:
             self._data.qvel[dof_address : dof_address + 6] = 0.0
         self._mj.mj_forward(self._model, self._data)
         return (*position_values, *orientation_xyzw)
+
+    def randomize_scene(
+        self,
+        seed: int | None = None,
+        *,
+        cube_xy_bounds: Sequence[Sequence[float]] = ((0.22, 0.38), (-0.14, 0.14)),
+        cube_z: float = 0.04,
+        reach_target_bounds: Sequence[Sequence[float]] = (
+            (0.18, 0.45),
+            (-0.22, 0.22),
+            (0.08, 0.35),
+        ),
+    ) -> RandomizedScene:
+        self._ensure_open()
+        rng = np.random.default_rng(seed) if seed is not None else self._rng
+        cube_x_bounds, cube_y_bounds = _bounds2(cube_xy_bounds, "cube_xy_bounds")
+        target_x_bounds, target_y_bounds, target_z_bounds = _bounds3(
+            reach_target_bounds, "reach_target_bounds"
+        )
+        cube_position = (
+            float(rng.uniform(*cube_x_bounds)),
+            float(rng.uniform(*cube_y_bounds)),
+            float(cube_z),
+        )
+        target = (
+            float(rng.uniform(*target_x_bounds)),
+            float(rng.uniform(*target_y_bounds)),
+            float(rng.uniform(*target_z_bounds)),
+        )
+        cube_pose = self.set_object_pose(
+            "test_cube",
+            cube_position,
+            (0.0, 0.0, 0.0, 1.0),
+        )
+        return RandomizedScene(
+            cube_pose=cube_pose,
+            reach_target_position=target,
+            seed=seed,
+        )
 
     def close(self) -> None:
         if self._closed:

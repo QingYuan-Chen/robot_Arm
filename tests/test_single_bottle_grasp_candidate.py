@@ -46,6 +46,7 @@ def bottle_plan(confidence):
     plan.candidate.class_name = 'bottle'
     plan.candidate.confidence = confidence
     plan.jaw_width = 0.07
+    plan.grasp_pose.position.z = 0.05
     return plan
 
 assert not runner._valid_bottle_plan(bottle_plan(0.3999))
@@ -73,6 +74,7 @@ def bottle_plan(jaw_width):
     plan.candidate.class_name = 'bottle'
     plan.candidate.confidence = 0.4
     plan.jaw_width = jaw_width
+    plan.grasp_pose.position.z = 0.05
     return plan
 
 assert runner._valid_bottle_plan(bottle_plan(0.085))
@@ -80,6 +82,32 @@ assert not runner._valid_bottle_plan(bottle_plan(0.085001))
 """
     result = _run_runner_script(script)
 
+    assert result.returncode == 0, result.stderr
+
+
+def test_single_bottle_grasp_rejects_below_50mm_grasp_height() -> None:
+    script = f"""
+import importlib.util
+from rebotarm_msgs.msg import GraspPlan
+
+spec = importlib.util.spec_from_file_location('single_bottle_height_test', {str(RUNNER_PATH)!r})
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+
+def bottle_plan(height):
+    plan = GraspPlan()
+    plan.valid = True
+    plan.header.frame_id = 'base_link'
+    plan.candidate.class_name = 'bottle'
+    plan.candidate.confidence = 0.8
+    plan.jaw_width = 0.07
+    plan.grasp_pose.position.z = height
+    return plan
+
+assert not runner._valid_bottle_plan(bottle_plan(0.049999))
+assert runner._valid_bottle_plan(bottle_plan(0.05))
+"""
+    result = _run_runner_script(script)
     assert result.returncode == 0, result.stderr
 
 

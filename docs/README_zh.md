@@ -36,8 +36,10 @@ P0-P6 已按用户确认的工程范围关闭，等待用户提供新规划，�
 ## MuJoCo
 
 - [`仿真包README`](../src/rebotarm_simulation/README_mujoco.md)：当前MuJoCo安装、物理后端和启动方式。
-- [`mujoco_sim.md`](mujoco_sim.md)：早期模型、adapter和离线分析记录，旧命令不作为当前部署入口。
-- [`mujoco_upstream_sources.md`](mujoco_upstream_sources.md)：固定上游版本、许可证证据和禁止复制边界。
+- [`mujoco_acceptance_zh.md`](mujoco_acceptance_zh.md)：headless、ROS 2和MoveIt验收入口。
+- [`mujoco_pick_zh.md`](mujoco_pick_zh.md)：Pick环境、接触判定和批量测试。
+- [`real2sim_bridge_zh.md`](real2sim_bridge_zh.md)：只读Real2Sim镜像与物理模式。
+- [`sim2real_workflow_zh.md`](sim2real_workflow_zh.md)：轨迹记录、回放、比较和随机化工作流。
 - [`mujoco_sim_to_real_params.md`](mujoco_sim_to_real_params.md)：仿真参数到真机参数的映射边界。
 
 ## 操作手册

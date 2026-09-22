@@ -338,6 +338,7 @@ def graspnet_array_to_candidates(
     max_jaw_width_m: float | None = None,
     target_detection: dict[str, Any] | None = None,
     camera_info: dict[str, Any] | None = None,
+    object_points: np.ndarray | None = None,
     stage_counts: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     array = np.asarray(grasp_array, dtype=np.float32)
@@ -347,6 +348,13 @@ def graspnet_array_to_candidates(
         array = filter_grasp_array_by_detection_projection(array, target_detection=target_detection, camera_info=camera_info)
     if stage_counts is not None:
         stage_counts["after_projection"] = int(len(array))
+    if object_points is not None:
+        array = filter_grasp_array_by_object_cloud_geometry(
+            array,
+            object_points=object_points,
+        )
+    if stage_counts is not None:
+        stage_counts["after_object_geometry"] = int(len(array))
     if max_jaw_width_m is not None:
         width_limit = float(max_jaw_width_m)
         if not np.isfinite(width_limit) or width_limit <= 0.0:
@@ -401,6 +409,34 @@ def filter_grasp_array_by_detection_projection(
     translations = array[:, 13:16]
     u, v = project_points_to_image(translations, camera_info=camera_info)
     keep = detection_contains_pixels(target_detection, u=u, v=v)
+    return array[keep]
+
+
+def filter_grasp_array_by_object_cloud_geometry(
+    grasp_array,
+    *,
+    object_points: np.ndarray,
+    margin_m: float = 0.015,
+) -> np.ndarray:
+    """Keep grasp centers inside the independently segmented object cloud."""
+    array = np.asarray(grasp_array, dtype=np.float32)
+    if array.ndim == 1:
+        array = array.reshape(1, -1)
+    points = np.asarray(object_points, dtype=np.float32).reshape(-1, 3)
+    margin = float(margin_m)
+    if not np.isfinite(margin) or margin < 0.0:
+        raise ValueError("margin_m must be finite and non-negative")
+    finite_points = points[np.isfinite(points).all(axis=1)]
+    if array.size == 0 or array.shape[1] < 16 or len(finite_points) < 4:
+        return array[:0]
+    lower = np.quantile(finite_points, 0.02, axis=0) - margin
+    upper = np.quantile(finite_points, 0.98, axis=0) + margin
+    translations = array[:, 13:16]
+    keep = (
+        np.isfinite(translations).all(axis=1)
+        & (translations >= lower).all(axis=1)
+        & (translations <= upper).all(axis=1)
+    )
     return array[keep]
 
 
@@ -506,6 +542,7 @@ class GraspNetBaselineInference:
             "after_nms": 0,
             "after_score_sort": 0,
             "after_projection": 0,
+            "after_object_geometry": 0,
             "after_jaw_width": 0,
             "published": 0,
             "empty_reason": "",
@@ -518,6 +555,7 @@ class GraspNetBaselineInference:
             ("after_collision", "collision_filter_empty"),
             ("after_nms", "nms_empty"),
             ("after_projection", "projection_filter_empty"),
+            ("after_object_geometry", "object_geometry_filter_empty"),
             ("after_jaw_width", "jaw_width_filter_empty"),
             ("published", "publish_conversion_empty"),
         )
@@ -629,6 +667,7 @@ class GraspNetBaselineInference:
             max_jaw_width_m=max_jaw_width_m,
             target_detection=detection,
             camera_info=camera_info,
+            object_points=object_points,
             stage_counts=stage_counts,
         )
         if not candidates:

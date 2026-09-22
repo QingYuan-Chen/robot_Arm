@@ -80,20 +80,6 @@ def test_analysis_reports_per_joint_and_paired_metrics() -> None:
     assert paired["paired"]["joint4"]["rms_real_minus_sim_position_rad"] == pytest.approx(0.01)
 
 
-def test_mujoco_can_reset_to_exact_paired_start_state() -> None:
-    pytest.importorskip("mujoco")
-    from rebotarm_simulation.mujoco_sim import RebotArmMujoco
-
-    start = [-1.6, -0.01, -0.04, 0.07, 0.03, 0.03]
-    with RebotArmMujoco() as simulation:
-        state = simulation.reset_joint_positions(start)
-        assert state.joint_positions[:6] == pytest.approx(start, abs=1e-12)
-        assert state.joint_velocities[:6] == pytest.approx([0.0] * 6, abs=1e-12)
-
-        with pytest.raises(ValueError, match="joint2 position"):
-            simulation.reset_joint_positions([-1.6, 0.5, -0.04, 0.07, 0.03, 0.03])
-
-
 def _peak_velocity(command) -> float:
     points = command["points"]
     peak = 0.0

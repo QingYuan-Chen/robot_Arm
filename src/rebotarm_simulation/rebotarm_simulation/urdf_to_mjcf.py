@@ -10,20 +10,33 @@ import xml.etree.ElementTree as ET
 import mujoco
 import yaml
 
+from rebotarm_simulation.resource_paths import package_resource
+
 
 PACKAGE_MESH_PREFIX = "package://rebotarm_moveit_config/meshes/"
 JOINTS = [f"joint{index}" for index in range(1, 7)] + [
     "left_finger_joint",
     "right_finger_joint",
 ]
+SUPPORTED_COLLISION_TYPES = {"box", "capsule", "cylinder", "mesh"}
 
 
-def authoritative_urdf_path(repo_root: Path) -> Path:
-    return repo_root / "src/rebotarm_moveit_config/config/rebotarm.urdf"
+def _package_path(repo_root: Path | None, package: str, relative: str) -> Path:
+    if repo_root is not None:
+        return repo_root / "src" / package / relative
+    return package_resource(package, relative)
 
 
-def _model_directory(repo_root: Path) -> Path:
-    return repo_root / "src/rebotarm_simulation/models/rebotarm"
+def authoritative_urdf_path(repo_root: Path | None) -> Path:
+    return _package_path(repo_root, "rebotarm_moveit_config", "config/rebotarm.urdf")
+
+
+def _model_directory(repo_root: Path | None) -> Path:
+    return _package_path(repo_root, "rebotarm_simulation", "models/rebotarm")
+
+
+def collision_config_path(repo_root: Path | None) -> Path:
+    return _package_path(repo_root, "rebotarm_simulation", "config/mujoco_collision.yaml")
 
 
 def actuator_name_for_joint(joint_name: str) -> str:
@@ -32,7 +45,7 @@ def actuator_name_for_joint(joint_name: str) -> str:
     return f"{joint_name.removesuffix('_joint')}_force"
 
 
-def stage_urdf(source: Path, repo_root: Path, temporary_dir: Path) -> Path:
+def stage_urdf(source: Path, repo_root: Path | None, temporary_dir: Path) -> Path:
     root = ET.parse(source).getroot()
     extension = ET.SubElement(root, "mujoco")
     ET.SubElement(
@@ -40,7 +53,7 @@ def stage_urdf(source: Path, repo_root: Path, temporary_dir: Path) -> Path:
         "compiler",
         {"discardvisual": "false", "fusestatic": "false", "strippath": "false"},
     )
-    source_assets = _model_directory(repo_root) / "assets"
+    source_assets = _package_path(repo_root, "rebotarm_moveit_config", "meshes")
     staged_assets = temporary_dir / "assets"
     staged_assets.mkdir(parents=True, exist_ok=True)
 
@@ -65,7 +78,7 @@ def stage_urdf(source: Path, repo_root: Path, temporary_dir: Path) -> Path:
     return staged
 
 
-def generate_mjcf_bytes(repo_root: Path) -> bytes:
+def generate_mjcf_bytes(repo_root: Path | None) -> bytes:
     source = authoritative_urdf_path(repo_root)
     with tempfile.TemporaryDirectory(prefix="rebotarm-urdf-") as directory:
         staged = stage_urdf(source, repo_root, Path(directory))
@@ -73,8 +86,10 @@ def generate_mjcf_bytes(repo_root: Path) -> bytes:
         spec.compile()
         root = ET.fromstring(spec.to_xml())
         urdf_root = ET.parse(source).getroot()
-        _configure_compiler(root)
+        collision_config = _load_collision_config(repo_root)
+        _configure_compiler(root, collision_config)
         _classify_geoms(root)
+        _replace_collision_geoms(root, collision_config)
         _add_contact_exclusions(root)
         _add_finger_coupling(root)
         _add_sites(root)
@@ -84,7 +99,7 @@ def generate_mjcf_bytes(repo_root: Path) -> bytes:
     return _canonicalize(root)
 
 
-def _configure_compiler(root: ET.Element) -> None:
+def _configure_compiler(root: ET.Element, collision_config: dict[str, object]) -> None:
     compiler = root.find("compiler")
     if compiler is None:
         compiler = ET.SubElement(root, "compiler")
@@ -96,12 +111,25 @@ def _configure_compiler(root: ET.Element) -> None:
         {"solref": "0.01 1", "solimp": "0.9 0.95 0.001", "friction": "0.8 0.02 0.001"},
     )
     visual = ET.SubElement(default, "default", {"class": "visual"})
-    ET.SubElement(visual, "geom", {"contype": "0", "conaffinity": "0", "group": "2"})
+    ET.SubElement(
+        visual,
+        "geom",
+        {
+            "contype": "0",
+            "conaffinity": "0",
+            "group": str(collision_config["visual_group"]),
+        },
+    )
     collision = ET.SubElement(default, "default", {"class": "collision"})
     ET.SubElement(
         collision,
         "geom",
-        {"contype": "1", "conaffinity": "1", "group": "3", "rgba": "0.2 0.5 0.8 0.12"},
+        {
+            "contype": "1",
+            "conaffinity": "1",
+            "group": str(collision_config["collision_group"]),
+            "rgba": "0.2 0.5 0.8 0.12",
+        },
     )
     compiler_index = list(root).index(compiler)
     root.insert(compiler_index + 1, default)
@@ -127,6 +155,117 @@ def _classify_geoms(root: ET.Element) -> None:
                 geom.attrib.pop("rgba", None)
             if not is_visual and mesh in {"left_finger", "right_finger"}:
                 geom.set("friction", "1.2 0.02 0.001")
+
+
+def _load_collision_config(repo_root: Path | None) -> dict[str, object]:
+    path = collision_config_path(repo_root)
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if payload.get("schema_version") != 1:
+        raise ValueError(f"expected schema_version 1 in {path}")
+    for field in ("visual_group", "collision_group"):
+        value = payload.get(field)
+        if not isinstance(value, int) or not 0 <= value <= 5:
+            raise ValueError(f"{field} must be an integer from 0 to 5 in {path}")
+    bodies = payload.get("bodies")
+    if not isinstance(bodies, dict) or not bodies:
+        raise ValueError(f"expected non-empty bodies mapping in {path}")
+    return payload
+
+
+def _numbers(values: object, count: int, field: str) -> str:
+    if not isinstance(values, list) or len(values) != count:
+        raise ValueError(f"collision {field} must contain {count} numbers")
+    converted: list[float] = []
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"collision {field} must contain only numbers")
+        converted.append(float(value))
+    return " ".join(f"{value:g}" for value in converted)
+
+
+def _sizes(values: object, count: int) -> str:
+    result = _numbers(values, count, "size")
+    if any(float(value) <= 0.0 for value in result.split()):
+        raise ValueError("collision size values must be positive")
+    return result
+
+
+def _collision_geom_attributes(
+    body_name: str,
+    index: int,
+    specification: object,
+    collision_group: int,
+) -> dict[str, str]:
+    if not isinstance(specification, dict):
+        raise ValueError(f"collision entry {body_name}[{index}] must be a mapping")
+    geom_type = specification.get("type")
+    if geom_type not in SUPPORTED_COLLISION_TYPES:
+        raise ValueError(f"unsupported collision type for {body_name}[{index}]: {geom_type}")
+    suffix = specification.get("name", str(index))
+    if not isinstance(suffix, str) or not suffix:
+        raise ValueError(f"collision name for {body_name}[{index}] must be non-empty")
+    attributes = {
+        "name": f"{body_name}_{suffix}_collision",
+        "class": "collision",
+        "type": str(geom_type),
+        "contype": "1",
+        "conaffinity": "1",
+        "group": str(collision_group),
+    }
+    if "pos" in specification:
+        attributes["pos"] = _numbers(specification["pos"], 3, "pos")
+    if "quat" in specification:
+        attributes["quat"] = _numbers(specification["quat"], 4, "quat")
+    if "friction" in specification:
+        attributes["friction"] = _numbers(specification["friction"], 3, "friction")
+    if geom_type == "mesh":
+        mesh = specification.get("mesh")
+        if not isinstance(mesh, str) or not mesh:
+            raise ValueError(f"mesh collision {body_name}[{index}] requires mesh")
+        attributes["mesh"] = mesh
+    elif geom_type == "capsule":
+        attributes["fromto"] = _numbers(specification.get("fromto"), 6, "fromto")
+        endpoints = tuple(float(value) for value in attributes["fromto"].split())
+        if endpoints[:3] == endpoints[3:]:
+            raise ValueError(f"capsule collision {body_name}[{index}] has zero length")
+        attributes["size"] = _sizes(specification.get("size"), 1)
+    elif geom_type == "box":
+        attributes["size"] = _sizes(specification.get("size"), 3)
+    elif geom_type == "cylinder":
+        attributes["size"] = _sizes(specification.get("size"), 2)
+    return attributes
+
+
+def _replace_collision_geoms(root: ET.Element, config: dict[str, object]) -> None:
+    bodies = config["bodies"]
+    assert isinstance(bodies, dict)
+    model_bodies = {
+        body.attrib["name"]: body for body in root.findall("worldbody//body")
+    }
+    if set(bodies) != set(model_bodies):
+        missing = sorted(set(model_bodies) - set(bodies))
+        unknown = sorted(set(bodies) - set(model_bodies))
+        raise ValueError(f"collision config body mismatch: missing={missing}, unknown={unknown}")
+    collision_group = int(config["collision_group"])
+    visual_group = int(config["visual_group"])
+    mesh_names = {mesh.attrib["name"] for mesh in root.findall("asset/mesh")}
+    for body_name, body in model_bodies.items():
+        for geom in list(body.findall("geom")):
+            if geom.attrib.get("class") == "collision":
+                body.remove(geom)
+            elif geom.attrib.get("class") == "visual":
+                geom.set("group", str(visual_group))
+        specifications = bodies[body_name]
+        if not isinstance(specifications, list) or not specifications:
+            raise ValueError(f"collision config for {body_name} must be a non-empty list")
+        for index, specification in enumerate(specifications):
+            attributes = _collision_geom_attributes(
+                body_name, index, specification, collision_group
+            )
+            mesh = attributes.get("mesh")
+            if mesh is not None and mesh not in mesh_names:
+                raise ValueError(f"unknown collision mesh for {body_name}: {mesh}")
+            ET.SubElement(body, "geom", attributes)
 
 
 def _add_contact_exclusions(root: ET.Element) -> None:
@@ -174,8 +313,10 @@ def _add_sites(root: ET.Element) -> None:
     )
 
 
-def _load_joint_dynamics(repo_root: Path) -> dict[str, dict[str, float]]:
-    path = repo_root / "src/rebotarm_simulation/config/motor_control_calibration.yaml"
+def _load_joint_dynamics(repo_root: Path | None) -> dict[str, dict[str, float]]:
+    path = _package_path(
+        repo_root, "rebotarm_simulation", "config/motor_control_calibration.yaml"
+    )
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     dynamics = payload.get("model_dynamics")
     if not isinstance(dynamics, dict):
@@ -202,7 +343,9 @@ def _add_joint_dynamics(root: ET.Element, dynamics: dict[str, dict[str, float]])
             joint.set(key, f"{value:g}")
 
 
-def _add_actuators(root: ET.Element, urdf_root: ET.Element, repo_root: Path) -> None:
+def _add_actuators(
+    root: ET.Element, urdf_root: ET.Element, repo_root: Path | None
+) -> None:
     limits = {
         joint.attrib["name"]: joint.find("limit")
         for joint in urdf_root.findall("joint")
@@ -234,8 +377,10 @@ def _add_actuators(root: ET.Element, urdf_root: ET.Element, repo_root: Path) -> 
         )
 
 
-def _load_gripper_force_limit(repo_root: Path) -> float:
-    path = repo_root / "src/rebotarm_simulation/config/motor_control_calibration.yaml"
+def _load_gripper_force_limit(repo_root: Path | None) -> float:
+    path = _package_path(
+        repo_root, "rebotarm_simulation", "config/motor_control_calibration.yaml"
+    )
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     try:
         value = float(payload["gripper"]["finger_force_limit_n"])
@@ -272,11 +417,11 @@ def _canonicalize(root: ET.Element) -> bytes:
     return (warning + xml.replace("\r\n", "\n").rstrip() + "\n").encode("utf-8")
 
 
-def check_generated_model(repo_root: Path, output: Path) -> bool:
+def check_generated_model(repo_root: Path | None, output: Path) -> bool:
     return output.is_file() and output.read_bytes() == generate_mjcf_bytes(repo_root)
 
 
-def write_generated_model(repo_root: Path, output: Path) -> None:
+def write_generated_model(repo_root: Path | None, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")
     try:
@@ -286,28 +431,29 @@ def write_generated_model(repo_root: Path, output: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _default_repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _default_output(repo_root: Path) -> Path:
+def _default_output(repo_root: Path | None) -> Path:
     return _model_directory(repo_root) / "robot.xml"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate reBotArm MJCF from the authoritative URDF")
-    parser.add_argument("--repo-root", type=Path, default=_default_repo_root())
+    parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
-    repo_root = args.repo_root.resolve()
+    repo_root = args.repo_root.resolve() if args.repo_root is not None else None
     output = (args.output or _default_output(repo_root)).resolve()
 
     if args.check:
         if check_generated_model(repo_root, output):
             print(f"MJCF is up to date: {output}")
             return 0
-        print(f"MJCF is stale; regenerate with rebotarm_urdf_to_mjcf --repo-root \"{repo_root}\"")
+        source = (
+            f'--repo-root "{repo_root}"'
+            if repo_root is not None
+            else "the installed package resources"
+        )
+        print(f"MJCF is stale for {source}; regenerate with rebotarm_urdf_to_mjcf")
         return 1
 
     write_generated_model(repo_root, output)

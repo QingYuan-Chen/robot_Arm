@@ -5,14 +5,15 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 
 
 def generate_launch_description():
     config = Path(get_package_share_directory("rebotarm_simulation")) / "config" / "mujoco_sim.yaml"
     python_executable = LaunchConfiguration("python_executable")
+    model_path = LaunchConfiguration("model_path")
     mujoco_arm_namespace = LaunchConfiguration("mujoco_arm_namespace")
     initial_joint_positions = LaunchConfiguration("initial_joint_positions")
     enable_virtual_camera = LaunchConfiguration("enable_virtual_camera")
@@ -28,13 +29,16 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "python_executable",
-                default_value=EnvironmentVariable("REBOTARM_MUJOCO_PYTHON", default_value="python3"),
+                default_value=EnvironmentVariable(
+                    "REBOTARM_MUJOCO_PYTHON", default_value="python3"
+                ),
                 description="Python interpreter containing MuJoCo and ROS 2 dependencies",
             ),
+            DeclareLaunchArgument("model_path", default_value=""),
             DeclareLaunchArgument("mujoco_arm_namespace", default_value="rebotarm"),
             DeclareLaunchArgument(
                 "initial_joint_positions",
-                default_value="[0.0, -0.1, -0.2, 0.2, 0.0, 0.0]",
+                default_value="[0.0, -0.8, -1.0, 0.3, 0.0, 0.0]",
             ),
             DeclareLaunchArgument("enable_virtual_camera", default_value="false"),
             DeclareLaunchArgument("virtual_camera_width", default_value="640"),
@@ -59,6 +63,7 @@ def generate_launch_description():
                     {
                         "backend": "mujoco",
                         "headless": True,
+                        "model_path": model_path,
                         "arm_namespace": mujoco_arm_namespace,
                         "initial_joint_positions": initial_joint_positions,
                         "virtual_camera.enabled": ParameterValue(

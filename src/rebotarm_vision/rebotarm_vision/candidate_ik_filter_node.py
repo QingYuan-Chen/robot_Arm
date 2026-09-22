@@ -330,7 +330,8 @@ class CandidateIkFilterNode(Node):
             return None
         source_frame = str(getattr(getattr(candidate, "header", None), "frame_id", "") or "")
         try:
-            object_pose = self._transform_pose_to_target_frame(pose, source_frame)
+            stamp = getattr(getattr(candidate, "header", None), "stamp", None)
+            object_pose = self._transform_pose_to_target_frame(pose, source_frame, stamp)
         except Exception:
             return None
         return (
@@ -339,19 +340,22 @@ class CandidateIkFilterNode(Node):
             float(object_pose.position.z),
         )
 
-    def _lookup_transform(self, target_frame: str, source_frame: str):
+    def _lookup_transform(self, target_frame: str, source_frame: str, stamp):
+        if stamp is None or (int(stamp.sec) == 0 and int(stamp.nanosec) == 0):
+            raise RuntimeError("candidate has no sensor timestamp for TF lookup")
         return self._tf_buffer.lookup_transform(
             target_frame,
             source_frame,
-            rclpy.time.Time(),
+            rclpy.time.Time.from_msg(stamp),
             timeout=rclpy.duration.Duration(seconds=0.2),
         )
 
-    def _transform_pose_to_target_frame(self, pose: Pose, source_frame: str) -> Pose:
+    def _transform_pose_to_target_frame(self, pose: Pose, source_frame: str, stamp) -> Pose:
         return transform_candidate_pose_to_target_frame(
             pose,
             source_frame=source_frame,
             target_frame=self._target_frame,
+            stamp=stamp,
             lookup_transform=self._lookup_transform,
         )
 
@@ -365,7 +369,11 @@ class CandidateIkFilterNode(Node):
         pose: Pose,
     ) -> list[tuple[PoseTarget, PoseTarget, str]]:
         source_frame = str(candidates.header.frame_id)
-        grasp_pose = self._transform_pose_to_target_frame(pose, source_frame)
+        grasp_pose = self._transform_pose_to_target_frame(
+            pose,
+            source_frame,
+            candidates.header.stamp,
+        )
         position_xyz = (
             float(grasp_pose.position.x),
             float(grasp_pose.position.y),

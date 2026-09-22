@@ -37,6 +37,18 @@ def color_image_to_array(msg: Image) -> np.ndarray:
     return np.ascontiguousarray(image)
 
 
+def select_target_detection(detections, *, target_class_name: str):
+    target = str(target_class_name).strip().casefold()
+    matching = [
+        detection
+        for detection in detections
+        if not target or str(detection.class_name).strip().casefold() == target
+    ]
+    if not matching:
+        return None
+    return max(matching, key=lambda item: float(item.confidence))
+
+
 class GraspNetBaselineNode(Node):
     def __init__(self) -> None:
         super().__init__("rebotarm_graspnet_baseline_node")
@@ -51,6 +63,7 @@ class GraspNetBaselineNode(Node):
         self.declare_parameter("network_timeout_ms", 1000)
         self.declare_parameter("network_poll_hz", 5.0)
         self.declare_parameter("max_input_skew_ms", 100)
+        self.declare_parameter("target_class_name", "")
         self.declare_parameter("depth_scale_m_per_unit", 0.001)
         self.declare_parameter("model_root", os.environ.get("GRASPNET_MODEL_ROOT", ""))
         self.declare_parameter(
@@ -263,7 +276,13 @@ class GraspNetBaselineNode(Node):
             return
         self.pending_inprocess_detections = None
         self.last_inprocess_detection_timestamp_ns = detection_timestamp_ns
-        detection = max(msg.detections, key=lambda item: float(item.confidence))
+        detection = select_target_detection(
+            msg.detections,
+            target_class_name=str(self.get_parameter("target_class_name").value),
+        )
+        if detection is None:
+            self._publish_empty(timestamp_ns=depth_timestamp_ns, frame_id=depth_frame_id)
+            return
         if not self.backend.available:
             self._publish_empty(timestamp_ns=depth_timestamp_ns, frame_id=depth_frame_id)
             return

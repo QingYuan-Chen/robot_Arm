@@ -38,10 +38,12 @@ def test_hardware_profile_pins_single_runner_execution_owner() -> None:
     assert arguments["execution_mode"] == "plan_only"
     assert arguments["vision_profile"] == "ubuntu_native"
     assert arguments["graspnet_source_mode"] == "in_process"
+    assert arguments["graspnet_target_class_name"] == "bottle"
     assert arguments["start_sim_trajectory_controller"] is False
     assert arguments["start_visual_grasp_executor"] is False
     assert arguments["start_motion_execution"] is True
     assert arguments["candidate_pose_policy"] == "base_axis"
+    assert arguments["candidate_min_grasp_z_m"] == 0.05
     assert arguments["fixed_grasp_orientation_xyzw"] == [
         0.0,
         0.0,
@@ -103,6 +105,14 @@ def test_hardware_profile_resolves_workspace_assets() -> None:
         (
             lambda data: data["launch_arguments"].update(start_visual_grasp_executor=True),
             "start_visual_grasp_executor",
+        ),
+        (
+            lambda data: data["launch_arguments"].update(graspnet_target_class_name="cup"),
+            "graspnet_target_class_name",
+        ),
+        (
+            lambda data: data["launch_arguments"].update(candidate_min_grasp_z_m=0.0),
+            "candidate_min_grasp_z_m",
         ),
         (
             lambda data: data["launch_arguments"].pop("trajectory_precheck_enabled"),

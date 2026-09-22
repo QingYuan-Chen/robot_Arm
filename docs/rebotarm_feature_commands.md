@@ -4,6 +4,20 @@
 
 > P0-P6 已按用户确认的工程范围关闭，验收依据及未实测边界见 `Agent/PROJECT_STATUS.md`。阶段关闭不是新的运动授权；真机启动和执行前仍需确认本次授权、串口唯一归属及现场安全。连接保持失能，运动必须显式 enable。
 
+## MuJoCo 无硬件仿真
+
+完整安装、健康检查、Viewer、ROS 2 接口和排障说明见
+[MuJoCo 仿真底座](../src/rebotarm_simulation/README_mujoco.md)。快速入口：
+
+```bash
+rebotarm_mujoco_cli run --duration 5
+ros2 launch rebotarm_simulation mujoco_sim.launch.py
+```
+
+与 MoveIt 联调使用 `mujoco_moveit_sim.launch.py`。该入口不接受
+`use_hardware:=true`，其固定语义是 `use_hardware:=false`，只启动仿真后端，
+不连接实机控制器。
+
 ## RViz MoveIt 末端拖动
 
 这两个入口保留，但路线是 MoveIt 原生 MotionPlanning：

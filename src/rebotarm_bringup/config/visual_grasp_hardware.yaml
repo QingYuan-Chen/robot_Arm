@@ -12,6 +12,7 @@ launch_arguments:
   execution_mode: plan_only
   vision_profile: ubuntu_native
   graspnet_source_mode: in_process
+  graspnet_target_class_name: bottle
   start_visual_ready: false
   move_to_visual_ready_on_start: false
   start_motion_execution: true
@@ -23,6 +24,7 @@ launch_arguments:
   fixed_grasp_orientation_xyzw: [0.0, 0.0, -0.707106781, 0.707106781]
   tcp_offset_xyz: [-0.04, 0.0, 0.0]
   candidate_min_confidence: 0.4
+  candidate_min_grasp_z_m: 0.05
   candidate_max_jaw_width_m: 0.080
   max_allowed_grasp_width_m: 0.080
   max_plan_age_sec: 1.5

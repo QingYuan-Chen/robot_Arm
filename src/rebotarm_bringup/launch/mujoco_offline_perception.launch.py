@@ -34,6 +34,7 @@ def generate_launch_description():
     bringup_share = FindPackageShare("rebotarm_bringup")
     vision_share = FindPackageShare("rebotarm_vision")
     sim_arm_namespace = LaunchConfiguration("sim_arm_namespace")
+    mujoco_model_path = LaunchConfiguration("mujoco_model_path")
     use_local_rviz = LaunchConfiguration("use_local_rviz")
     use_sim_time = LaunchConfiguration("use_sim_time")
     initial_joint_positions = LaunchConfiguration("initial_joint_positions")
@@ -69,6 +70,7 @@ def generate_launch_description():
         {
             "backend": "mujoco",
             "headless": True,
+            "model_path": mujoco_model_path,
             "arm_namespace": sim_arm_namespace,
             "initial_joint_positions": initial_joint_positions,
             "virtual_camera.enabled": True,
@@ -77,6 +79,7 @@ def generate_launch_description():
             "virtual_camera.rate_hz": ParameterValue(virtual_camera_rate_hz, value_type=float),
             "virtual_camera.frame_id": virtual_camera_frame_id,
             "virtual_camera.parent_frame_id": "base_link",
+            "virtual_camera.annotation_bodies": ["bottle"],
             "virtual_camera.annotation_topic": virtual_camera_annotation_topic,
         }
     )
@@ -84,6 +87,12 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("sim_arm_namespace", default_value="rebotarm_sim"),
+            DeclareLaunchArgument(
+                "mujoco_model_path",
+                default_value=PathJoinSubstitution(
+                    [FindPackageShare("rebotarm_simulation"), "models", "rebotarm", "scene_bottle.xml"]
+                ),
+            ),
             DeclareLaunchArgument("use_local_rviz", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
             DeclareLaunchArgument(

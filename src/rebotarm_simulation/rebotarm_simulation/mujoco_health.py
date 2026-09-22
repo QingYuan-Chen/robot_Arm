@@ -9,9 +9,7 @@ import subprocess
 import sys
 from typing import Callable
 
-# Keep the pre-swap model-profile health API available to project callers while
-# the upstream health CLI remains the package's primary implementation.
-from .mujoco_legacy_health import ModelHealthReport, check_model_health
+from .mujoco_sim import RebotArmMujoco
 
 
 EXPECTED_JOINT_COUNT = 8
@@ -144,13 +142,9 @@ def collect_health(
     *,
     renderer_check: Callable[[object], tuple[bool, str | None]] | None = None,
     renderer_timeout: float = DEFAULT_RENDERER_TIMEOUT,
-    sim_factory=None,
+    sim_factory=RebotArmMujoco,
     mujoco_version: str | None = None,
 ) -> dict[str, object]:
-    if sim_factory is None:
-        from .mujoco_sim import RebotArmMujoco
-
-        sim_factory = RebotArmMujoco
     sim = sim_factory(model_path)
     try:
         before = sim.get_state()
@@ -227,7 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(
     argv=None,
     *,
-    sim_factory=None,
+    sim_factory=RebotArmMujoco,
     renderer_check=None,
     stdout=None,
     stderr=None,

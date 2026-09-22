@@ -624,3 +624,21 @@ P5/P6共用恢复链现在先停止轨迹并核验控制器状态、六轴状态
 原先嵌在`tools/p5_paired_trajectory_runner.py`的ROS反馈监视与FollowJointTrajectory客户端已移入`rebotarm_motion.guarded_trajectory_client`，P5工具改为复用该正式motion实现；旧`tools/p6_single_bottle_grasp_runner.py`仅保留为兼容转发，旧P6 YAML由安装型feature profile替代。视觉硬件launch继续强制`plan_only`、关闭持续`visual_grasp_executor`并开启motion execution，确保单一动作发起者。标准非symlink `install/`已重建motion、vision和bringup；从`/tmp`且无源码`PYTHONPATH`验证ROS可发现新console entry、模块与profile均来自install，源码/安装副本哈希一致。验证为聚焦`44 passed, 1 skipped`、全量`856 passed, 8 skipped`、分层`20 passed`、required compileall/py_compile/diff check通过。未访问串口、启动ROS运行时、使能或发送动作；本次是已验收行为的产品化整理，不构成新的实机验收或授权。用户确认两命令设计后授权整理并本地提交，不推送。
 
 用户确认正式功能继续使用两个独立命令：先启动`visual_grasp_hardware.launch.py`支撑链并人工检查点云、候选位姿、controller状态和现场净空，再以`rebotarm_single_bottle_grasp`携带逐次`--confirm`启动一次动作。不新增自动串联支撑链与运动的一键launch，避免启动时序或候选首次出现直接取得动作权限；现有产品代码无需调整。
+
+## 2026-09-07 03:51 夹爪机械闭合零位校准
+
+用户确认夹爪已人工闭合到机械零位并明确授权校准。启动前`/dev/ttyUSB0`与`/dev/ttyACM0`无人占用；仅启动`driver_only.launch.py`，controller为`CONNECTED_DISABLED/IDLE`、control loop false、六轴status全0。机械闭合位置的设备原始反馈为`6.350615 rad`，超出有效坐标域并在外部表现为gripper position `NaN/status255`，证明当时零位坐标失效。确认`/dev/ttyACM0`仅由本次controller PID 291593占用后，仅调用一次`/rebotarm/set_zero`且`joint_name=gripper`，返回`success=true/set_zero complete`；接口内部要求0.5秒内连续3个新鲜status0近零样本。
+
+外部复核采集10个不同反馈时间戳，约0.217秒持续推进，映射位置全部为`0.000003433 m`（约`0.0034 mm`），status均为0，ArmStatus error_codes清空，六轴继续disabled/IDLE/status0。100Hz ROS发布会重复50Hz硬件批次，因此首个错误的“10条消息时间戳必须全部唯一”检查被更正为按不同反馈时间戳计数；未因此再次写零。随后Ctrl-C停止临时controller，PID退出且两个串口均释放。全程未enable、未发送六轴/夹爪运动、未切模式或写其他参数。本次只验证当前运行实例的闭合零位，未验证24V断电后的持久保持。
+
+## 2026-09-07 视觉抓取候选时空一致性加固
+
+异常候选的高置信度不能证明位姿正确：失败证据中的抓取点`z=0.040520 m`仍有`0.6678`置信度，而同一基线成功点约`z=0.243771 m`。实机硬件profile现固定只选择`bottle`，并把`base_link`抓取高度下限设为`0.05 m`；单瓶执行入口再次检查同一下限。候选TF改为按深度图采集时间查询，计划年龄也从“ROS消息收到多久”改为传感器时间戳年龄，继续使用`1.5 s`上限。
+
+GraspNet输出新增独立三维几何门：抓取中心必须落在YOLO瓶体分割点云的鲁棒包络加`0.015 m`余量内。单瓶执行入口要求连续3个不同传感器时间戳的计划稳定，窗口内XY最大距离`0.015 m`、Z跨度`0.010 m`、夹爪宽度跨度`0.010 m`。fixed `base_axis`配置覆盖候选姿态，所以此窗口不比较上游姿态。验证为聚焦`128 passed,1 skipped`、全量`864 passed,8 skipped`、分层`20 passed`、两包构建、required compileall和launch静态解析通过；未启动相机/ROS运行时、未访问串口、未使能或发送运动，需另行实机复验。
+
+## 2026-09-07 MuJoCo最新版整合
+
+`/home/a/project/rebot_refer`已更新到`huangbinai/robotarm_ros2 main@a68c3ab924080b94f039270b568de464218d7512`，其最新版MuJoCo实现已替换主项目旧active runtime。新增控制/碰撞栈、Viewer关节与笛卡尔操作和速度档位、Reach/Pick环境、Sim2Real轨迹记录/回放/比较/随机化、只读Real2Sim Bridge及ROS/MoveIt/批量验收工具；删除旧`mujoco_adapter_core`、`mujoco_runner`、`mujoco_model_profile`、`mujoco_metrics`、legacy/limit/grasp-quality实现和专属测试，被Git忽略的`third_party/rebotarm_simulation_current_baseline`旧本地归档也按用户授权移入系统回收站。主项目继续保留`virtual_camera.py`、`paired_trajectory_analysis.py`、MoveIt联动launch，并新增`scene_bottle.xml`隔离瓶体视觉场景；通用`scene.xml`保留上游`test_cube`。
+
+本地适配继续以MoveIt URDF为模型权威源，保持J2/J3上限`0.02 rad`、J4-J6力矩`7 N.m`和`ee_site=-0.04 m`。固件参考参数已移入simulation包，资源加载不再反向读取bringup；`urdf_to_mjcf`修复了安装态从模块路径误猜仓库根的问题，现在从`/tmp`导入install副本也能按package share校验模型。验证：全量`1203 passed,2 skipped`，分层`20 passed`，模型/安装态回归`39 passed`，required compileall，MoveIt/simulation/bringup三包普通构建，三个launch参数解析，源码/安装场景逐字节一致，`MJCF is up to date`和`git diff --check`通过。未访问串口、启动ROS节点、使能或发送运动；未提交、未推送。
