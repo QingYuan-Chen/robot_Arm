@@ -115,3 +115,77 @@ def test_audit_indices_and_retries_are_stable(tmp_path):
     assert [a['revision'] for a in current['audit']]==[1,2]
     assert current['audit'][-1]['at']==current['updated_at']
     assert SessionStore(tmp_path).read(sid)==current
+
+
+def test_manual_outlier_exclusion_is_reversible_and_keeps_raw_samples(tmp_path):
+    source=dataset();store=SessionStore(tmp_path)
+    current=store.create(source['metadata']);sid=current['session_id']
+    for split in ('training','validation'):
+        for sample in source[split+'_samples']:
+            current=store.mutate(sid,request_id=sample['sample_id'],revision=current['revision'],
+                                 operation='capture',payload={'split':split,'sample':sample})
+    current=store.mutate(sid,request_id='solve-1',revision=current['revision'],operation='solve')
+    selected=current['report']['selected_method']
+    assert selected
+    # A valid dataset need not contain any outliers; inject one in a separate session below.
+    with pytest.raises(ValueError,match='unknown sample_id'):
+        store.mutate(sid,request_id='bad',revision=current['revision'],operation='exclude_samples',
+                     payload={'sample_ids':['unknown'],'reason':'test'})
+    unflagged=next(sample['sample_id'] for sample in source['training_samples']
+                   if sample['sample_id'] not in {item['label'] for item in current['report']['methods'][selected]['training']['diagnostics']['flagged_samples']})
+    with pytest.raises(ValueError,match='only reported outliers'):
+        store.mutate(sid,request_id='not-flagged',revision=current['revision'],operation='exclude_samples',
+                     payload={'sample_ids':[unflagged],'reason':'test'})
+    assert store.read(sid)==current
+
+
+def test_flagged_sample_requires_reason_and_cannot_bypass_minimum(tmp_path):
+    from copy import deepcopy
+    source=dataset();store=SessionStore(tmp_path)
+    current=store.create(source['metadata']);sid=current['session_id']
+    for split in ('training','validation'):
+        for sample in source[split+'_samples']:
+            sample=deepcopy(sample)
+            if split=='validation' and sample is not None and sample['sample_id']==source['validation_samples'][0]['sample_id']:
+                sample['camera_to_marker']['translation'][0]+=.1
+            current=store.mutate(sid,request_id=sample['sample_id'],revision=current['revision'],
+                                 operation='capture',payload={'split':split,'sample':sample})
+    current=store.mutate(sid,request_id='solve',revision=current['revision'],operation='solve')
+    assert current['report']['selected_method']
+    suspect=source['validation_samples'][0]['sample_id']
+    flags=current['report']['methods'][current['report']['selected_method']]['validation']['diagnostics']['flagged_samples']
+    assert suspect in {flag['label'] for flag in flags}
+    with pytest.raises(ValueError,match='reason'):
+        store.mutate(sid,request_id='no-reason',revision=current['revision'],operation='exclude_samples',
+                     payload={'sample_ids':[suspect]})
+    with pytest.raises(ValueError,match='evidence'):
+        store.mutate(sid,request_id='no-evidence',revision=current['revision'],operation='exclude_samples',
+                     payload={'sample_ids':[suspect],'reason':'high residual'})
+    changed=store.mutate(sid,request_id='exclude',revision=current['revision'],operation='exclude_samples',
+                         payload={'sample_ids':[suspect],'reason':'observed board shift','evidence':'camera inspection log'})
+    assert changed['state']=='active' and changed['report'] is None
+    assert len(changed['validation_samples'])==len(source['validation_samples'])
+    assert changed['excluded_sample_ids']==[suspect]
+    assert changed['audit'][-1]['reason']=='observed board shift'
+    filtered=store.mutate(sid,request_id='solve-after-exclusion',revision=changed['revision'],operation='solve')
+    assert filtered['report']['excluded_sample_ids']==[suspect]
+    assert not filtered['report']['passed']
+    assert filtered['report']['final_validation_required']
+    assert filtered['report']['final_validation_sample_count']==0
+    assert changed['report_history'][-1]['report']==current['report']
+    method=filtered['report']['selected_method']
+    assert filtered['report']['methods'][method]['validation']['sample_count']==len(source['validation_samples'])-1
+    restored=store.mutate(sid,request_id='restore',revision=filtered['revision'],operation='exclude_samples',
+                          payload={'sample_ids':[],'reason':'restored for inspection','evidence':'reviewed original capture'})
+    assert restored['excluded_sample_ids']==[]
+    solved=store.mutate(sid,request_id='solve-restored',revision=restored['revision'],operation='solve')
+    assert solved['report']['excluded_sample_ids']==[]
+
+
+def test_excluded_sample_cannot_reduce_validation_below_five(tmp_path):
+    from rebotarm_calibration.handeye_workflow import solve_dataset
+    source=dataset()
+    source['validation_samples']=source['validation_samples'][:5]
+    source['excluded_sample_ids']=[source['validation_samples'][0]['sample_id']]
+    with pytest.raises(ValueError,match='validation_samples requires at least five'):
+        solve_dataset(source)

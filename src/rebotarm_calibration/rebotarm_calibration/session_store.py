@@ -100,13 +100,70 @@ class SessionStore:
                 sample['sample_index'] = len(existing)
                 sample['recorded_at'] = datetime.now(timezone.utc).isoformat()
                 data[split + '_samples'].append(sample)
+                if split == 'training' and data.get('validation_review_started'):
+                    data['final_validation_after_index'] = sample['sample_index']
             elif operation == 'solve':
                 from .tcp_workflow import solve_tcp_dataset
-                data['report'] = solve_tcp_dataset(data) if data['metadata'].get('mode') == 'tcp' else solve_dataset(data)
+                effective = deepcopy(data)
+                excluded = set(data.get('excluded_sample_ids', []))
+                if data['metadata'].get('mode') == 'tcp':
+                    for split in ('training', 'validation'):
+                        key = split + '_samples'
+                        effective[key] = [sample for sample in data[key] if sample['sample_id'] not in excluded]
+                data['report'] = solve_tcp_dataset(effective) if data['metadata'].get('mode') == 'tcp' else solve_dataset(data)
+                if data['metadata'].get('mode') == 'tcp' and 'final_validation_after_index' in data:
+                    final = deepcopy(effective)
+                    final['validation_samples'] = [sample for sample in effective['validation_samples']
+                        if sample['sample_index'] > data['final_validation_after_index']]
+                    count = len(final['validation_samples'])
+                    passed = False
+                    if count >= 5:
+                        final_report = solve_tcp_dataset(final)
+                        passed = final_report['passed']
+                        data['report']['final_validation'] = final_report['validation']
+                    data['report']['final_validation_required'] = True
+                    data['report']['final_validation_sample_count'] = count
+                    data['report']['passed'] = data['report']['passed'] and passed
+                data['report']['excluded_sample_ids'] = sorted(excluded)
+                data['validation_review_started'] = True
                 data['state'] = 'solved'
+            elif operation == 'exclude_samples':
+                ids = payload.get('sample_ids')
+                reason = payload.get('reason')
+                if not isinstance(ids, list) or any(not isinstance(item, str) for item in ids) or len(set(ids)) != len(ids):
+                    raise ValueError('sample_ids must be a unique list of strings')
+                existing = {sample['sample_id'] for split in ('training', 'validation') for sample in data[split + '_samples']}
+                if not set(ids) <= existing:
+                    raise ValueError('unknown sample_id')
+                old = set(data.get('excluded_sample_ids', []))
+                added = set(ids) - old
+                flagged = set()
+                report = data.get('report') or {}
+                methods = report.get('methods', {})
+                selected = methods.get(report.get('selected_method')) or next(
+                    (method for method in methods.values() if 'training' in method), {})
+                for split in ('training', 'validation'):
+                    flagged.update(item['label'] for item in selected.get(split, {}).get('diagnostics', {}).get('flagged_samples', []))
+                if added and (data['state'] != 'solved' or data['metadata'].get('mode') == 'tcp' or added - flagged):
+                    raise ValueError('only reported outliers can be newly excluded')
+                if set(ids) == old:
+                    raise ValueError('sample selection unchanged')
+                if not isinstance(reason, str) or not reason.strip():
+                    raise ValueError('exclusion change requires a reason')
+                validation_ids = {sample['sample_id'] for sample in data['validation_samples']}
+                if (set(ids) ^ old) & validation_ids and not str(payload.get('evidence', '')).strip():
+                    raise ValueError('validation exclusion requires acquisition evidence')
+                data['final_validation_after_index'] = max(
+                    (sample['sample_index'] for split in ('training', 'validation') for sample in data[split + '_samples']), default=-1)
+                data['excluded_sample_ids'] = sorted(ids)
+                if data.get('report'):
+                    data.setdefault('report_history', []).append({'revision': data['revision'], 'report': data['report']})
+                data['report'] = None
+                data['state'] = 'active'
             elif operation == 'reopen':
                 if data['state'] != 'solved':
                     raise ValueError('reopen requires solved session')
+                data.setdefault('report_history', []).append({'revision': data['revision'], 'report': data['report']})
                 data['report'] = None
                 data['state'] = 'active'
             elif operation == 'accept':
@@ -132,6 +189,8 @@ class SessionStore:
                 'revision': data['revision'], 'request_id': request_id,
                 'operation': operation, 'at': data['updated_at'],
                 'operator': payload.get('operator') if operation == 'accept' else None,
+                **({'excluded_sample_ids': data['excluded_sample_ids'], 'reason': reason.strip(), 'evidence': payload.get('evidence', '')}
+                   if operation == 'exclude_samples' else {}),
             })
             data['requests'][request_id] = digest
             data.setdefault('request_inputs', {})[request_id] = {'revision': revision, 'operation': operation, 'payload': payload}

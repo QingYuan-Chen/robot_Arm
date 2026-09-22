@@ -35,6 +35,23 @@ def test_exact_dataset_passes_without_acceptance():
     json.dumps(report, allow_nan=False)
 
 
+def test_final_validation_requires_new_poses_after_selection_change():
+    payload=dataset()
+    for index,sample in enumerate(payload['training_samples']+payload['validation_samples']):
+        sample['sample_index']=index
+    payload['final_validation_after_index']=15
+    report=solve_dataset(payload)
+    assert not report['passed']
+    assert report['final_validation_sample_count']==0
+    assert report['methods'][report['selected_method']]['full_validation']['sample_count']==6
+    # The unchanged sample poses are valid for this solver test; move the cutoff
+    # before their recorded acquisition indices to model an independent cohort.
+    payload['final_validation_after_index']=9
+    report=solve_dataset(payload)
+    assert report['passed']
+    assert report['final_validation_sample_count']==6
+
+
 def test_holdout_bias_fails_and_does_not_change_selection():
     payload = dataset()
     selected = solve_dataset(payload)['selected_method']

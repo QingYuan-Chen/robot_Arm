@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-21T17:12:20+08:00",
+  "generated_at": "2026-09-22T19:16:05+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "main",
-    "head": "20ab32b",
+    "head": "b596b12",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-21T17:12:20+08:00 | actor=codex | event=verified | note=已完成GraspNet候选变化与人工快照选择方案分析，未修改代码 | verification=read-only source inspection of GraspNet, raw Open3D viewer, IK filter, executor freshness gate, and launch wiring"
+  "last_event": "- 2026-09-22T19:16:05+08:00 | actor=codex | event=complete | note=预检清单独立整行，优化采样区域布局 | verification=browser screenshot; 745 passed 7 skipped; layering 18; dashboard build; compileall; diff check"
 }

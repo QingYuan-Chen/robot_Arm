@@ -50,10 +50,20 @@ def solve_dataset(dataset):
     for key in ('base_frame', 'end_link_frame', 'camera_frame', 'marker_frame'):
         if not isinstance(metadata.get(key), str) or not metadata[key].strip():
             raise ValueError(f'metadata.{key} is required')
+    excluded = dataset.get('excluded_sample_ids', [])
+    if not isinstance(excluded, list) or any(not isinstance(item, str) for item in excluded) or len(set(excluded)) != len(excluded):
+        raise ValueError('invalid excluded_sample_ids')
+    known_ids = {sample.get('sample_id') for name in ('training_samples', 'validation_samples')
+                 for sample in dataset.get(name, []) if isinstance(sample, dict)}
+    if not set(excluded) <= known_ids:
+        raise ValueError('unknown excluded sample')
     groups = []
     identities, poses = set(), set()
     for name in ('training_samples', 'validation_samples'):
         samples = dataset.get(name)
+        if not isinstance(samples, list):
+            raise ValueError(f'{name} requires at least five samples')
+        samples = [sample for sample in samples if not isinstance(sample, dict) or sample.get('sample_id') not in excluded]
         if not isinstance(samples, list) or len(samples) < 5:
             raise ValueError(f'{name} requires at least five samples')
         normalized = []
@@ -74,6 +84,10 @@ def solve_dataset(dataset):
             normalized.append(normalized_sample)
         groups.append(normalized)
     training, validation = groups
+    cutoff = dataset.get('final_validation_after_index')
+    fresh_ids = {sample['sample_id'] for sample in dataset['validation_samples']
+                 if cutoff is None or sample.get('sample_index', -1) > cutoff}
+    final_validation = [sample for sample in validation if sample['sample_id'] in fresh_ids]
     methods = {}
     for method in HAND_EYE_METHODS:
         try:
@@ -99,6 +113,23 @@ def solve_dataset(dataset):
             }
             methods[method] = {'end_to_camera': transform, 'training': train,
                                'validation': holdout, 'gates': gates, 'passed': all(gates.values())}
+            full = [dict(sample, label=sample['sample_id']) for sample in dataset['validation_samples']]
+            methods[method]['full_validation'] = evaluate_eye_in_hand(full, candidate,
+                reference_base_to_marker=transform_matrix(train['mean_base_to_marker']))
+            if cutoff is not None:
+                final_pass = False
+                if len(final_validation) >= 5:
+                    final = evaluate_eye_in_hand(final_validation, candidate,
+                        reference_base_to_marker=transform_matrix(train['mean_base_to_marker']))
+                    diversity_final = analyze_handeye_residual({'schema_version': 1, 'samples': final_validation, 'end_to_camera': transform})
+                    final_pass = (diversity_final['pose_diversity']['pass'] and
+                        final['position_residual']['rms_m'] <= limits['max_position_rms_m'] and
+                        final['position_residual']['max_m'] <= limits['max_position_residual_m'] and
+                        final['rotation_residual']['rms_deg'] <= limits['max_rotation_rms_deg'] and
+                        final['rotation_residual']['max_deg'] <= limits['max_rotation_residual_deg'])
+                    methods[method]['final_validation'] = final
+                gates['fresh_final_validation'] = final_pass
+                methods[method]['passed'] = all(gates.values())
         except (ValueError, cv2.error) as exc:
             methods[method] = {'passed': False, 'error': str(exc)}
     eligible = [name for name, result in methods.items()
@@ -112,9 +143,11 @@ def solve_dataset(dataset):
         transform_matrix(methods[selected]['end_to_camera'])) if selected else None
     from .provenance import dataset_fingerprint, runtime_provenance
     return {'schema_version': 1, 'metadata': deepcopy(metadata),
-            'dataset_sha256': dataset_fingerprint(dataset),
+            'dataset_sha256': dataset_fingerprint(dataset), 'excluded_sample_ids': list(excluded),
             'solver_provenance': runtime_provenance({}), 'opencv_version': cv2.__version__,
             'methods': methods, 'selected_method': selected,
             'selection_source': 'training_only', 'uncertainty': uncertainty,
+            'final_validation_required': cutoff is not None,
+            'final_validation_sample_count': len(final_validation),
             'passed': bool(selected and methods[selected]['passed']),
             'accepted': False, 'deployed': False}

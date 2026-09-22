@@ -818,3 +818,45 @@
 - 2026-09-21T16:38:04+08:00 | actor=codex | event=verified | note=视觉夹取默认运动档已提高到暂定上限，尚未进行真机验收 | verification=defaults 0.25/0.08/0.15/0.12; focused 74 passed; layering 18 passed; full suite 739 passed, 7 skipped; vision/bringup build and compileall passed; installed show-args confirmed; user-maintained TODO unchanged
 - 2026-09-21T17:11:26+08:00 | actor=codex | event=start | note=分析GraspNet候选持续变化并设计人工选择输出快照方案 | verification=-
 - 2026-09-21T17:12:20+08:00 | actor=codex | event=verified | note=已完成GraspNet候选变化与人工快照选择方案分析，未修改代码 | verification=read-only source inspection of GraspNet, raw Open3D viewer, IK filter, executor freshness gate, and launch wiring
+- 2026-09-22T12:13:13+08:00 | actor=codex | event=start | note=核对手眼标定测试流程与代码分布，供用户 review | verification=-
+- 2026-09-22T12:20:45+08:00 | actor=codex | event=start | note=解释启动文件 use_hardware 与显式使能的区别 | verification=-
+- 2026-09-22T12:24:09+08:00 | actor=codex | event=verified | note=已核对 use_hardware 仅选择并启动真实硬件后端，connect 后固定为 CONNECTED_DISABLED；显式 /rebotarm/enable 才开启 holding torque | verification=source inspection: interactive_system.launch.py, hardware_manager.py, ros_services.py
+- 2026-09-22T12:41:06+08:00 | actor=codex | event=start | note=更新 rebotarm_calibration 与 rebotarm_dashboard README，评估 calibration_web_plan 是否归档或删除 | verification=-
+- 2026-09-22T12:43:40+08:00 | actor=codex | event=checkpoint | note=已同步更新 calibration/dashboard README；calibration_web_plan 标记为软件完成归档并保留；分层测试18通过、compileall与diff检查通过 | verification=-
+- 2026-09-22T12:58:23+08:00 | actor=codex | event=checkpoint | note=重建 rebotarm_msgs/calibration/dashboard/bringup；清理遗留消息生成产物后消息导入正常，标定回归95 passed，launch参数检查通过 | verification=-
+- 2026-09-22T13:04:38+08:00 | actor=codex | event=checkpoint | note=使用最新安装空间重跑标定软件回归：95 passed in 23.70s | verification=-
+- 2026-09-22T13:07:39+08:00 | actor=codex | event=start | note=提供 dashboard 手眼标定测试指令 | verification=-
+- 2026-09-22T13:12:42+08:00 | actor=codex | event=complete | note=已核对 dashboard 手眼标定测试入口与安全边界；未启动硬件 | verification=39 passed (non-ROS focused); 3 passed (ROS runtime after sourcing Jazzy and overlay)
+- 2026-09-22T13:31:46+08:00 | actor=codex | event=complete | note=改进 Dashboard 标定入口与 /calibration 分步骤视觉布局；不改标定后端和硬件安全门 | verification=calibration dashboard focused tests 9 passed; dashboard compileall passed; git diff check passed; rebotarm_dashboard symlink build passed
+- 2026-09-22T13:38:44+08:00 | actor=codex | event=start | note=全面优化 Dashboard 手眼标定前端界面，保留现有接口和安全门 | verification=-
+- 2026-09-22T13:47:38+08:00 | actor=codex | event=complete | note=完成手眼标定页面产品化重构：中文业务标签、流程侧栏、分层操作、预览与报告布局；保持接口和安全门不变 | verification=layering 18 passed; full suite 739 passed 7 skipped; compileall passed; rebotarm_dashboard build passed; git diff check passed; browser visual QA completed
+- 2026-09-22T14:49:29+08:00 | actor=codex | event=start | note=Inspect provided Figma node and implement it in the dashboard code; awaiting node-specific Figma URL | verification=-
+- 2026-09-22T14:57:24+08:00 | actor=codex | event=start | note=核对并上传当前 Dashboard 优化进度到 GitHub | verification=-
+- 2026-09-22T15:00:21+08:00 | actor=codex | event=complete | note=Dashboard 标定入口与手眼标定页面重构已提交并推送 GitHub main | verification=commit b596b12; push origin/main succeeded; prior full regression 739 passed 7 skipped
+- 2026-09-22T15:44:22+08:00 | actor=codex | event=start | note=将手眼标定工作台统一为主 Dashboard 浅色视觉体系 | verification=-
+- 2026-09-22T15:48:12+08:00 | actor=codex | event=complete | note=手眼标定工作台已统一为主 Dashboard 浅色视觉体系，保留流程结构、后端接口与安全门 | verification=browser visual QA top and lower sections passed; focused tests 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall passed; dashboard build passed; git diff check passed
+- 2026-09-22T15:51:05+08:00 | actor=codex | event=start | note=将手眼标定工作台改为紧凑步骤卡片切换布局 | verification=-
+- 2026-09-22T16:08:29+08:00 | actor=codex | event=complete | note=完成标定工作台卡片化与矢量图标优化，修正采样控件和指标卡对齐，优化03空状态，并折叠可选会话恢复 | verification=live 8088 browser visual QA passed for flow cards, capture alignment, and solve empty state; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, build, diff check passed
+- 2026-09-22T16:32:20+08:00 | actor=codex | event=complete | note=根据三张截图完成流程SVG居中、P2按钮分组和P3紧凑布局优化 | verification=live 8088 visual QA passed; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, dashboard build, diff check passed
+- 2026-09-22T16:41:17+08:00 | actor=codex | event=complete | note=TCP模式说明换行并为标定板坐标系、标记边长、标记ID、ArUco字典增加内联解释 | verification=live 8088 visual QA passed; focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, build, diff check passed
+- 2026-09-22T16:43:50+08:00 | actor=codex | event=start | note=从准备会话界面删除四个ArUco高级字段，保留后端默认请求值 | verification=-
+- 2026-09-22T16:50:27+08:00 | actor=codex | event=complete | note=准备会话界面移除四个ArUco高级输入字段，创建请求保留默认参数 | verification=focused 9 passed; layering 18 passed; full suite 739 passed 7 skipped; compileall, dashboard build, diff check passed
+- 2026-09-22T16:51:00+08:00 | actor=codex | event=start | note=解释手眼标定预检与样本用途 | verification=-
+- 2026-09-22T16:51:14+08:00 | actor=codex | event=complete | note=核对只读预检与训练验证样本代码语义并解释，无硬件操作 | verification=read-only source inspection
+- 2026-09-22T16:51:31+08:00 | actor=codex | event=start | note=恢复手眼标定四个ArUco输入项并保留紧凑界面 | verification=-
+- 2026-09-22T16:56:45+08:00 | actor=codex | event=complete | note=恢复四个标记配置输入并验证创建与回填；无硬件操作 | verification=dashboard build; full pytest 739 passed, 7 skipped; layering 18 passed; compileall; diff check
+- 2026-09-22T17:09:01+08:00 | actor=codex | event=start | note=为手眼标定模式控制补充Safe Home与失能按钮及安全确认 | verification=-
+- 2026-09-22T17:13:32+08:00 | actor=codex | event=complete | note=标定模式控制新增Safe Home与确认后失能；仅软件验证，未操作硬件 | verification=focused 88 passed; full pytest 739 passed, 7 skipped; layering 18 passed; dashboard build; compileall; diff check
+- 2026-09-22T17:26:55+08:00 | actor=codex | event=start | note=删除重复页面快照导出并设计可追溯的人工离群样本排除 | verification=-
+- 2026-09-22T17:35:54+08:00 | actor=codex | event=complete | note=移除重复快照导出并实现需理由的可逆离群样本人工排除；未操作硬件 | verification=full pytest 742 passed 7 skipped; layering 18 passed; focused 12 passed; calibration/dashboard build; compileall; diff check
+- 2026-09-22T17:38:38+08:00 | actor=codex | event=start | note=调整手眼标定流程卡片图标与连接布局 | verification=-
+- 2026-09-22T17:43:30+08:00 | actor=codex | event=complete | note=修正标定流程卡片图标与文本对齐、移除贴边连接线并验证响应式布局 | verification=browser screenshot; dashboard build; pytest 742 passed 7 skipped; layering 18 passed; compileall; diff check
+- 2026-09-22T17:46:33+08:00 | actor=codex | event=start | note=修正手眼标定流程卡片矢量图标视觉对齐 | verification=-
+- 2026-09-22T17:51:02+08:00 | actor=codex | event=complete | note=统一标定流程卡片三枚SVG图标的几何与视觉对齐 | verification=browser render checked; page test passed; layering 18 passed; dashboard build; compileall; diff check
+- 2026-09-22T17:53:58+08:00 | actor=codex | event=complete | note=修正rail-step span覆盖图标flex的根因，截图确认SVG在方框中心 | verification=browser screenshot; dashboard rebuild; 742 passed 7 skipped; compileall
+- 2026-09-22T17:59:58+08:00 | actor=codex | event=start | note=完善标定工作台状态、预检、样本审核、独立验证与结果展示 | verification=-
+- 2026-09-22T18:14:01+08:00 | actor=codex | event=complete | note=完善标定工作台状态门、配置、试采反馈、样本与最终验证规则；无硬件动作 | verification=743 passed 7 skipped; layering 18 passed; build calibration/dashboard; compileall; browser static verification
+- 2026-09-22T19:07:58+08:00 | actor=codex | event=start | note=增加预检逐项检查清单 | verification=-
+- 2026-09-22T19:11:51+08:00 | actor=codex | event=complete | note=预检五项清单接入真实检查结果；无硬件操作 | verification=745 passed 7 skipped; focused 3; layering 18; calibration/dashboard build; compileall; diff check
+- 2026-09-22T19:13:34+08:00 | actor=codex | event=start | note=优化采样预览与预检清单布局 | verification=-
+- 2026-09-22T19:16:05+08:00 | actor=codex | event=complete | note=预检清单独立整行，优化采样区域布局 | verification=browser screenshot; 745 passed 7 skipped; layering 18; dashboard build; compileall; diff check

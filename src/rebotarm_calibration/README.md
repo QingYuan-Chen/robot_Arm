@@ -1,82 +1,99 @@
 # rebotarm_calibration
 
-标定与 TF 校验工具包。它只负责把相机、末端和参考物之间的几何关系解算成可检查的结果；不访问电机 SDK，不规划轨迹，也不直接执行机械臂动作。
+手眼、TCP 和 TF 验证工具包。它负责同步采集、ArUco/PnP、手眼与 TCP 数学求解、
+质量门和会话数据，不访问电机 SDK、不规划轨迹、不使能机械臂，也不自动部署外参。
 
 ## 目录结构
 
 ```text
 rebotarm_calibration/
 ├── rebotarm_calibration/
-│   ├── aruco_pose.py              # ArUco 角点检测与相机到标记位姿
-│   ├── handeye_solver.py          # eye-in-hand 手眼外参求解与评估
-│   ├── handeye_residual.py        # 多样本手眼残差、离群和一致性分析
-│   ├── handeye_residual_cli.py    # 手眼残差 JSON 命令行入口
-│   ├── tcp_calibration.py         # TCP 偏置、旋转和 pivot 模型的纯计算
-│   ├── tcp_calibration_node.py    # 交互采样并输出 TCP 标定结果
+│   ├── aruco_pose.py              # ArUco 检测与 camera->marker PnP
+│   ├── calibration_quality.py     # 覆盖度、可观测性、残差和 bootstrap
+│   ├── handeye_capture_node.py    # ROS Image/CameraInfo/TF 采集服务
+│   ├── handeye_calibration_cli.py # 离线手眼求解入口
+│   ├── handeye_residual.py        # 手眼残差、离群和一致性分析
+│   ├── handeye_residual_cli.py    # 手眼残差 JSON 入口
+│   ├── handeye_solver.py          # 五种 eye-in-hand 求解器
+│   ├── handeye_workflow.py        # 训练选择、独立验证和报告
+│   ├── provenance.py              # 数据集和源码来源指纹
+│   ├── session_store.py           # 原子 JSON 会话、版本和幂等
+│   ├── stability_window.py        # 连续稳定姿态窗口
+│   ├── tcp_calibration.py         # TCP pivot 数学计算
+│   ├── tcp_calibration_node.py    # 传统交互式 TCP 节点
+│   ├── tcp_workflow.py            # 网页 TCP 训练/验证流程
 │   └── __init__.py
 ├── setup.py                       # ament_python 与 console_scripts
 ├── package.xml                    # ROS 2 依赖
 └── resource/rebotarm_calibration  # ament 包索引
 ```
 
-## 脚本职责
+## 数据流和职责边界
 
-- `aruco_pose.py`：从 BGR 图像、相机内参和标记尺寸估计 `camera_to_marker` 齐次变换。
-- `handeye_solver.py`：根据多组 `base->end`、`camera->marker` 数据求 `end->camera`，并给出旋转/平移残差。
-- `handeye_residual.py`：离线分析已有手眼结果的样本一致性；`analyze_handeye_residual` 返回可序列化报告。
-- `handeye_residual_cli.py`：读取 JSON 数据集，调用残差分析并打印报告。
-- `tcp_calibration.py`：提供末端姿态到 TCP 偏置的估计、平均、门限分析和 YAML 格式化。
-- `tcp_calibration_node.py`：ROS 2 交互节点，操作者逐姿态采样，节点负责采集、解算和输出，不负责移动机械臂。
+```text
+Image + CameraInfo + TF
+        │
+        └── HandeyeCaptureNode
+              ├── ArUco/PnP -> camera_to_marker
+              ├── TF        -> base_to_end
+              └── SessionStore -> training/validation JSON
+                                  │
+                    handeye_workflow / tcp_workflow
+                                  │
+                         candidate report (deployed=false)
+```
+
+网页由现有 `rebotarm_dashboard` 提供；Dashboard 只负责 HTTP/SSE、页面和
+`CalibrationCommand` ROS 客户端。本包不依赖 Dashboard，也不读取控制器命令。
 
 ## 对外入口
 
 ```bash
+# ROS 采集服务，网页 /calibration 使用
+ros2 run rebotarm_calibration rebotarm_handeye_capture
+
+# 离线手眼求解
+ros2 run rebotarm_calibration rebotarm_handeye_calibration \
+  --input session.json --output report.json
+
+# 离线残差分析
 ros2 run rebotarm_calibration rebotarm_handeye_residual \
   --input dataset.json --output residual_report.json
+
+# 传统交互式 TCP 节点
 ros2 run rebotarm_calibration rebotarm_tcp_calibration
-ros2 run rebotarm_calibration rebotarm_handeye_capture
-ros2 run rebotarm_calibration rebotarm_handeye_calibration --input session.json --output report.json
 ```
 
-这些名字来自 `setup.py`，是包的公开接口。详细参数以各入口的 `--help` 和当前源码为准。
+入口参数以 `--help` 和当前源码为准。网页采集节点提供
+`/rebotarm_handeye_capture/command`，支持 `create/status/preflight/preview/tf_check/`
+`capture/solve/reopen/accept/abort`。同一会话目录只能由一个采集节点写入。
 
-## 数据流与边界
+## 会话和求解规则
 
-```text
-相机图像/CameraInfo + ArUco
-        │
-        ├── handeye_solver / handeye_residual ──> 手眼外参候选与残差报告
-        └── tcp_calibration_node ───────────────> TCP 偏置报告
-                                                     │
-                                      配置或 TF 被 vision/motion 消费
-```
+- 手眼模式使用训练集选择 TSAI、PARK、HORAUD、ANDREFF、DANIILIDIS 之一，验证集只做独立评估。
+- TCP 模式只求 TCP 位置和固定 pivot，不求工具旋转；验证集使用训练得到的 pivot。
+- 每次写操作携带 `request_id` 和 `expected_revision`，重复请求不会重复追加样本。
+- 首个样本会冻结 topic、CameraInfo、阈值和源码来源；条件变化必须新建会话。
+- 报告包含观测性、覆盖度、残差、离群诊断、bootstrap 和完整数据集哈希。
+- `passed`、`accepted` 和 `deployed` 是不同状态；本包不会自动写入视觉配置。
 
-标定结果必须经过人工检查后再写入配置。软件求解通过不等于真实末端方向、接触或抓取验收通过。
+## 采集质量门
 
-网页标定的分阶段技术路线见
-[`docs/calibration_web_plan.md`](../../docs/calibration_web_plan.md)。网页只负责向导、
-状态和人工确认；会话、采集质量门与数学求解继续由本包和 ROS 适配器负责。
+ArUco 模式要求 Image、CameraInfo 的 frame 和分辨率匹配，使用新鲜且时间戳推进的
+图像/TF；默认还检查重投影 RMSE、标记面积、正深度、距离和连续稳定窗口。
+相对旋转约束必须满秩且条件数满足阈值，单轴重复运动会被拒绝。
 
-## 采集质量与验收边界
+TCP/手眼采样失败只返回结构化错误并保留已持久化状态，不会自动退出重力补偿、失能或回位。
+硬件 Enable 和 Gravity Start/Stop 由 Dashboard 的显式操作管理。
 
-TCP 节点默认要求至少 5 个样本。每次采集总超时 `capture_timeout_sec=15` 秒，
-TF 必须在 `maximum_age_sec=0.5` 秒内、时间戳推进，并在
-`stability_window_sec=0.4` 秒内保持位置变化不超过 1 mm、姿态变化不超过 0.5 度。
-等待人工输入时不采样，按回车后才进入受限采集窗口。
+## 测试和操作文档
 
-ArUco 模式要求 Image、CameraInfo 与 `aruco.camera_frame` 完全匹配；该参数必须指定
-图像对应的光学坐标系。内参分辨率必须匹配，时间差默认最多 0.1 秒，
-畸变模型仅支持 plumb_bob/rational_polynomial。TF 按图像时间查询；
-不接受无时间戳或缓存旧图。默认质量门为 RMSE <= 1 px、面积 >= 400 px²、距离 <= 2 m。
-这些阈值可通过同名 ROS 参数配置；原始时间戳、逐帧质量和拒绝原因写入报告。
+软件回归主要位于 `tests/test_handeye_*.py`、`tests/test_calibration_*.py` 和
+`tests/test_tcp_*.py`。网页操作、安全顺序、真实相机预检和现场验收边界见：
 
-手眼残差报告新增 `observability`：相对旋转约束必须满秩且条件数 <= 100，
-只绕同一轴运动会被拒绝。求解器同样执行该门，并支持字典与 4×4 矩阵输入。
-低残差只证明采样一致性；部署前仍需独立多轴留出姿态验证和物理测量，不能替代硬件验收。
+- [网页操作说明](../../docs/calibration_web_usage.md)
+- [软件验收清单](../../docs/calibration_acceptance.md)
+- [技术路线归档](../../docs/calibration_web_plan.md)
 
-退化 TCP 报告的未知条件数以 JSON null 表示；失败时不输出可复制的 TCP YAML。
-节点只读相机和 TF，不执行运动、使能或部署参数。
-
-网页操作、恢复、参数和安全顺序见 [使用说明](../../docs/calibration_web_usage.md)。
-网页正式状态所有者为 `session_store.py`，采集入口为 `handeye_capture_node.py`；
-`handeye_workflow.py`/`tcp_workflow.py`负责训练与独立验证，`provenance.py`记录来源。
+软件测试或 MuJoCo 结果不等于真实相机、重力补偿、末端方向或物理精度验收；部署前必须
+进行独立多轴留出验证和现场测量。

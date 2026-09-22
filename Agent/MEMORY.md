@@ -4,6 +4,24 @@
 
 ## 当前焦点
 
+- 2026-09-22：采样区预检清单从覆盖度内部移到独立整行卡片，桌面五列、窄屏换行；相机与 TF/覆盖度卡片上沿对齐，移除旧40px补偿留白。静态截图验证、Dashboard重建、745 passed/7 skipped、分层18、compileall/diff通过；仅布局变更。
+
+- 2026-09-22：试采预检新增后端请求级检查清单：图像、CameraInfo、同期机器人 TF、ArUco 质量、姿态稳定性；每次观测重置状态，成功或超时返回最后观测的逐项结果，不把未执行项目标为通过。TCP 相机三项标记不适用；前端等待期间不宣称实时阶段完成。双包重建、完整745 passed/7 skipped、分层18、聚焦3与compileall/diff通过；无真实采样或硬件操作。
+
+- 2026-09-22：工作台新增 file 预览隔离、SSE 过期提示、后端 arm_feedback 新鲜度、运动请求互斥与未知状态人工解锁；配置锁定/复制及 TCP 参数隐藏、试采反馈、有效样本计数/明细、结果卡片和完整验证误差展示。排除/恢复保留旧报告；验证样本调整需采集证据；调整样本选择或看过验证后新增训练数据，需采集至少五个新的最终验证姿态才能通过。图像缩略图未实现，Safe Home 物理到位仍须反馈和现场确认。双包重建、全量 743 passed/7 skipped、分层18、compileall/diff通过；静态浏览器验证，无真机操作。
+
+- 2026-09-22：图标偏左上根因是 `.rail-step span` 的 display:block 覆盖低优先级 `.rail-icon` 的 flex。已用 `.rail-step > .rail-icon` 明确恢复 flex 居中并归零 margin，浏览器截图确认三个 SVG 均位于边框中心。
+
+- 2026-09-22：根据用户截图进一步统一标定流程卡片的三枚 SVG 矢量图，重画文档/相机/趋势图路径并统一圆角、线帽、线连接与视觉边界；保留卡片布局和响应式规则。浏览器页面静态渲染已检查，Dashboard 重建、页面回归 1 passed、分层 18 passed、compileall 与 diff check 通过；未启动设备。
+
+- 2026-09-22：根据手眼标定页面截图调整顶部三步流程卡片，去掉跨卡片贴边连接线，统一卡片内图标与文案垂直对齐及间距，并在窄屏改为单列。浏览器静态渲染已目视检查，Dashboard symlink-install 重建；全量 742 passed/7 skipped、分层 18 passed、两组 compileall 与 diff 检查通过。仅样式变动，未触及服务或机械臂。
+
+- 2026-09-22：手眼标定求解页删除重复的浏览器内存快照下载，仅保留“下载服务器会话 JSON”；新增人工勾选报告标记的离群样本并填写理由的排除流程。排除不删除原始样本，按样本 ID 留存排除集合与审计理由，可恢复；调整后清除旧报告、重新开放采样，后续求解只用未排除数据且仍需数量、多轴覆盖和残差门槛。TCP 暂不提供离群勾选（现有报告无对应标记）；不自动删点或部署。Dashboard/Calibration 双包重建，完整回归 742 passed/7 skipped，分层 18 passed、compileall/diff 检查通过；本轮未使用真机或真实标定会话。
+
+- 2026-09-22：手眼标定工作台“模式控制”新增“回到 Safe Home”和“确认后失能”，复用 Dashboard 既有受控整臂接口；Safe Home 提示会先停当前轨迹再运动，失能确认明确要求先确认已到 Safe Home（硬件/通信故障保护性失能除外），未引入自动回位或自动失能。五按钮紧凑排列；聚焦 88 passed、Dashboard 重建、分层 18 passed、完整 739 passed/7 skipped、compileall 与 diff 检查通过。未启动设备或发送命令。
+
+- 2026-09-22：手眼标定工作台恢复“标定板坐标系、标记边长、标记 ID、ArUco 字典”四项可编辑输入；创建会话按实际输入提交，数值字段转换为数值，恢复会话回填。页面回归测试覆盖上述链路；Dashboard symlink-install 重建、分层 18 passed、完整 739 passed/7 skipped、compileall 与 diff 检查通过。未启动设备或采样；已有会话 metadata 不受页面修改影响。
+
 - 2026-09-21：按用户要求统一视觉撤退方向为 `[-1.0, 0.0, 0.5]`，预抓取 Z 下限为 `0.04m`（base_link坐标，不是桌面净空）。同步 launch、节点默认、三个候选配置与撤退配置和参数文档；抬升下限0.12m、撤退距离0.06m保持原值。vision/bringup重建成功，安装入口show-args确认，分层18 passed，全量737 passed/7 skipped；未启动真机，未验证修改后的实际路线。
 
 - 2026-09-20：按用户同意删除独立 `visual_grasp_perception_preview.launch.py`，将其 Open3D 查看器与原始候选 Marker 节点并入唯一 `visual_grasp_system.launch.py`。主入口新增 `start_open3d_viewer`、`start_raw_candidate_markers`（默认 true）；`start_visual_ready=false` 现在也会关闭常驻视觉就绪服务。纯感知诊断通过 `use_hardware=false`、`execution_mode=plan_only`、关闭运动执行/抓取执行器来组合，不接串口。`rebotarm_bringup` 重建成功，源码/安装目录旧入口均不存在；聚焦视觉/分层测试 97 passed。全量测试 734 passed、7 skipped、1 个既有 MuJoCo 解释器测试失败（与本次合并无关）。

@@ -1468,6 +1468,11 @@ class TeleopStatusPanelNode(Node):
         """
         snapshot = self._store.snapshot()
         arm_state = str(snapshot.arm.get("state_machine", ""))
+        received = getattr(self, '_arm_status_received_at', None)
+        self._store.update_teleop_status('arm_feedback', {
+            'fresh': received is not None and time.monotonic() - received <= .5,
+            'age_sec': time.monotonic() - received if received is not None else None,
+        })
         try:
             start_available = bool(self._gravity_start_client.service_is_ready())
             if not start_available:

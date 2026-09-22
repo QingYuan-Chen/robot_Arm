@@ -106,18 +106,28 @@ class HandeyeCaptureNode(Node):
         with self.lock:
             self.infos.append(message)
 
-    def observation(self, metadata, after_ns):
+    def observation(self, metadata, after_ns, checks=None):
+        if checks:
+            checks.start('image')
         with self.lock:
-            if not self.frames or not self.infos:
-                raise WaitingObservation('waiting for Image/CameraInfo')
+            if not self.frames:
+                raise WaitingObservation('waiting for Image')
             image = self.frames[-1]
             stamp = stamp_ns(image.header.stamp)
-            info = min(self.infos, key=lambda i: abs(stamp_ns(i.header.stamp) - stamp))
+            infos = list(self.infos)
         age = (self.get_clock().now().nanoseconds - stamp) / 1e9
         if stamp <= after_ns:
             raise WaitingObservation('waiting for advancing image')
         if stamp <= 0 or not -.05 <= age <= self.settings['maximum_age_sec']:
             raise ValueError('waiting for fresh advancing image')
+        if image.header.frame_id != metadata['camera_frame']:
+            raise ValueError('optical frame mismatch')
+        if checks:
+            checks.passed(f'图像新鲜，帧龄 {age:.3f} 秒')
+            checks.start('camera_info')
+        if not infos:
+            raise WaitingObservation('waiting for CameraInfo')
+        info = min(infos, key=lambda i: abs(stamp_ns(i.header.stamp) - stamp))
         if abs(stamp_ns(info.header.stamp) - stamp) / 1e9 > self.settings['maximum_info_skew_sec']:
             raise ValueError('CameraInfo time mismatch')
         if image.header.frame_id != metadata['camera_frame'] or info.header.frame_id != metadata['camera_frame']:
@@ -126,12 +136,18 @@ class HandeyeCaptureNode(Node):
             raise ValueError('CameraInfo size mismatch')
         if info.distortion_model not in ('plumb_bob', 'rational_polynomial'):
             raise ValueError('unsupported distortion model')
+        if checks:
+            checks.passed('时间、分辨率、坐标系与畸变模型匹配')
+            checks.start('tf')
         tf = self.buffer.lookup_transform(metadata['base_frame'], metadata['end_link_frame'],
                                          rclpy.time.Time.from_msg(image.header.stamp))
         # Explicit historical lookup; no prior end->camera calibration is used.
         t, q = tf.transform.translation, tf.transform.rotation
         base_end = {'translation': [t.x, t.y, t.z], 'rotation_xyzw': [q.x, q.y, q.z, q.w]}
         transform_matrix(base_end)
+        if checks:
+            checks.passed('图像时刻的基座到末端 TF 可用')
+            checks.start('aruco')
         marker = detect_aruco_pose(self.bridge.imgmsg_to_cv2(image, desired_encoding='bgr8'),
                  camera_matrix=np.asarray(info.k).reshape(3, 3), distortion=info.d,
                  marker_length_m=metadata['marker_length_m'],
@@ -143,6 +159,8 @@ class HandeyeCaptureNode(Node):
             raise ValueError('marker too small')
         if not 0 < np.linalg.norm(marker['camera_to_marker']['translation']) <= self.settings['maximum_distance_m']:
             raise ValueError('marker distance invalid')
+        if checks:
+            checks.passed(f"目标标记检出，重投影误差 {marker['reprojection_rmse_px']:.3f} px；面积与距离通过")
         return {'provenance': self.provenance, 'base_to_end': base_end, 'camera_to_marker': marker['camera_to_marker'],
                 'image_stamp_ns': stamp, 'tf_stamp_ns': stamp_ns(tf.header.stamp),
                 'capture_age_sec': age, 'monotonic_ns': time.monotonic_ns(),
@@ -150,7 +168,7 @@ class HandeyeCaptureNode(Node):
                 'camera_info': {'k': list(info.k), 'd': list(info.d), 'width': info.width,
                                 'height': info.height, 'distortion_model': info.distortion_model}}
 
-    def capture(self, metadata):
+    def capture(self, metadata, checks=None):
         if metadata.get('mode') != 'tcp':
             self.configure_topics(metadata)
         deadline = time.monotonic() + self.settings['capture_timeout_sec']
@@ -161,20 +179,31 @@ class HandeyeCaptureNode(Node):
         reason = 'no observation'
         while rclpy.ok() and time.monotonic() < deadline:
             try:
+                if checks:
+                    checks.reset()
                 if metadata.get('mode') == 'tcp':
+                    if checks:
+                        checks.start('tf')
                     checked = self.check_tf(metadata)
                     if checked['stamp_ns'] <= after:
                         raise WaitingObservation('waiting for advancing TF')
+                    if checks:
+                        checks.passed('新鲜基座到末端 TF 可用')
                     sample = {'base_to_end': checked['transform'], 'tf_stamp_ns': checked['stamp_ns'],
                               'capture_age_sec': checked['age_sec'], 'provenance': self.provenance,
                               'monotonic_ns': time.monotonic_ns()}
                 else:
-                    sample = self.observation(metadata, after)
+                    sample = self.observation(metadata, after, checks) if checks else self.observation(metadata, after)
+                if checks:
+                    checks.start('stability')
                 after = sample['tf_stamp_ns']
                 pose = transform_matrix(sample['base_to_end'])
                 if window.add(after, pose):
                     sample['stability_sample_count'] = len(window.values)
                     sample['stability_duration_sec'] = (after - window.values[0][0]) / 1e9
+                    if checks:
+                        checks.passed(f"稳定窗口 {sample['stability_duration_sec']:.2f} 秒，{len(window.values)} 个观测")
+                        sample['checks'] = checks.items
                     return sample
                 reason = 'waiting for stable pose window'
             except (WaitingObservation, TransformException) as exc:
@@ -183,6 +212,10 @@ class HandeyeCaptureNode(Node):
                 window.reset()
                 reason = str(exc)
             time.sleep(.02)
+        if checks:
+            from .preflight_checks import PreflightFailure
+            checks.failed(reason)
+            raise PreflightFailure(reason, checks)
         raise TimeoutError(reason)
 
     def check_tf(self, metadata):
@@ -265,13 +298,15 @@ class HandeyeCaptureNode(Node):
                         revision=request.expected_revision, operation='capture',
                         payload={'split': payload['split'], 'sample': sample})
                 else:
-                    data = dict(data, preflight=self.capture(data['metadata']))
+                    from .preflight_checks import PreflightChecks
+                    data = dict(data, preflight=self.capture(data['metadata'], PreflightChecks(data['metadata'].get('mode') == 'tcp')))
             else:
                 data = self.store.mutate(request.session_id, request_id=request.request_id,
                     revision=request.expected_revision, operation=request.command, payload=payload)
             from .calibration_quality import sample_coverage
             if 'training_samples' in data:
-                data = dict(data, coverage={split: sample_coverage(data[split + '_samples'], mode=data['metadata'].get('mode', 'handeye'))
+                excluded = set(data.get('excluded_sample_ids', []))
+                data = dict(data, coverage={split: sample_coverage([sample for sample in data[split + '_samples'] if sample['sample_id'] not in excluded], mode=data['metadata'].get('mode', 'handeye'))
                                            for split in ('training', 'validation')})
             data.setdefault('schema_version', 1)
             data.setdefault('session_id', request.session_id)
@@ -288,6 +323,8 @@ class HandeyeCaptureNode(Node):
             # persisted revision, without echoing a partially modified object.
             failure = {'schema_version': 1, 'session_id': request.session_id,
                        'state': 'unavailable', 'revision': None}
+            if request.command == 'preflight' and hasattr(exc, 'checks'):
+                failure['preflight'] = {'checks': exc.checks}
             if request.session_id:
                 try:
                     saved = self.store.read(request.session_id)
