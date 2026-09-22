@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-23T04:52:30+08:00",
+  "generated_at": "2026-09-23T05:15:02+08:00",
   "plan_source": "Agent/PROJECT_STATUS.md",
   "completion_basis": "weighted verified checklist; not code volume or hardware readiness",
   "overall_completion_percent": 100.0,
@@ -163,8 +163,8 @@
   ],
   "git": {
     "branch": "codex/upstream-baseline-integrated",
-    "head": "fc600ef",
+    "head": "c11c236",
     "working_tree_dirty": true
   },
-  "last_event": "- 2026-09-23T04:52:30+08:00 | actor=codex | event=verified | note=清理主目录被忽略的旧测试残留，按迁移工作树同一测试集合完成最终回归 | verification=125 Python test files match migration worktree; 1145 passed, 14 skipped in isolated ROS domain 119; no hardware"
+  "last_event": "- 2026-09-23T05:15:02+08:00 | actor=codex | event=complete | note=清理主目录同级衍生目录并保留远端分支，准备重建唯一 rebot_refer | verification=old sibling directories moved to system trash; gripper branch 6fc58e8 pushed; only main worktree registered; no hardware"
 }

@@ -866,3 +866,7 @@
 - 2026-09-23T04:47:19+08:00 | actor=codex | event=verified | note=上游新基线已按迁移分支文件树合并到主目录独立分支并完成软件验证 | verification=1154 passed, 14 skipped; layering 18 passed; fresh 11-package build; compileall and launch show-args passed; EGL health ok; retired packages absent; no hardware
 - 2026-09-23T04:48:29+08:00 | actor=codex | event=complete | note=主目录完成以上游迁移分支为主的双父合并，独立整合分支验证并收尾 | verification=merge 41215b4; 1154 passed, 14 skipped; fresh 11-package build; layering 18 passed; compileall, launch show-args, EGL health and retired-package absence passed; no hardware
 - 2026-09-23T04:52:30+08:00 | actor=codex | event=verified | note=清理主目录被忽略的旧测试残留，按迁移工作树同一测试集合完成最终回归 | verification=125 Python test files match migration worktree; 1145 passed, 14 skipped in isolated ROS domain 119; no hardware
+- 2026-09-23T05:00:13+08:00 | actor=codex | event=start | note=只读核对已合并的上游 robotarm_ros2 分支最新状态与主工作区差异 | verification=-
+- 2026-09-23T05:00:41+08:00 | actor=codex | event=verified | note=实时核对上游默认 main 与主工作区已合并基线，确认无新增上游提交 | verification=ls-remote upstream HEAD/main=1749e3a; merged parent=3a25206; 117 intentional file differences vs upstream; no hardware
+- 2026-09-23T05:13:31+08:00 | actor=codex | event=start | note=清理主目录同级衍生目录并从当前主目录重建 rebot_refer | verification=-
+- 2026-09-23T05:15:02+08:00 | actor=codex | event=complete | note=清理主目录同级衍生目录并保留远端分支，准备重建唯一 rebot_refer | verification=old sibling directories moved to system trash; gripper branch 6fc58e8 pushed; only main worktree registered; no hardware
